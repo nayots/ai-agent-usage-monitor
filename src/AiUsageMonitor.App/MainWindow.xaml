@@ -1,0 +1,11 @@
+<Window x:Class="AiUsageMonitor.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AI Usage Widget" Height="420" Width="360">
+    <Grid>
+        <TextBlock Margin="16"
+                   TextWrapping="Wrap"
+                   VerticalAlignment="Center"
+                   Text="Shell only. No UI until the design brief in docs/design/design-prompt.md has been run and approved." />
+    </Grid>
+</Window>

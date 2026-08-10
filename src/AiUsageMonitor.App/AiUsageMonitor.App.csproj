@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RootNamespace>AiUsageMonitor.App</RootNamespace>
+    <AssemblyName>AiUsageMonitor.App</AssemblyName>
+    <DebugType>embedded</DebugType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AiUsageMonitor.Domain\AiUsageMonitor.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
