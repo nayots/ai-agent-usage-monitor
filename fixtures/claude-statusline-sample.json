@@ -1,0 +1,11 @@
+{
+  "session_id": "REDACTED", "version": "2.1.226",
+  "model": { "id": "claude-haiku-4-5", "display_name": "Haiku 4.5" },
+  "cost": { "total_cost_usd": 0.0379152, "total_duration_ms": 8612, "total_api_duration_ms": 3998, "total_lines_added": 0, "total_lines_removed": 0 },
+  "context_window": { "total_input_tokens": 37365, "total_output_tokens": 217, "context_window_size": 200000, "used_percentage": 19, "remaining_percentage": 81 },
+  "exceeds_200k_tokens": false,
+  "rate_limits": {
+    "five_hour": { "used_percentage": 47, "resets_at": 1786385400 },
+    "seven_day": { "used_percentage": 92, "resets_at": 1786374000 }
+  }
+}

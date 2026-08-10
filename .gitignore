@@ -1,0 +1,58 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+publish/
+*.dll
+*.exe
+*.pdb
+
+# .NET / VS / Rider
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.received.*
+project.lock.json
+project.fragment.lock.json
+
+# Test + coverage
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.trx
+*.coverage
+*.coveragexml
+BenchmarkDotNet.Artifacts/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+
+# Local secrets / machine-specific config.
+# NOTE: this app is local-first and stores no credentials, but never let a
+# captured provider payload or settings file with machine paths be committed.
+*.local.json
+appsettings.Development.json
+secrets.json
+
+# Captured provider fixtures that were not manually redacted.
+# Redacted fixtures belong in tests and SHOULD be committed.
+**/fixtures/raw/
+*.raw.json
+
+# OS noise
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
