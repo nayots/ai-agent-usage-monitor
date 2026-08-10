@@ -1,4 +1,4 @@
-namespace AiUsageMonitor.Poc.Domain;
+namespace AiUsageMonitor.Domain;
 
 /// <summary>
 /// Provider-neutral connection lifecycle state for a quota probe.

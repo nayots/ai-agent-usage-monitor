@@ -1,4 +1,4 @@
-namespace AiUsageMonitor.Poc.Domain;
+namespace AiUsageMonitor.Domain;
 
 /// <summary>
 /// A provider-specific probe capable of discovering installation state and, when possible,

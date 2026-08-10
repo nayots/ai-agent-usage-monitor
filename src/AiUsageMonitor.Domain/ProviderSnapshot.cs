@@ -1,4 +1,4 @@
-namespace AiUsageMonitor.Poc.Domain;
+namespace AiUsageMonitor.Domain;
 
 /// <summary>
 /// Point-in-time result of probing a single provider for installation, connection, and quota state.

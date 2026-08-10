@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using AiUsageMonitor.Poc.Domain;
+using AiUsageMonitor.Domain;
 
 namespace AiUsageMonitor.Poc.Providers.Codex;
 

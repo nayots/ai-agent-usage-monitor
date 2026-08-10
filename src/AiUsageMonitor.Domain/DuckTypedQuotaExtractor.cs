@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace AiUsageMonitor.Poc.Domain;
+namespace AiUsageMonitor.Domain;
 
 /// <summary>
 /// Walks an arbitrary <see cref="JsonElement"/> tree and duck-types <see cref="QuotaWindow"/> instances

@@ -1,4 +1,4 @@
-namespace AiUsageMonitor.Poc.Domain;
+namespace AiUsageMonitor.Domain;
 
 /// <summary>
 /// A single provider-reported quota window (e.g. a rolling usage bucket with a reset time).
