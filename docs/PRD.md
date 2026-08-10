@@ -167,9 +167,13 @@ Discovery must never:
 
 ### 7. Design-First Workflow
 
-Before implementation begins, the team must generate and review a Claude Design prompt that defines the visual direction for the WPF application.
+Before implementation begins, the team must generate and review a Claude Design prompt that defines the visual direction for the WPF application. The prompt is maintained at `docs/design/design-prompt.md`.
 
-The design phase must produce a concrete design brief covering:
+The design must be derived from the verified provider behavior recorded in `docs/provider-capability-findings.md`. It must not be derived from assumptions about plan periods, quota counts, or field availability. Verification demonstrated that a live account exposes an undocumented quota window carrying a usage percentage but no reset time, and that a provider may expose a single window while another exposes three. A design that assumes a fixed set of fully populated windows is invalid before it is drawn.
+
+#### 7.1 Required layout coverage
+
+The design brief must cover:
 
 - Default widget layout.
 - Compact widget layout.
@@ -177,15 +181,56 @@ The design phase must produce a concrete design brief covering:
 - Light and dark themes.
 - Connection-state indicators.
 - Stale-data presentation.
-- Progress bars with elapsed-time markers.
+- Progress bars, both with and without elapsed-time markers.
 - Settings and diagnostics layouts.
 - System tray behavior.
 - Typography, spacing, colors, iconography, and accessibility.
 - Multi-monitor and high-DPI behavior.
 
-The approved design output is a required input to implementation. Engineering may adapt details required for WPF accessibility, performance, or platform conventions, but must preserve the approved information hierarchy and state communication.
+#### 7.2 Required state coverage
+
+The design is incomplete unless it presents each of the following. Every item is a state the verified provider data can already produce, not a hypothetical.
+
+1. **Complete quota row** — display label, usage percentage, progress bar, elapsed-time marker, and reset countdown.
+2. **Partial quota row** — a provider-supplied label and a usage percentage only, with no reset countdown and no elapsed-time marker. This state must read as deliberate and complete, not as a row that failed to load.
+3. **Progress bar without an elapsed-time marker** — the marker is the exception rather than the default, because it may be shown only when the window duration is verified per §16. The unmarked bar is the baseline form and must be designed as such.
+4. **Elapsed-time marker at both extremes** — at 0% and at 100% of the window. At 100% the marker must not collide with or be obscured by the bar's end cap, and it must remain distinguishable from the fill edge when marker and fill coincide.
+5. **Exhausted quota window** — 100% used with a provider-reported rate-limit-reached indication. This must be visually distinct from a merely very full bar, and must promote reset timing to the primary information in the row.
+6. **Usage far ahead of elapsed time** — a window at 100% used with roughly a quarter of the window elapsed. This was the verified Codex state and is the clearest demonstration of why the marker exists.
+7. **Mechanism tier badge** — Official or Unofficial, on every provider card and in diagnostics, as required by §4.1.1. A value obtained unofficially must never be presented as official.
+8. **Mechanism unavailable** — a prominent state for a provider whose sole mechanism has stopped working. Claude Code has no fallback per §11, so this state must communicate an unrecoverable condition and must be distinct from stale data.
+9. **Every connection state defined in §10**, including Not Installed, Discovering, Waiting, and Unsupported.
+10. **Unknown quota label treatment** — a window name that resolves to a known duration is rendered as a human-readable label; a name that does not resolve is rendered as the provider's literal token, typographically distinguished so it cannot be mistaken for a label this application understands. This satisfies §13's requirement to display an unfamiliar provider-supplied name, and is the sole exception to §15's prohibition on opaque provider fields in the default card; it does not license displaying protocol names, method names, or wire-format field names anywhere in the widget. The provider-supplied identifier must remain available in a tooltip and in diagnostics for every window.
+11. **Asymmetric providers** — a card exposing one quota window beside a card exposing three, plus a card exposing none and a card exposing six. The layout must not assume that providers have equal window counts, nor that any count is stable across accounts, plans, or time.
+12. **Stale presentation** as defined in §18.
+
+#### 7.3 Design-to-data contract
+
+The design must not require any value that a verified provider mechanism does not supply. Every field other than the usage percentage is nullable and has been observed null in practice.
+
+Consequently:
+
+- No layout may reserve space that only looks correct when fully populated.
+- No element may be rendered from a fabricated, estimated, or inferred value when the provider did not supply it. Absence is shown as absence.
+- Windows must not be sorted, grouped, or laid out on an assumed duration. Verification recorded a seven-day window resetting sooner than a five-hour window on the same account.
+- Context-window fill is not subscription quota and must never appear as a quota row.
+
+#### 7.4 Prompt requirements
 
 The Claude Design prompt must request a restrained native-Windows utility aesthetic: compact, readable, calm, and appropriate for a developer desktop. It must explicitly avoid dashboard clutter, decorative illustrations, gamification, and ambiguous color-only status signals.
+
+The prompt must additionally:
+
+- Supply concrete fixture snapshots taken from the verification record, and state which figures are verified and which are illustrative.
+- State the deliverable format, which is a single self-contained HTML page presenting every required state, accompanied by a token document mapping colors, spacing, radii, and type styles to proposed WPF resource keys.
+- Forbid projected-exhaustion language, per §16.
+- Forbid displaying any credential, token, session identifier, or user-identifying path in any mockup, including diagnostics mockups.
+
+#### 7.5 Status of the approved output
+
+The approved design output is a required input to implementation. Engineering may adapt details required for WPF accessibility, performance, or platform conventions, but must preserve the approved information hierarchy and state communication.
+
+The design output is a reference, not a source of shipping code. No generated markup or styling is compiled into the application.
 
 ### 8. Generic Provider and Quota Model
 
