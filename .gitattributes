@@ -1,0 +1,12 @@
+* text=auto
+
+*.cs      text diff=csharp
+*.csproj  text
+*.sln     text eol=crlf
+*.props   text
+*.json    text
+*.md      text
+*.ps1     text eol=crlf
+
+*.png binary
+*.ico binary
