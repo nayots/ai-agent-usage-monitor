@@ -101,8 +101,13 @@ public sealed class QuotaBar : FrameworkElement
         _ => AccentFillBrush
     };
 
+    // default(T) is passed explicitly: the FrameworkPropertyMetadata(options) overload leaves
+    // DefaultValue null, and WPF rejects a null default for a value-type property with
+    // "Default value type does not match type of property". That throws inside this class's
+    // static initializer, which surfaces only as a XamlParseException when a view first
+    // references the control - not at build time, and not in any test that never loads XAML.
     private static DependencyProperty Register<T>(string name) =>
-        DependencyProperty.Register(name, typeof(T), typeof(QuotaBar), new FrameworkPropertyMetadata(FrameworkPropertyMetadataOptions.AffectsRender));
+        DependencyProperty.Register(name, typeof(T), typeof(QuotaBar), new FrameworkPropertyMetadata(default(T), FrameworkPropertyMetadataOptions.AffectsRender));
 
     private static DependencyProperty Register(string name, bool defaultValue) =>
         DependencyProperty.Register(name, typeof(bool), typeof(QuotaBar), new FrameworkPropertyMetadata(defaultValue, FrameworkPropertyMetadataOptions.AffectsRender));

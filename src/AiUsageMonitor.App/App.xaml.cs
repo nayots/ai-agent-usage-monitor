@@ -50,7 +50,19 @@ public partial class App : Application
         _services.GetRequiredService<ThemeManager>().Apply(loaded.Settings.Theme);
         _logger.LogInformation("Startup complete.");
 
-        new MainWindow().Show();
+        try
+        {
+            new MainWindow().Show();
+        }
+        catch (Exception ex)
+        {
+            // A widget that cannot show its window has nothing to offer, and the dispatcher
+            // handler below would otherwise swallow this and leave a running process with no
+            // window and no tray icon - invisible, unkillable except through Task Manager.
+            // Startup failures are fatal; only post-startup exceptions are survivable.
+            _logger.LogCritical(ex, "The main window could not be created; shutting down.");
+            Shutdown(1);
+        }
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

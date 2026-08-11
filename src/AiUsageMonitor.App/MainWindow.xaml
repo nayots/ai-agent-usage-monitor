@@ -12,11 +12,11 @@
       <StackPanel>
         <TextBlock Text="Token gallery — not the widget" Style="{StaticResource SubtitleTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
         <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-          <RadioButton Content="System" IsChecked="True" Checked="ThemeRadioButton_Checked" />
-          <RadioButton Content="Light" Margin="8,0,0,0" Tag="Light" Checked="ThemeRadioButton_Checked" />
-          <RadioButton Content="Dark" Margin="8,0,0,0" Tag="Dark" Checked="ThemeRadioButton_Checked" />
+          <RadioButton x:Name="SystemThemeRadioButton" Content="System" Checked="ThemeRadioButton_Checked" />
+          <RadioButton x:Name="LightThemeRadioButton" Content="Light" Margin="8,0,0,0" Tag="Light" Checked="ThemeRadioButton_Checked" />
+          <RadioButton x:Name="DarkThemeRadioButton" Content="Dark" Margin="8,0,0,0" Tag="Dark" Checked="ThemeRadioButton_Checked" />
         </StackPanel>
-        <CheckBox x:Name="ColorBarsCheckBox" Margin="0,6,0,0" Content="Color bars by usage" IsChecked="True" />
+        <CheckBox x:Name="ColorBarsCheckBox" Margin="0,6,0,0" Content="Color bars by usage" />
         <TextBlock Margin="0,10,0,2" Text="Usage bands" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" />
         <controls:QuotaBar UsedPercent="0" ColorBarsByUsage="{Binding IsChecked, ElementName=ColorBarsCheckBox}" />
         <controls:QuotaBar UsedPercent="25" ColorBarsByUsage="{Binding IsChecked, ElementName=ColorBarsCheckBox}" />
