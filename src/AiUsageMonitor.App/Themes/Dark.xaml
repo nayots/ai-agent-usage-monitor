@@ -1,0 +1,27 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <SolidColorBrush x:Key="WidgetWindowBackgroundBrush" Color="#202020" />
+  <SolidColorBrush x:Key="WidgetWindowStrokeBrush" Color="#3A3A3A" />
+  <SolidColorBrush x:Key="WidgetLayerBackgroundBrush" Color="#2B2B2B" />
+  <SolidColorBrush x:Key="WidgetLayerAltBackgroundBrush" Color="#323232" />
+  <SolidColorBrush x:Key="WidgetCardStrokeBrush" Color="#383838" />
+  <SolidColorBrush x:Key="WidgetRowDividerBrush" Color="#333333" />
+  <SolidColorBrush x:Key="WidgetSelectionBackgroundBrush" Color="#2F3B47" />
+  <SolidColorBrush x:Key="WidgetTokenChipBackgroundBrush" Color="#333333" />
+  <SolidColorBrush x:Key="WidgetTokenChipStrokeBrush" Color="#3F3F3F" />
+  <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextSecondaryBrush" Color="#C8C8C8" />
+  <SolidColorBrush x:Key="TextTertiaryBrush" Color="#A6A6A6" />
+  <SolidColorBrush x:Key="AccentTextBrush" Color="#4CC2FF" />
+  <SolidColorBrush x:Key="AccentBrush" Color="#4CC2FF" />
+  <SolidColorBrush x:Key="QuotaBarFillBrush" Color="#3A96DD" />
+  <SolidColorBrush x:Key="QuotaBarHighFillBrush" Color="#B47F1E" />
+  <SolidColorBrush x:Key="QuotaBarExhaustedFillBrush" Color="#E0685E" />
+  <SolidColorBrush x:Key="QuotaBarStaleFillBrush" Color="#8A8A8A" />
+  <SolidColorBrush x:Key="QuotaBarTrackBrush" Color="#3D3D3D" />
+  <SolidColorBrush x:Key="ElapsedMarkerBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="ElapsedMarkerGapBrush" Color="#2B2B2B" />
+  <SolidColorBrush x:Key="QuotaBarHatchBrush" Color="#4D000000" />
+  <SolidColorBrush x:Key="StateOkBrush" Color="#6CCB8E" />
+  <SolidColorBrush x:Key="StateWarnBrush" Color="#E0B252" />
+  <SolidColorBrush x:Key="StateBadBrush" Color="#F0796F" />
+</ResourceDictionary>

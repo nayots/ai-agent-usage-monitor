@@ -20,4 +20,10 @@
     <ProjectReference Include="..\..\src\AiUsageMonitor.Infrastructure\AiUsageMonitor.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\src\AiUsageMonitor.App\Themes\*.xaml"
+             Link="Themes\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
