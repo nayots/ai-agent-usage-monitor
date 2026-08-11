@@ -1,0 +1,77 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:AiUsageMonitor.App.Controls"
+                    xmlns:domain="clr-namespace:AiUsageMonitor.Domain;assembly=AiUsageMonitor.Domain">
+  <Style TargetType="{x:Type controls:QuotaBar}">
+    <Setter Property="TrackBrush" Value="{DynamicResource QuotaBarTrackBrush}" />
+    <Setter Property="AccentFillBrush" Value="{DynamicResource QuotaBarFillBrush}" />
+    <Setter Property="HighFillBrush" Value="{DynamicResource QuotaBarHighFillBrush}" />
+    <Setter Property="ExhaustedFillBrush" Value="{DynamicResource QuotaBarExhaustedFillBrush}" />
+    <Setter Property="StaleFillBrush" Value="{DynamicResource QuotaBarStaleFillBrush}" />
+    <Setter Property="HatchBrush" Value="{DynamicResource QuotaBarHatchBrush}" />
+    <Setter Property="MarkerBrush" Value="{DynamicResource ElapsedMarkerBrush}" />
+    <Setter Property="MarkerGapBrush" Value="{DynamicResource ElapsedMarkerGapBrush}" />
+  </Style>
+
+  <Style TargetType="{x:Type controls:StateGlyph}">
+    <Setter Property="GlyphBrush" Value="{DynamicResource StateWarnBrush}" />
+    <Style.Triggers>
+      <Trigger Property="State" Value="{x:Static domain:ConnectionState.Connected}"><Setter Property="GlyphBrush" Value="{DynamicResource StateOkBrush}" /></Trigger>
+      <Trigger Property="State" Value="{x:Static domain:ConnectionState.Stale}"><Setter Property="GlyphBrush" Value="{DynamicResource TextTertiaryBrush}" /></Trigger>
+      <Trigger Property="State" Value="{x:Static domain:ConnectionState.Unavailable}"><Setter Property="GlyphBrush" Value="{DynamicResource StateWarnBrush}" /></Trigger>
+      <Trigger Property="State" Value="{x:Static domain:ConnectionState.Error}"><Setter Property="GlyphBrush" Value="{DynamicResource StateBadBrush}" /></Trigger>
+      <Trigger Property="State" Value="{x:Static domain:ConnectionState.Unsupported}"><Setter Property="GlyphBrush" Value="{DynamicResource TextTertiaryBrush}" /></Trigger>
+      <Trigger Property="State" Value="{x:Static domain:ConnectionState.NotInstalled}"><Setter Property="GlyphBrush" Value="{DynamicResource TextTertiaryBrush}" /></Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style TargetType="{x:Type controls:StateChip}">
+    <Setter Property="AutomationProperties.Name" Value="{Binding Label, RelativeSource={RelativeSource Self}}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type controls:StateChip}">
+          <StackPanel Orientation="Horizontal">
+            <controls:StateGlyph State="{TemplateBinding State}" VerticalAlignment="Center" />
+            <TextBlock Margin="2,0,0,0" Text="{TemplateBinding Label}" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+          </StackPanel>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="{x:Type controls:TierBadge}">
+    <Setter Property="ToolTip" Value="Unofficial: values are read from an undocumented source and may change or stop without notice." />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type controls:TierBadge}">
+          <Border x:Name="Background" Padding="4,2" CornerRadius="{DynamicResource RadiusControl}" Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
+            <Grid>
+              <Rectangle x:Name="DashedOutline" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1" StrokeDashArray="2,1"
+                         RadiusX="{Binding CornerRadius.TopLeft, ElementName=Background}"
+                         RadiusY="{Binding CornerRadius.TopLeft, ElementName=Background}" />
+              <StackPanel Orientation="Horizontal" Margin="2,0">
+                <Grid Width="7" Height="6" VerticalAlignment="Center">
+                  <Polygon x:Name="Triangle" Points="0,6 3.5,0 7,6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1" />
+                  <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource TextSecondaryBrush}" Visibility="Collapsed" />
+                </Grid>
+                <TextBlock x:Name="Label" Margin="4,0,0,0" Text="UNOFFICIAL" Style="{StaticResource CaptionMicroTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="Tier" Value="{x:Static domain:MechanismTier.Official}">
+              <Setter TargetName="Background" Property="Background" Value="{DynamicResource WidgetLayerAltBackgroundBrush}" />
+              <Setter TargetName="Background" Property="BorderBrush" Value="{DynamicResource WidgetCardStrokeBrush}" />
+              <Setter TargetName="DashedOutline" Property="Visibility" Value="Collapsed" />
+              <Setter TargetName="Triangle" Property="Visibility" Value="Collapsed" />
+              <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
+              <Setter TargetName="Label" Property="Text" Value="OFFICIAL" />
+              <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+              <Setter Property="ToolTip" Value="Official: values come from a documented, provider-supported interface." />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>
