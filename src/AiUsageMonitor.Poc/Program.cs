@@ -25,9 +25,6 @@ try
         PrintProviderReport(snapshot, elapsedMs);
     }
 
-    PrintDuckTypedSelfTest();
-    PrintClaudeFixtureTest();
-
     Console.WriteLine();
     Console.WriteLine(new string('=', 78));
     Console.WriteLine("Done.");
@@ -196,79 +193,3 @@ static string BuildProgressBar(double? usedPercent, int width = 20)
     return "[" + new string('#', filled) + new string('-', width - filled) + $"] {clamped:0}%";
 }
 
-// ---------------------------------------------------------------------------------------------
-// Self-tests (not live data)
-// ---------------------------------------------------------------------------------------------
-
-static void PrintDuckTypedSelfTest()
-{
-    Console.WriteLine();
-    Console.WriteLine(new string('=', 78));
-    Console.WriteLine("SELF-TEST (inline sample, not live data): DuckTypedQuotaExtractor");
-    Console.WriteLine(new string('=', 78));
-    Console.WriteLine("Proves new/unknown provider window names survive without any code change.");
-
-    const string sampleJson =
-        """
-        {
-          "rateLimits": {
-            "five_hour": { "used_percent": 42.5, "resets_at": 1786800000 },
-            "seven_day": { "utilization": 73.1, "reset": "2026-08-17T12:00:00Z" },
-            "seven_day_opus": { "usedPercent": 12.0, "resetsAt": 1786900000, "windowDurationMins": 10080 },
-            "three_hour_nimbus": { "percent_used": 5.5, "reset_at": 1786700000 }
-          },
-          "meta": { "note": "self-test sample, deliberately not a real provider shape" }
-        }
-        """;
-
-    using JsonDocument doc = JsonDocument.Parse(sampleJson);
-    IReadOnlyList<QuotaWindow> windows = DuckTypedQuotaExtractor.Extract(doc.RootElement);
-
-    string[] expectedIds = ["five_hour", "seven_day", "seven_day_opus", "three_hour_nimbus"];
-    bool allExpectedFound = expectedIds.All(id => windows.Any(w => w.Id == id));
-    bool countMatches = windows.Count == expectedIds.Length;
-
-    Console.WriteLine($"  Windows discovered : {windows.Count} (expected {expectedIds.Length})");
-    Console.WriteLine($"  All four present, including the unknown 'three_hour_nimbus': {allExpectedFound}");
-    Console.WriteLine($"  PASS: {allExpectedFound && countMatches}");
-    Console.WriteLine();
-
-    DateTimeOffset now = DateTimeOffset.UtcNow;
-    foreach (QuotaWindow w in windows.OrderBy(w => w.Order))
-    {
-        PrintWindow(w, now);
-    }
-}
-
-static void PrintClaudeFixtureTest()
-{
-    Console.WriteLine();
-    Console.WriteLine(new string('=', 78));
-    Console.WriteLine("PARSER REGRESSION TEST (recorded sample): Claude statusLine JSON -> DuckTypedQuotaExtractor");
-    Console.WriteLine(new string('=', 78));
-    Console.WriteLine("The sample originates from the statusLine contract, which is no longer a supported");
-    Console.WriteLine("mechanism (see PRD ss11.1) - it is retained solely as parser test data.");
-    Console.WriteLine("Proves the shared duck-typed parser still handles this dialect correctly, and that");
-    Console.WriteLine("context_window's used_percentage (no reset field) is correctly excluded.");
-
-    using JsonDocument doc = JsonDocument.Parse(ClaudeFixtures.StatusLineSampleJson);
-    IReadOnlyList<QuotaWindow> windows = DuckTypedQuotaExtractor.Extract(doc.RootElement);
-
-    bool exactlyTwo = windows.Count == 2;
-    bool hasFiveHour = windows.Any(w => w.Id == "five_hour");
-    bool hasSevenDay = windows.Any(w => w.Id == "seven_day");
-    bool noContextWindow = windows.All(w => w.Id != "context_window");
-    bool pass = exactlyTwo && hasFiveHour && hasSevenDay && noContextWindow;
-
-    Console.WriteLine($"  Windows discovered : {windows.Count} (expected exactly 2)");
-    Console.WriteLine($"  five_hour present: {hasFiveHour}, seven_day present: {hasSevenDay}");
-    Console.WriteLine($"  context_window correctly excluded (has used_percentage but no reset-ish field): {noContextWindow}");
-    Console.WriteLine($"  PASS: {pass}");
-    Console.WriteLine();
-
-    DateTimeOffset now = DateTimeOffset.UtcNow;
-    foreach (QuotaWindow w in windows.OrderBy(w => w.Order))
-    {
-        PrintWindow(w, now);
-    }
-}
