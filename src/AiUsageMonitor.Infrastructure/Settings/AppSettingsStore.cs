@@ -1,0 +1,86 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace AiUsageMonitor.Infrastructure.Settings;
+
+/// <summary>
+/// Outcome of a load. <paramref name="CorruptBackupPath"/> is non-null only when an unreadable
+/// settings file was moved aside; diagnostics surfaces it so a silent reset is never silent.
+/// </summary>
+public sealed record SettingsLoadResult(AppSettings Settings, string? CorruptBackupPath);
+
+/// <summary>
+/// Reads and writes <see cref="AppSettings"/> as JSON. Never throws on a damaged or missing
+/// file: the application must always start, with defaults if necessary.
+/// </summary>
+public sealed class AppSettingsStore
+{
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    private readonly string _path;
+
+    public AppSettingsStore(string path) => _path = path;
+
+    /// <summary>
+    /// %APPDATA%\AiUsageMonitor\settings.json, resolved for whichever user is running. Never a
+    /// literal path: the release artifact has to run on a machine that is not the author's.
+    /// </summary>
+    public static string DefaultPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "AiUsageMonitor",
+        "settings.json");
+
+    public SettingsLoadResult Load()
+    {
+        if (!File.Exists(_path))
+        {
+            return new SettingsLoadResult(AppSettings.Default, null);
+        }
+
+        try
+        {
+            string json = File.ReadAllText(_path);
+            AppSettings? settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions);
+            return settings is null
+                ? QuarantineAndDefault()
+                : new SettingsLoadResult(settings, null);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return QuarantineAndDefault();
+        }
+    }
+
+    public void Save(AppSettings settings)
+    {
+        string directory = Path.GetDirectoryName(_path)
+            ?? throw new InvalidOperationException("Settings path has no directory component.");
+        Directory.CreateDirectory(directory);
+
+        // Write-then-move so a crash mid-write cannot leave a truncated settings file behind.
+        string temporary = _path + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(settings, SerializerOptions));
+        File.Move(temporary, _path, overwrite: true);
+    }
+
+    private SettingsLoadResult QuarantineAndDefault()
+    {
+        string backup = _path + "." + DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss") + ".corrupt";
+
+        try
+        {
+            File.Move(_path, backup, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file could not be preserved. Starting with defaults still beats not starting.
+            return new SettingsLoadResult(AppSettings.Default, null);
+        }
+
+        return new SettingsLoadResult(AppSettings.Default, backup);
+    }
+}
