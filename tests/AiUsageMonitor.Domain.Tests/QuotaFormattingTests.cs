@@ -24,6 +24,17 @@ public class QuotaFormattingTests
         Assert.Equal(expected, QuotaFormatting.FormatUsedPercent(used));
     }
 
+    [Theory]
+    [InlineData(150, "150% used")]
+    [InlineData(-5, "-5% used")]
+    public void FormatUsedPercent_RendersOutOfRangeValuesVerbatim(double used, string expected)
+    {
+        // Deliberate pair with QuotaWindow.RemainingPercent, which clamps: the raw used value
+        // stays visible so provider over-reporting is never silently hidden. See the XML doc on
+        // both members for the full rationale.
+        Assert.Equal(expected, QuotaFormatting.FormatUsedPercent(used));
+    }
+
     [Fact]
     public void FormatRemainingPercent_IsNull_WhenUsageIsUnknown()
     {

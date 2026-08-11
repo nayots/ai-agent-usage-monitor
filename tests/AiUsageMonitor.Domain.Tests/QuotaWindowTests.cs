@@ -125,6 +125,7 @@ public class QuotaWindowTests
     [InlineData(28, 72)]
     [InlineData(100, 0)]
     [InlineData(120, 0)]   // provider over-reporting is clamped, not propagated
+    [InlineData(-5, 100)]  // a negative "used" clamps the derived remaining to 100, not 105
     public void RemainingPercent_IsTheClampedComplementOfUsage(double used, double expected)
     {
         Assert.Equal(expected, Window(usedPercent: used).RemainingPercent);

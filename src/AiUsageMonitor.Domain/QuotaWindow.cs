@@ -20,7 +20,15 @@ public sealed record QuotaWindow(
     IReadOnlyDictionary<string, string> Extra,
     bool LabelIsProviderToken)
 {
-    /// <summary>Percent remaining, derived from <see cref="UsedPercent"/>. Null when usage is unknown.</summary>
+    /// <summary>
+    /// Percent remaining, derived from <see cref="UsedPercent"/>. Null when usage is unknown.
+    /// Deliberately clamped to [0, 100]: this is a <em>derived</em> value, and a negative or
+    /// over-100 "remaining" is meaningless regardless of what the provider reported for used.
+    /// Contrast <see cref="QuotaFormatting.FormatUsedPercent"/>, which renders the provider's
+    /// <see cref="UsedPercent"/> unclamped and verbatim - the two are a deliberate pair, not an
+    /// inconsistency: the raw value stays visible so provider over-reporting is never silently
+    /// hidden, while this derived complement stays meaningful by construction.
+    /// </summary>
     public double? RemainingPercent => UsedPercent is double used ? Math.Clamp(100.0 - used, 0.0, 100.0) : null;
 
     /// <summary>Time remaining until this window resets, relative to <paramref name="now"/>. Null when the reset time is unknown.

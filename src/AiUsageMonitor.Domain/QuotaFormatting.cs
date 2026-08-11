@@ -9,6 +9,15 @@ namespace AiUsageMonitor.Domain;
 /// </summary>
 public static class QuotaFormatting
 {
+    /// <summary>
+    /// Renders the provider's <paramref name="usedPercent"/> verbatim, deliberately unclamped:
+    /// a provider reporting e.g. 150 renders as "150% used" rather than being silently masked to
+    /// 100. Fabricating or hiding an out-of-range provider value is exactly what this project
+    /// forbids - over-reporting should stay visible, not disappear. Contrast
+    /// <see cref="QuotaWindow.RemainingPercent"/>, which clamps to [0, 100] because it is a
+    /// derived value where a negative or over-100 "remaining" would be meaningless. The two are
+    /// a deliberate pair, not an inconsistency.
+    /// </summary>
     public static string? FormatUsedPercent(double? usedPercent) =>
         usedPercent is double v ? $"{Round(v)}% used" : null;
 
