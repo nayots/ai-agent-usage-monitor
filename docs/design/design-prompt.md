@@ -53,8 +53,8 @@ Design against these. They are drawn from a real verification run against live a
 
 | Window | Used | Resets in | Duration | Marker? |
 |---|---|---|---|---|
-| `five_hour` | 47% | 3h 12m | 5 hours, inferred from the name | yes |
-| `seven_day` | 92% | 4h 55m | 7 days, inferred from the name | yes |
+| `five_hour` | 47% | 4h 55m | 5 hours, inferred from the name | yes |
+| `seven_day` | 92% | 3h 12m | 7 days, inferred from the name | yes |
 | `nimbus_quill` | 34% | *none supplied* | *none supplied* | **no** |
 
 *Verified:* the three window names, the 47% and 92% figures, and the total absence of reset and duration data on `nimbus_quill`. *Illustrative:* the 34%, and the exact countdowns.
