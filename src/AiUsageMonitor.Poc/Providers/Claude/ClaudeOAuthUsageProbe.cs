@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -112,7 +111,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             notes.Add($"{windows.Count} quota window(s) discovered.");
 
             IReadOnlyList<string> unhumanized = windows
-                .Where(w => !HasFriendlyNumericUnitLabel(w.Id))
+                .Where(w => w.LabelIsProviderToken)
                 .Select(w => w.Id)
                 .ToList();
             notes.Add(unhumanized.Count > 0
@@ -222,19 +221,6 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             notes.Add($"credentials.json could not be read or parsed ({ex.GetType().Name}). token: <absent>");
             return null;
         }
-    }
-
-    /// <summary>
-    /// True when <see cref="DuckTypedQuotaExtractor.Humanize"/> was able to turn this window's raw id
-    /// into a friendly "N unit[...]" label (e.g. "five_hour" -&gt; "5 hour") - i.e. its leading token
-    /// was a recognised English number-word. False for any id the humaniser could not map this way
-    /// (unrecognised naming schemes are preserved verbatim rather than mangled - see PRD ss4.2/ss13).
-    /// </summary>
-    private static bool HasFriendlyNumericUnitLabel(string id)
-    {
-        string label = DuckTypedQuotaExtractor.Humanize(id);
-        string[] parts = label.Split(' ', 2);
-        return parts.Length == 2 && double.TryParse(parts[0], NumberStyles.Number, CultureInfo.InvariantCulture, out _);
     }
 
     /// <summary>Top-level JSON object key names only - never values, never the raw body.</summary>
