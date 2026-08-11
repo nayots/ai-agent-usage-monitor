@@ -9,29 +9,42 @@ public class QuotaOrderingTests
     [Fact]
     public void InProviderOrder_PreservesProviderOrder_NotDuration()
     {
-        // Verified 2026-08-10: seven_day reset SOONER than five_hour on the same account.
-        // Sorting by assumed duration or by countdown would reorder them wrongly. PRD SS7.3.
+        // Verified 2026-08-10, live Claude account: three real windows in their real provider
+        // order. seven_day reset SOONER than five_hour despite the longer duration, and
+        // nimbus_quill - the real verified shape - carries neither a duration nor a reset time
+        // at all. Sorting by assumed duration or by reset countdown would both reorder these
+        // wrongly. PRD §7.3.
         QuotaWindow fiveHour = QuotaWindowTests.Window(
             id: "five_hour", resetsAt: Now.AddHours(4).AddMinutes(55),
             windowDuration: TimeSpan.FromHours(5), order: 0);
+        QuotaWindow nimbusQuill = QuotaWindowTests.Window(
+            id: "nimbus_quill", resetsAt: null, windowDuration: null, order: 1);
         QuotaWindow sevenDay = QuotaWindowTests.Window(
             id: "seven_day", resetsAt: Now.AddHours(3).AddMinutes(12),
-            windowDuration: TimeSpan.FromDays(7), order: 1);
+            windowDuration: TimeSpan.FromDays(7), order: 2);
 
-        IReadOnlyList<QuotaWindow> ordered = QuotaOrdering.InProviderOrder(new[] { sevenDay, fiveHour });
+        IReadOnlyList<QuotaWindow> ordered =
+            QuotaOrdering.InProviderOrder(new[] { sevenDay, nimbusQuill, fiveHour });
 
-        Assert.Equal(new[] { "five_hour", "seven_day" }, ordered.Select(w => w.Id).ToArray());
+        Assert.Equal(
+            new[] { "five_hour", "nimbus_quill", "seven_day" },
+            ordered.Select(w => w.Id).ToArray());
     }
 
     [Fact]
     public void InProviderOrder_IsStable_WhenOrdersCollide()
     {
-        QuotaWindow first = QuotaWindowTests.Window(id: "a", order: 0);
-        QuotaWindow second = QuotaWindowTests.Window(id: "b", order: 0);
+        // Three items share order 0, plus one with a higher order, fed scrambled. Two elements
+        // already in their expected relative order would let an unstable sort pass by
+        // construction; three-plus scrambled elements require genuine stability to pass.
+        QuotaWindow b = QuotaWindowTests.Window(id: "b", order: 0);
+        QuotaWindow z = QuotaWindowTests.Window(id: "z", order: 1);
+        QuotaWindow c = QuotaWindowTests.Window(id: "c", order: 0);
+        QuotaWindow a = QuotaWindowTests.Window(id: "a", order: 0);
 
-        IReadOnlyList<QuotaWindow> ordered = QuotaOrdering.InProviderOrder(new[] { first, second });
+        IReadOnlyList<QuotaWindow> ordered = QuotaOrdering.InProviderOrder(new[] { b, z, c, a });
 
-        Assert.Equal(new[] { "a", "b" }, ordered.Select(w => w.Id).ToArray());
+        Assert.Equal(new[] { "b", "c", "a", "z" }, ordered.Select(w => w.Id).ToArray());
     }
 
     [Fact]
