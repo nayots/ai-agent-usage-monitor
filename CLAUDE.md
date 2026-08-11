@@ -88,6 +88,19 @@ Per PRD §4.1.1 and §23 — these are product requirements, not style preferenc
 
 Windows-only. The primary shell is PowerShell (5.1 — no `&&`, no ternary); a Bash tool is also available and takes POSIX syntax. Use `System.Text.Json`; keep dependencies minimal and justified. Provider operations are async, cancellable, and timeout-bounded. One provider failing must never affect the other or crash the process.
 
+## Where process documents live
+
+One location per kind, no parallel trees:
+
+| Kind | Path |
+|---|---|
+| Implementation plans | `docs/plans/` |
+| Design specs / brainstorm output | `docs/specs/` |
+
+This **overrides the Superpowers defaults** (`docs/superpowers/plans/`, `docs/superpowers/specs/`) — those skills state that a user preference wins, and this is it. The plan path is not a preference at all but a requirement: the codex-workflow block below, and `docs/codex-workflow.md`, both name `docs/plans/<feature>.md` as the file a delegation is run against, so a plan written anywhere else is a plan Codex is never pointed at.
+
+Do not recreate `docs/superpowers/`. If a skill writes there by default, move the file and say so.
+
 <!-- codex-workflow:begin v7 -->
 # Claude ↔ Codex workflow
 
