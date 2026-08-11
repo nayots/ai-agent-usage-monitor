@@ -56,3 +56,8 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 *.lnk
+
+# Git Bash / MSYS crash artifacts. These reappear in the working tree whenever
+# a bash subprocess faults; they carry no project value and must never land in
+# a commit.
+*.stackdump
