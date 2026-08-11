@@ -18,7 +18,7 @@ public sealed record QuotaWindow(
     int Order,
     bool IsPartial,
     IReadOnlyDictionary<string, string> Extra,
-    bool LabelIsProviderToken = false)
+    bool LabelIsProviderToken)
 {
     /// <summary>Percent remaining, derived from <see cref="UsedPercent"/>. Null when usage is unknown.</summary>
     public double? RemainingPercent => UsedPercent is double used ? Math.Clamp(100.0 - used, 0.0, 100.0) : null;

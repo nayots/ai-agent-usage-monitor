@@ -435,15 +435,31 @@ public sealed class CodexProbe : IProviderProbe
             ["slot"] = slot,
         };
 
+        // A provider-supplied limitName is a real label - not a claim that needs justifying.
+        // Falling back to the id requires the same honesty check the duck-typed path uses, so the
+        // two label sources can never drift out of sync (see DuckTypedQuotaExtractor.TryHumanize).
+        string label;
+        bool labelIsProviderToken;
+        if (limitName is not null)
+        {
+            label = limitName;
+            labelIsProviderToken = false;
+        }
+        else
+        {
+            labelIsProviderToken = !DuckTypedQuotaExtractor.TryHumanize(id, out label);
+        }
+
         return new QuotaWindow(
             Id: id,
-            Label: limitName ?? DuckTypedQuotaExtractor.Humanize(id),
+            Label: label,
             UsedPercent: usedPercent,
             ResetsAt: resetsAt,
             WindowDuration: windowDuration,
             Order: order,
             IsPartial: isPartial,
-            Extra: extra);
+            Extra: extra,
+            LabelIsProviderToken: labelIsProviderToken);
     }
 
     private static string? TryGetString(JsonElement el, string propertyName) =>

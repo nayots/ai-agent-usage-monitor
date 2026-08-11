@@ -11,7 +11,8 @@ public class QuotaWindowTests
         double? usedPercent = 50,
         DateTimeOffset? resetsAt = null,
         TimeSpan? windowDuration = null,
-        int order = 0) =>
+        int order = 0,
+        bool labelIsProviderToken = false) =>
         new(
             Id: id,
             Label: id,
@@ -20,7 +21,8 @@ public class QuotaWindowTests
             WindowDuration: windowDuration,
             Order: order,
             IsPartial: resetsAt is null || windowDuration is null,
-            Extra: new Dictionary<string, string>());
+            Extra: new Dictionary<string, string>(),
+            LabelIsProviderToken: labelIsProviderToken);
 
     [Fact]
     public void TimeUntilReset_IsNull_WhenTheProviderSuppliedNoResetTime()
