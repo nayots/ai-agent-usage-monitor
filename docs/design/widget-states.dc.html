@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  html, body { margin:0; padding:0; background:#E9E9E9; }
+  a { color:#2B5FA8; text-decoration:none; }
+  a:hover { color:#17406F; text-decoration:underline; }
+</style>
+</helmet>
+
+<div style="--win:#F3F3F3;--win-stroke:#D9D9D9;--layer:#FFFFFF;--layer-alt:#F7F7F7;--stroke:#E5E5E5;--divider:#ECECEC;--ink:#1B1B1B;--ink-2:#5C5C5C;--ink-3:#6E6E6E;--fill:#2B7CD3;--fill-exhausted:#C0453F;--fill-stale:#7A7A7A;--fill-high:#9A6600;--track:#E4E4E4;--marker:#1B1B1B;--hatch:rgba(255,255,255,0.38);--ok:#0F7B3C;--warn:#8A5A00;--bad:#B32020;--token-bg:#F2F2F2;--token-stroke:#DEDEDE;--accent:#2B7CD3;--accent-text:#1F63AD;--sel:#EAF2FB; font-family:'Segoe UI Variable Text','Segoe UI Variable','Segoe UI',system-ui,sans-serif; background:#E9E9E9; color:#1B1B1B; padding:30px 34px 80px; display:flex; flex-direction:column; gap:40px; -webkit-font-smoothing:antialiased">
+
+  <div style="display:flex; flex-direction:column; gap:8px; max-width:820px">
+    <div style="font-size:10.5px; letter-spacing:0.09em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Visual reference &middot; not shipping markup</div>
+    <h1 style="margin:0; font-size:27px; font-weight:600; letter-spacing:-0.015em">Quota widget — screens and states</h1>
+    <p style="margin:0; font-size:13.5px; line-height:1.55; color:#4A4A4A; text-wrap:pretty">Windows 11 desktop widget showing live quota for locally installed AI coding tools. Every screen below is drawn against the fixture data in the brief; nothing is populated that the fixture does not supply. Light and dark are shown together throughout. Layouts are nested stacks and grids with explicit sizing, so they translate to WPF panels directly.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; font-size:11.5px; color:#4A4A4A">
+      <span style="border:1px solid #CFCFCF; background:#FFF; border-radius:4px; padding:3px 8px">Default widget 360 &times; 410 px @100%</span>
+      <span style="border:1px solid #CFCFCF; background:#FFF; border-radius:4px; padding:3px 8px">Segoe UI Variable, tabular figures</span>
+      <span style="border:1px solid #CFCFCF; background:#FFF; border-radius:4px; padding:3px 8px">Usage tones behind a toggle</span>
+      <span style="border:1px solid #CFCFCF; background:#FFF; border-radius:4px; padding:3px 8px">State = icon + text + colour</span>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 1 ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">1 &middot; Default widget, expanded — Fixtures A + B</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">Three-window card above a one-window card. The number of rows is whatever the provider reported; neither card assumes the other's shape.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Light</div>
+        <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px">
+          <div style="width:360px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.12); overflow:hidden">
+            <div style="height:32px; display:flex; align-items:center; padding:0 4px 0 11px">
+              <span style="font-size:11.5px; font-weight:600; color:var(--ink-2)">Quota Monitor</span>
+              <span style="flex:1"></span>
+              <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:12px">&#8801;</span>
+              <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:12px">&#8722;</span>
+              <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:11px">&#10005;</span>
+            </div>
+            <div style="padding:0 10px 10px; display:flex; flex-direction:column; gap:8px">
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,182px" mark="CC" provider-name="Claude Code" version="2.1.226" tier="unofficial" state="connected" updated="Updated 12s ago" windows="{{ winA }}"></dc-import>
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,136px" mark="CX" provider-name="Codex" version="0.144.6" plan="plus" tier="official" state="connected" updated="Updated 4s ago" windows="{{ winB }}"></dc-import>
+            </div>
+            <div style="border-top:1px solid var(--win-stroke); height:26px; display:flex; align-items:center; padding:0 11px">
+              <span style="font-size:11px; color:var(--ink-3)">2 providers</span>
+              <span style="flex:1"></span>
+              <span style="font-size:11px; font-weight:600; color:var(--accent-text)">Refresh</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Dark</div>
+        <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px">
+          <div style="width:360px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.45); overflow:hidden">
+            <div style="height:32px; display:flex; align-items:center; padding:0 4px 0 11px">
+              <span style="font-size:11.5px; font-weight:600; color:var(--ink-2)">Quota Monitor</span>
+              <span style="flex:1"></span>
+              <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:12px">&#8801;</span>
+              <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:12px">&#8722;</span>
+              <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:11px">&#10005;</span>
+            </div>
+            <div style="padding:0 10px 10px; display:flex; flex-direction:column; gap:8px">
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,182px" mark="CC" provider-name="Claude Code" version="2.1.226" tier="unofficial" state="connected" updated="Updated 12s ago" windows="{{ winA }}"></dc-import>
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,136px" mark="CX" provider-name="Codex" version="0.144.6" plan="plus" tier="official" state="connected" updated="Updated 4s ago" windows="{{ winB }}"></dc-import>
+            </div>
+            <div style="border-top:1px solid var(--win-stroke); height:26px; display:flex; align-items:center; padding:0 11px">
+              <span style="font-size:11px; color:var(--ink-3)">2 providers</span>
+              <span style="flex:1"></span>
+              <span style="font-size:11px; font-weight:600; color:var(--accent-text)">Refresh</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="max-width:300px; display:flex; flex-direction:column; gap:12px; padding-top:26px">
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">Rows are ordered exactly as the provider returned them. <b>seven_day</b> resets sooner than <b>five_hour</b>; nothing re-sorts by duration.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">Three columns: label left, <b>Used</b> right-aligned, <b>Resets in</b> right-aligned. Figures are tabular, so a ticking countdown never shifts its neighbours.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">Measured height at 100% scaling: <b>410&nbsp;px</b> in a 360&nbsp;px window. The 420&nbsp;px budget holds with both fixtures expanded &mdash; but only just, which is why the column captions and duration provenance live in the expanded card rather than here.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 2 ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">2 &middot; Compact widget — same data, minimum height</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">326&nbsp;px tall against the default 410, same 360&nbsp;px width. Nothing that answers "how much is left, and when does it come back" is removed.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Light</div>
+        <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px">
+          <div style="width:360px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.12); overflow:hidden">
+            <div style="height:28px; display:flex; align-items:center; padding:0 4px 0 11px">
+              <span style="font-size:11px; font-weight:600; color:var(--ink-2)">Quota Monitor</span>
+              <span style="flex:1"></span>
+              <span style="width:28px; height:24px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:12px">&#8801;</span>
+              <span style="width:28px; height:24px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:11px">&#10005;</span>
+            </div>
+            <div style="padding:0 8px 8px; display:flex; flex-direction:column; gap:6px">
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,124px" provider-name="Claude Code" tier="unofficial" state="connected" density="compact" windows="{{ winA }}"></dc-import>
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,86px" provider-name="Codex" tier="official" state="connected" density="compact" windows="{{ winB }}"></dc-import>
+            </div>
+            <div style="border-top:1px solid var(--win-stroke); height:24px; display:flex; align-items:center; padding:0 11px">
+              <span style="font-size:10.5px; color:var(--ink-3)">Updated 4s ago</span>
+              <span style="flex:1"></span>
+              <span style="font-size:10.5px; font-weight:600; color:var(--accent-text)">Refresh</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Dark</div>
+        <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px">
+          <div style="width:360px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.45); overflow:hidden">
+            <div style="height:28px; display:flex; align-items:center; padding:0 4px 0 11px">
+              <span style="font-size:11px; font-weight:600; color:var(--ink-2)">Quota Monitor</span>
+              <span style="flex:1"></span>
+              <span style="width:28px; height:24px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:12px">&#8801;</span>
+              <span style="width:28px; height:24px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:11px">&#10005;</span>
+            </div>
+            <div style="padding:0 8px 8px; display:flex; flex-direction:column; gap:6px">
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,124px" provider-name="Claude Code" tier="unofficial" state="connected" density="compact" windows="{{ winA }}"></dc-import>
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,86px" provider-name="Codex" tier="official" state="connected" density="compact" windows="{{ winB }}"></dc-import>
+            </div>
+            <div style="border-top:1px solid var(--win-stroke); height:24px; display:flex; align-items:center; padding:0 11px">
+              <span style="font-size:10.5px; color:var(--ink-3)">Updated 4s ago</span>
+              <span style="flex:1"></span>
+              <span style="font-size:10.5px; font-weight:600; color:var(--accent-text)">Refresh</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="width:330px; padding-top:26px">
+        <div style="background:#FFF; border:1px solid #D5D5D5; border-radius:6px; padding:14px 16px">
+          <div style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:#7A7A7A; font-weight:700; margin-bottom:9px">Cut order</div>
+          <ol style="margin:0; padding-left:18px; font-size:12.5px; line-height:1.65; color:#3C3C3C">
+            <li>Per-card timestamp — one stays in the footer</li>
+            <li>Version and plan</li>
+            <li>Provider monogram</li>
+            <li><i>Connected</i> status chip — silence means connected; every other state comes back</li>
+            <li>Row and card padding tighten by 2&nbsp;px</li>
+            <li>Beyond three rows per card, collapse to "N more windows — expand"</li>
+          </ol>
+          <div style="border-top:1px solid #E5E5E5; margin-top:11px; padding-top:9px; font-size:12.5px; line-height:1.55; color:#3C3C3C">Column captions and duration provenance are already absent from the default widget — they were the price of the 420&nbsp;px budget and live in the expanded provider card.<br><br><b>Never cut:</b> window label, percentage, bar, elapsed marker, countdown, tier badge, limit-reached indicator, any non-connected state.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 3 ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">3 &middot; Expanded provider card — Fixture A, all metadata, all windows</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">The single-provider view. Duration provenance is stated per row here, which is the field the default widget drops first.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Light</div>
+        <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px">
+          <div style="width:360px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.12); overflow:hidden">
+            <div style="height:32px; display:flex; align-items:center; padding:0 4px 0 8px">
+              <span style="width:24px; height:24px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:12px">&#8592;</span>
+              <span style="font-size:11.5px; font-weight:600; color:var(--ink-2); margin-left:2px">Claude Code</span>
+              <span style="flex:1"></span>
+              <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:11px">&#10005;</span>
+            </div>
+            <div style="padding:0 10px 10px">
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,300px" columns="true" mark="CC" provider-name="Claude Code" version="2.1.226" tier="unofficial" state="connected" updated="Updated 12s ago" windows="{{ winACap }}"></dc-import>
+            </div>
+            <div style="border-top:1px solid var(--win-stroke); height:30px; display:flex; align-items:center; padding:0 11px; gap:14px">
+              <span style="font-size:11px; font-weight:600; color:var(--accent-text)">Refresh</span>
+              <span style="font-size:11px; font-weight:600; color:var(--accent-text)">Diagnostics</span>
+              <span style="flex:1"></span>
+              <span style="font-size:11px; color:var(--ink-3)">3 windows reported</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Dark</div>
+        <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px">
+          <div style="width:360px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.45); overflow:hidden">
+            <div style="height:32px; display:flex; align-items:center; padding:0 4px 0 8px">
+              <span style="width:24px; height:24px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:12px">&#8592;</span>
+              <span style="font-size:11.5px; font-weight:600; color:var(--ink-2); margin-left:2px">Claude Code</span>
+              <span style="flex:1"></span>
+              <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:11px">&#10005;</span>
+            </div>
+            <div style="padding:0 10px 10px">
+              <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,300px" columns="true" mark="CC" provider-name="Claude Code" version="2.1.226" tier="unofficial" state="connected" updated="Updated 12s ago" windows="{{ winACap }}"></dc-import>
+            </div>
+            <div style="border-top:1px solid var(--win-stroke); height:30px; display:flex; align-items:center; padding:0 11px; gap:14px">
+              <span style="font-size:11px; font-weight:600; color:var(--accent-text)">Refresh</span>
+              <span style="font-size:11px; font-weight:600; color:var(--accent-text)">Diagnostics</span>
+              <span style="flex:1"></span>
+              <span style="font-size:11px; color:var(--ink-3)">3 windows reported</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:300px; display:flex; flex-direction:column; gap:12px; padding-top:26px">
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">"Duration inferred from window name" versus "Duration supplied by provider" is the only place the app admits how it knows the window length. It is also what licenses the marker: no verified duration, no marker.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">Hovering any row — known or not — shows <b>identifier: five_hour</b>, <b>identifier: nimbus_quill</b>, <b>identifier: codex</b>. The raw token is never lost, only relegated.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ QUOTA ROW STATES ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">States 1–6 &middot; The quota row</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">Every row form the widget can produce, at widget width. Each is labelled with the fixture it comes from.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Light</div>
+        <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px; width:360px">
+          <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:4px 11px 10px">
+            <sc-for list="{{ rowStates }}" as="r" hint-placeholder-count="6">
+              <div style="padding-top:11px">
+                <div style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-3); font-weight:700; padding-bottom:2px">{{ r.title }}</div>
+                <dc-import name="QuotaRow" tone="{{ tone }}" label="{{ r.label }}" raw="{{ r.raw }}" unknown="{{ r.unknown }}" pct="{{ r.pct }}" countdown="{{ r.countdown }}" marker="{{ r.marker }}" exhausted="{{ r.exhausted }}" hint-size="100%,34px"></dc-import>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px">
+        <div style="font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:#7A7A7A; font-weight:700">Dark</div>
+        <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px; width:360px">
+          <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:4px 11px 10px">
+            <sc-for list="{{ rowStates }}" as="r" hint-placeholder-count="6">
+              <div style="padding-top:11px">
+                <div style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-3); font-weight:700; padding-bottom:2px">{{ r.title }}</div>
+                <dc-import name="QuotaRow" tone="{{ tone }}" label="{{ r.label }}" raw="{{ r.raw }}" unknown="{{ r.unknown }}" pct="{{ r.pct }}" countdown="{{ r.countdown }}" marker="{{ r.marker }}" exhausted="{{ r.exhausted }}" hint-size="100%,34px"></dc-import>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="width:330px; display:flex; flex-direction:column; gap:12px; padding-top:26px">
+        <div style="border-left:2px solid #B33A3A; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#3C3C3C"><b>nimbus_quill — the partial row.</b> Label and percentage arrived; reset time and duration did not. The row keeps its three columns and simply leaves the countdown column empty. No dash, no zero, no greyed placeholder — an em-dash would read as a value. The bar has no marker because the duration is unknown, which is the baseline bar, not a degraded one. The token sits in a monospace chip so it cannot be mistaken for a phrase the app authored.</div>
+        <div style="border-left:2px solid #B33A3A; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#3C3C3C"><b>codex at 100% — exhausted.</b> Two things separate it from a merely full bar: the fill is hatched (a tiled brush in WPF, not a colour change), and a second line spells out "Limit reached &middot; resets in 5d&nbsp;08h" with the countdown promoted to the heaviest type in the row. The marker at 24% stays where it is; the distance between it and the fill edge is the whole point of the row and the UI draws no conclusion from it.</div>
+        <div style="border-left:2px solid #B33A3A; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#3C3C3C"><b>Marker at the extremes.</b> The marker is a 4&nbsp;px box — a 2&nbsp;px core with a 1&nbsp;px surface-coloured gap either side — and its box is inset linearly so that at 0% it sits flush inside the left cap and at 100% flush inside the right. It never overhangs the track and never merges with the end cap. Where marker and fill edge land on the same pixel, the gap keeps them separate; the 3&nbsp;px overshoot above and below the bar keeps the marker findable at any scaling.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MARKER EXTREMES ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">State 4 &middot; Marker at both extremes, enlarged</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">Bars at 3&times; width so the construction is legible. Values reused from Fixtures A and B; only the marker position is being demonstrated.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+      <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px; width:520px">
+        <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:4px 14px 12px">
+          <sc-for list="{{ extremes }}" as="e" hint-placeholder-count="4">
+            <div style="padding-top:12px">
+              <div style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-3); font-weight:700; padding-bottom:2px">{{ e.title }}</div>
+              <dc-import name="QuotaRow" tone="{{ tone }}" label="{{ e.label }}" raw="{{ e.raw }}" unknown="{{ e.unknown }}" pct="{{ e.pct }}" countdown="{{ e.countdown }}" marker="{{ e.marker }}" exhausted="{{ e.exhausted }}" hint-size="100%,34px"></dc-import>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px; width:520px">
+        <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:4px 14px 12px">
+          <sc-for list="{{ extremes }}" as="e" hint-placeholder-count="4">
+            <div style="padding-top:12px">
+              <div style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-3); font-weight:700; padding-bottom:2px">{{ e.title }}</div>
+              <dc-import name="QuotaRow" tone="{{ tone }}" label="{{ e.label }}" raw="{{ e.raw }}" unknown="{{ e.unknown }}" pct="{{ e.pct }}" countdown="{{ e.countdown }}" marker="{{ e.marker }}" exhausted="{{ e.exhausted }}" hint-size="100%,34px"></dc-import>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TIER + CONNECTION STATES ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">States 7 &amp; 9 &middot; Mechanism tier and connection state</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">Tier is carried by border style and word, never by colour. Connection state is carried by glyph shape and word, never by colour.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+      <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px; width:400px; display:flex; flex-direction:column; gap:14px">
+        <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:12px 13px; display:flex; flex-direction:column; gap:10px">
+          <div style="display:flex; align-items:center; gap:10px">
+            <span style="display:inline-flex; align-items:center; gap:4px; border:1px solid var(--stroke); background:var(--layer-alt); border-radius:4px; padding:1px 5px 2px; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-2)"><span style="width:6px; height:6px; border-radius:50%; background:var(--ink-2)"></span>Official</span>
+            <span style="font-size:12px; color:var(--ink-2)">Solid border, filled dot. Documented interface.</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px">
+            <span style="display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--ink-3); border-radius:4px; padding:1px 5px 2px; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-2)"><span style="width:0; height:0; border-left:3.5px solid transparent; border-right:3.5px solid transparent; border-bottom:6px solid var(--ink-3)"></span>Unofficial</span>
+            <span style="font-size:12px; color:var(--ink-2)">Dashed border, open triangle. Undocumented source.</span>
+          </div>
+        </div>
+        <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:6px 13px 10px">
+          <sc-for list="{{ connStates }}" as="s" hint-placeholder-count="8">
+            <div style="display:grid; grid-template-columns:112px 1fr; column-gap:10px; align-items:baseline; border-top:1px solid var(--divider); padding:7px 0 6px">
+              <dc-import name="StateChip" kind="{{ s.kind }}" fontSize="12px" weight="600" textColor="{{ s.ink }}" hint-size="100px,16px"></dc-import>
+              <span style="font-size:11.5px; color:var(--ink-2); line-height:1.4">{{ s.desc }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px; width:400px; display:flex; flex-direction:column; gap:14px">
+        <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:12px 13px; display:flex; flex-direction:column; gap:10px">
+          <div style="display:flex; align-items:center; gap:10px">
+            <span style="display:inline-flex; align-items:center; gap:4px; border:1px solid var(--stroke); background:var(--layer-alt); border-radius:4px; padding:1px 5px 2px; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-2)"><span style="width:6px; height:6px; border-radius:50%; background:var(--ink-2)"></span>Official</span>
+            <span style="font-size:12px; color:var(--ink-2)">Solid border, filled dot. Documented interface.</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px">
+            <span style="display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--ink-3); border-radius:4px; padding:1px 5px 2px; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-2)"><span style="width:0; height:0; border-left:3.5px solid transparent; border-right:3.5px solid transparent; border-bottom:6px solid var(--ink-3)"></span>Unofficial</span>
+            <span style="font-size:12px; color:var(--ink-2)">Dashed border, open triangle. Undocumented source.</span>
+          </div>
+        </div>
+        <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:6px 13px 10px">
+          <sc-for list="{{ connStates }}" as="s" hint-placeholder-count="8">
+            <div style="display:grid; grid-template-columns:112px 1fr; column-gap:10px; align-items:baseline; border-top:1px solid var(--divider); padding:7px 0 6px">
+              <dc-import name="StateChip" kind="{{ s.kind }}" fontSize="12px" weight="600" textColor="{{ s.ink }}" hint-size="100px,16px"></dc-import>
+              <span style="font-size:11.5px; color:var(--ink-2); line-height:1.4">{{ s.desc }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="max-width:300px; display:flex; flex-direction:column; gap:12px">
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">Seven distinct glyph silhouettes: filled disc, dashed ring, hollow ring, diamond, triangle, cross, bar. Strip all colour and every state is still separable; the word is always present beside it.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">In Windows high-contrast mode the glyph fills adopt system brushes and the badges keep their solid-versus-dashed distinction, which is the one that must not collapse.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PROVIDER CARD VARIANTS ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">States 8, 11, 12 &middot; Fixtures C, D, E, F and stale data</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">Card-level states at widget width. All four cards sit in the same list as Fixtures A and B without changing the widget's structure.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+      <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px; width:400px; display:flex; flex-direction:column; gap:14px">
+        <sc-for list="{{ cardStates }}" as="c" hint-placeholder-count="5">
+          <div>
+            <div style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:#7A7A7A; font-weight:700; padding-bottom:5px">{{ c.title }}</div>
+            <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,120px" mark="{{ c.mark }}" provider-name="{{ c.name }}" version="{{ c.version }}" plan="{{ c.plan }}" tier="{{ c.tier }}" state="{{ c.state }}" updated="{{ c.updated }}" stale="{{ c.stale }}" staleAge="{{ c.staleAge }}" collapseAfter="{{ c.collapseAfter }}" noticeTitle="{{ c.noticeTitle }}" noticeBody="{{ c.noticeBody }}" noticeAlert="{{ c.noticeAlert }}" action="{{ c.action }}" windows="{{ c.windows }}"></dc-import>
+          </div>
+        </sc-for>
+      </div>
+      <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px; width:400px; display:flex; flex-direction:column; gap:14px">
+        <sc-for list="{{ cardStates }}" as="c" hint-placeholder-count="5">
+          <div>
+            <div style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:#8A8A8A; font-weight:700; padding-bottom:5px">{{ c.title }}</div>
+            <dc-import name="ProviderCard" tone="{{ tone }}" hint-size="100%,120px" mark="{{ c.mark }}" provider-name="{{ c.name }}" version="{{ c.version }}" plan="{{ c.plan }}" tier="{{ c.tier }}" state="{{ c.state }}" updated="{{ c.updated }}" stale="{{ c.stale }}" staleAge="{{ c.staleAge }}" collapseAfter="{{ c.collapseAfter }}" noticeTitle="{{ c.noticeTitle }}" noticeBody="{{ c.noticeBody }}" noticeAlert="{{ c.noticeAlert }}" action="{{ c.action }}" windows="{{ c.windows }}"></dc-import>
+          </div>
+        </sc-for>
+      </div>
+      <div style="max-width:300px; display:flex; flex-direction:column; gap:12px">
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A"><b>Unavailable (C)</b> states that the only mechanism stopped returning data and that no fallback exists. It keeps the triangle and the word, offers diagnostics, and shows no bars at all — there is nothing to show, and a greyed bar would imply there was.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A"><b>Zero windows (E)</b> is not an error and not zero usage. It says what happened — the provider reported no windows — and stops. No bar is drawn, because a 0% bar would be a fabricated value.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A"><b>Six windows (F)</b> proves the card scales by stacking. The card never truncates: rows keep rendering and the widget grows to a 520&nbsp;px ceiling, after which the provider list — not any individual card — scrolls. Compact mode is where collapsing begins, at three rows per card.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A"><b>Stale</b> keeps the last known values at secondary ink (5.1:1 light, 5.8:1 dark — de-emphasised, still comfortably readable), swaps the accent bar fill for neutral grey so a stale bar cannot be mistaken for a live one, and states the age of the last successful update with the refresh action beside it.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS + DIAGNOSTICS ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">4 &amp; 5 &middot; Settings and Diagnostics</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">Both follow standard Fluent metrics — 32&nbsp;px rows, generous spacing — because neither is glanced at. Settings is shown light and Diagnostics dark; same layout, same tokens. Diagnostics reports state, timing, versions and error categories only.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+
+      <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px">
+        <div style="width:420px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.12); overflow:hidden">
+          <div style="height:32px; display:flex; align-items:center; padding:0 4px 0 11px">
+            <span style="font-size:11.5px; font-weight:600; color:var(--ink-2)">Settings</span>
+            <span style="flex:1"></span>
+            <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:11px">&#10005;</span>
+          </div>
+          <div style="padding:4px 14px 16px; display:flex; flex-direction:column; gap:16px">
+            <sc-for list="{{ settingGroups }}" as="g" hint-placeholder-count="3">
+              <div>
+                <div style="font-size:12px; font-weight:600; color:var(--ink); padding-bottom:6px">{{ g.title }}</div>
+                <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px">
+                  <sc-for list="{{ g.rows }}" as="row" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:center; gap:12px; min-height:38px; padding:6px 12px; border-top:1px solid var(--divider)">
+                      <div style="min-width:0; flex:1">
+                        <div style="font-size:12.5px; color:var(--ink)">{{ row.label }}</div>
+                        <sc-if value="{{ row.hasSub }}" hint-placeholder-val="{{ false }}">
+                          <div style="font-size:11px; color:var(--ink-3); margin-top:1px">{{ row.sub }}</div>
+                        </sc-if>
+                      </div>
+                      <sc-if value="{{ row.isToggle }}" hint-placeholder-val="{{ true }}">
+                        <span style="width:38px; height:20px; border-radius:10px; background:{{ row.toggleBg }}; border:1px solid {{ row.toggleStroke }}; position:relative; flex:0 0 auto">
+                          <span style="position:absolute; top:4px; left:{{ row.knobLeft }}; width:11px; height:11px; border-radius:50%; background:{{ row.knobBg }}"></span>
+                        </span>
+                        <span style="font-size:11px; color:var(--ink-2); width:24px; flex:0 0 auto">{{ row.toggleLabel }}</span>
+                      </sc-if>
+                      <sc-if value="{{ row.isSelect }}" hint-placeholder-val="{{ false }}">
+                        <span style="display:inline-flex; align-items:center; gap:8px; border:1px solid var(--stroke); background:var(--layer-alt); border-radius:4px; padding:4px 9px; font-size:12px; color:var(--ink); flex:0 0 auto">{{ row.value }}<span style="font-size:8px; color:var(--ink-3)">&#9660;</span></span>
+                      </sc-if>
+                      <sc-if value="{{ row.isBadge }}" hint-placeholder-val="{{ false }}">
+                        <span style="border:1px dashed var(--ink-3); border-radius:4px; padding:1px 5px 2px; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-2); flex:0 0 auto">{{ row.value }}</span>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+            <div style="display:flex; align-items:center; gap:14px; font-size:11.5px; color:var(--ink-3)">
+              <span>Quota Monitor 1.0.0</span><span style="flex:1"></span>
+              <span style="font-weight:600; color:var(--accent-text)">Open diagnostics</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px">
+        <div style="width:420px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.45); overflow:hidden">
+          <div style="height:32px; display:flex; align-items:center; padding:0 4px 0 11px">
+            <span style="font-size:11.5px; font-weight:600; color:var(--ink-2)">Diagnostics</span>
+            <span style="flex:1"></span>
+            <span style="width:30px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-2); font-size:11px">&#10005;</span>
+          </div>
+          <div style="padding:4px 14px 16px; display:flex; flex-direction:column; gap:12px">
+            <sc-for list="{{ diagBlocks }}" as="d" hint-placeholder-count="2">
+              <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:10px 12px 11px">
+                <div style="display:flex; align-items:center; gap:8px; padding-bottom:7px">
+                  <span style="font-size:12.5px; font-weight:600; color:var(--ink)">{{ d.name }}</span>
+                  <span style="flex:1"></span>
+                  <sc-if value="{{ d.official }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:inline-flex; align-items:center; gap:4px; border:1px solid var(--stroke); background:var(--layer-alt); border-radius:4px; padding:1px 5px 2px; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-2)"><span style="width:6px; height:6px; border-radius:50%; background:var(--ink-2)"></span>Official</span>
+                  </sc-if>
+                  <sc-if value="{{ d.unofficial }}" hint-placeholder-val="{{ true }}">
+                    <span style="display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--ink-3); border-radius:4px; padding:1px 5px 2px; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-2)"><span style="width:0; height:0; border-left:3.5px solid transparent; border-right:3.5px solid transparent; border-bottom:6px solid var(--ink-3)"></span>Unofficial</span>
+                  </sc-if>
+                </div>
+                <sc-for list="{{ d.rows }}" as="dr" hint-placeholder-count="5">
+                  <div style="display:grid; grid-template-columns:132px 1fr; column-gap:10px; border-top:1px solid var(--divider); padding:4px 0 3px">
+                    <span style="font-size:11.5px; color:var(--ink-3)">{{ dr.k }}</span>
+                    <span style="font-size:11.5px; color:var(--ink-2); font-variant-numeric:tabular-nums lining-nums">{{ dr.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+            <div style="display:flex; align-items:center; gap:8px">
+              <span style="border:1px solid var(--stroke); background:var(--layer-alt); border-radius:4px; padding:4px 11px; font-size:12px; color:var(--ink)">Re-run checks</span>
+              <span style="border:1px solid var(--stroke); background:var(--layer-alt); border-radius:4px; padding:4px 11px; font-size:12px; color:var(--ink)">Copy report</span>
+            </div>
+            <div style="font-size:11px; line-height:1.45; color:var(--ink-3)">Reports contain provider state, timing, version strings and error categories. They never contain tokens, keys, headers, session identifiers or file paths.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TRAY ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">6 &middot; Tray icon and context menu</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">The icon is one rule per reported window at 16&nbsp;px &mdash; three for Fixture A, one for Fixture B &mdash; with a shape overlay for the two states that matter at that size. Shown at 16&nbsp;px and 4&times;.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+      <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px; display:flex; gap:26px">
+        <sc-for list="{{ trayIcons }}" as="t" hint-placeholder-count="3">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:10px">
+              <dc-import name="TrayGlyph" size="64" digits="" digitSize="8" tone="{{ tone }}" overlay="{{ t.overlay }}" bars="{{ t.bars }}" hint-size="64px,64px"></dc-import>
+              <dc-import name="TrayGlyph" size="16" digits="" digitSize="8" tone="{{ tone }}" overlay="{{ t.overlay }}" bars="{{ t.bars }}" hint-size="16px,16px"></dc-import>
+              <div style="font-size:11px; color:#4A4A4A; text-align:center; max-width:104px; line-height:1.35">{{ t.label }}</div>
+            </div>
+          </sc-for>
+</div>
+
+      <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px">
+        <div style="width:252px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,0.16); padding:4px; font-size:12.5px; color:var(--ink)">
+          <sc-for list="{{ trayMenu }}" as="m" hint-placeholder-count="8">
+            <sc-if value="{{ m.sep }}" hint-placeholder-val="{{ false }}">
+              <div style="height:1px; background:var(--divider); margin:4px 8px"></div>
+            </sc-if>
+            <sc-if value="{{ m.item }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; gap:9px; height:30px; padding:0 10px; border-radius:4px; background:{{ m.bg }}">
+                <span style="color:{{ m.ink }}">{{ m.label }}</span>
+                <span style="flex:1"></span>
+                <span style="font-size:11.5px; color:var(--ink-3); font-variant-numeric:tabular-nums lining-nums">{{ m.right }}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ m.status }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:8px; height:28px; padding:0 10px">
+                <dc-import name="StateChip" kind="{{ m.kind }}" label="{{ m.label }}" fontSize="12px" textColor="var(--ink-2)" hint-size="140px,16px"></dc-import>
+                <span style="flex:1"></span>
+                <span style="font-size:11.5px; color:var(--ink-2); font-variant-numeric:tabular-nums lining-nums">{{ m.right }}</span>
+              </div>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px; display:flex; gap:26px; align-items:flex-start">
+        <div style="display:flex; gap:26px">
+          <sc-for list="{{ trayIcons }}" as="t" hint-placeholder-count="3">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:10px">
+              <dc-import name="TrayGlyph" size="64" digits="" digitSize="8" tone="{{ tone }}" overlay="{{ t.overlay }}" bars="{{ t.bars }}" hint-size="64px,64px"></dc-import>
+              <dc-import name="TrayGlyph" size="16" digits="" digitSize="8" tone="{{ tone }}" overlay="{{ t.overlay }}" bars="{{ t.bars }}" hint-size="16px,16px"></dc-import>
+              <div style="font-size:11px; color:#B4B4B4; text-align:center; max-width:104px; line-height:1.35">{{ t.label }}</div>
+            </div>
+          </sc-for>
+</div>
+        <div style="width:252px; background:var(--win); border:1px solid var(--win-stroke); border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,0.5); padding:4px; font-size:12.5px; color:var(--ink)">
+          <sc-for list="{{ trayMenu }}" as="m" hint-placeholder-count="8">
+            <sc-if value="{{ m.sep }}" hint-placeholder-val="{{ false }}">
+              <div style="height:1px; background:var(--divider); margin:4px 8px"></div>
+            </sc-if>
+            <sc-if value="{{ m.item }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; gap:9px; height:30px; padding:0 10px; border-radius:4px; background:{{ m.bg }}">
+                <span style="color:{{ m.ink }}">{{ m.label }}</span>
+                <span style="flex:1"></span>
+                <span style="font-size:11.5px; color:var(--ink-3); font-variant-numeric:tabular-nums lining-nums">{{ m.right }}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ m.status }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:8px; height:28px; padding:0 10px">
+                <dc-import name="StateChip" kind="{{ m.kind }}" label="{{ m.label }}" fontSize="12px" textColor="var(--ink-2)" hint-size="140px,16px"></dc-import>
+                <span style="flex:1"></span>
+                <span style="font-size:11.5px; color:var(--ink-2); font-variant-numeric:tabular-nums lining-nums">{{ m.right }}</span>
+              </div>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+      <div style="max-width:300px; display:flex; flex-direction:column; gap:12px">
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">At 16&nbsp;px a bar is two device pixels at 100% scaling, so the icon carries fill length only. State is an overlay shape — filled disc with a cross for limit reached, triangle for unavailable — never a recolour of the bars. Unavailable draws no bars at all: three empty tracks would read as 0% used.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">The menu repeats each provider's state in words. The percentage beside it is the highest reported window for that provider, labelled with which window it is; no aggregate is invented.</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============ TRAY, LIVE VALUES ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">6b &middot; Tray icon carrying live values</h2>
+      <p style="margin:0; font-size:13px; line-height:1.5; color:#4A4A4A">Three approaches to putting the numbers themselves in the notification area, each shown at 4&times; and at true 16&nbsp;px. The hover tooltip is the same in all of them.</p>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+      <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px; display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap">
+        <sc-for list="{{ trayVariants }}" as="v" hint-placeholder-count="3">
+          <div style="width:236px; display:flex; flex-direction:column">
+            <div style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-3); font-weight:700">{{ v.title }}</div>
+            <div style="display:flex; align-items:flex-end; gap:22px; padding:16px 0 14px; min-height:96px">
+              <sc-for list="{{ v.icons }}" as="ic" hint-placeholder-count="1">
+                <div style="display:flex; align-items:flex-end; gap:13px">
+                  <dc-import name="TrayGlyph" tone="{{ tone }}" size="64" digits="{{ ic.digits }}" digitSize="{{ ic.digitSize }}" overlay="{{ ic.overlay }}" bars="{{ ic.bars }}" hint-size="64px,64px"></dc-import>
+                  <dc-import name="TrayGlyph" tone="{{ tone }}" size="16" digits="{{ ic.digits }}" digitSize="{{ ic.digitSize }}" overlay="{{ ic.overlay }}" bars="{{ ic.bars }}" hint-size="16px,16px"></dc-import>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:11.5px; line-height:1.45; color:var(--ink-2)">{{ v.detail }}</div>
+          </div>
+        </sc-for>
+        <div style="display:flex; flex-direction:column; gap:12px; width:300px">
+          <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; box-shadow:0 6px 16px rgba(0,0,0,0.14); padding:8px 11px 9px">
+            <sc-for list="{{ tooltipLines }}" as="l" hint-placeholder-count="6">
+              <sc-if value="{{ l.head }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; align-items:center; gap:6px; padding-top:{{ l.padTop }}">
+                  <span style="font-size:12px; font-weight:600; color:var(--ink)">{{ l.text }}</span>
+                  <span style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-3)">{{ l.tier }}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ l.body }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12px; color:var(--ink-2); font-variant-numeric:tabular-nums lining-nums; padding-top:2px">{{ l.text }}</div>
+              </sc-if>
+            </sc-for>
+          </div>
+          <div style="background:#F3F3F3; border:1px solid #D9D9D9; border-radius:6px; height:40px; display:flex; align-items:center; gap:12px; padding:0 12px">
+            <span style="color:#4A4A4A; font-size:10px">&#94;</span>
+            <div style="--track:#E4E4E4;--fill:#2B7CD3;--fill-high:#9A6600;--fill-exhausted:#C0453F;--ink:#1B1B1B;--bad:#B32020;--layer:#F3F3F3; display:flex; align-items:center; gap:10px">
+              <dc-import name="TrayGlyph" tone="{{ tone }}" size="16" digits="92" digitSize="8" overlay="" bars="{{ barsClaude }}" hint-size="16px,16px"></dc-import>
+              <dc-import name="TrayGlyph" tone="{{ tone }}" size="16" digits="" digitSize="8" overlay="cross" bars="{{ barsCodex }}" hint-size="16px,16px"></dc-import>
+            </div>
+            <span style="flex:1"></span>
+            <span style="color:#4A4A4A; font-size:11px">ENG</span>
+          </div>
+        </div>
+      </div>
+      <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--fill:#3A96DD;--fill-exhausted:#E0685E;--fill-stale:#8A8A8A;--fill-high:#B47F1E;--track:#3D3D3D;--marker:#FFFFFF;--hatch:rgba(0,0,0,0.30);--ok:#6CCB8E;--warn:#E0B252;--bad:#F0796F;--token-bg:#333333;--token-stroke:#3F3F3F;--accent:#4CC2FF;--accent-text:#4CC2FF;--sel:#2F3B47; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px; display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap">
+        <sc-for list="{{ trayVariants }}" as="v" hint-placeholder-count="3">
+          <div style="width:236px; display:flex; flex-direction:column">
+            <div style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:var(--ink-3); font-weight:700">{{ v.title }}</div>
+            <div style="display:flex; align-items:flex-end; gap:22px; padding:16px 0 14px; min-height:96px">
+              <sc-for list="{{ v.icons }}" as="ic" hint-placeholder-count="1">
+                <div style="display:flex; align-items:flex-end; gap:13px">
+                  <dc-import name="TrayGlyph" tone="{{ tone }}" size="64" digits="{{ ic.digits }}" digitSize="{{ ic.digitSize }}" overlay="{{ ic.overlay }}" bars="{{ ic.bars }}" hint-size="64px,64px"></dc-import>
+                  <dc-import name="TrayGlyph" tone="{{ tone }}" size="16" digits="{{ ic.digits }}" digitSize="{{ ic.digitSize }}" overlay="{{ ic.overlay }}" bars="{{ ic.bars }}" hint-size="16px,16px"></dc-import>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:11.5px; line-height:1.45; color:var(--ink-2)">{{ v.detail }}</div>
+          </div>
+        </sc-for>
+        <div style="display:flex; flex-direction:column; gap:12px; width:300px">
+          <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; box-shadow:0 6px 16px rgba(0,0,0,0.14); padding:8px 11px 9px">
+            <sc-for list="{{ tooltipLines }}" as="l" hint-placeholder-count="6">
+              <sc-if value="{{ l.head }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; align-items:center; gap:6px; padding-top:{{ l.padTop }}">
+                  <span style="font-size:12px; font-weight:600; color:var(--ink)">{{ l.text }}</span>
+                  <span style="font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; font-weight:600; color:var(--ink-3)">{{ l.tier }}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ l.body }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12px; color:var(--ink-2); font-variant-numeric:tabular-nums lining-nums; padding-top:2px">{{ l.text }}</div>
+              </sc-if>
+            </sc-for>
+          </div>
+          <div style="background:#1C1C1C; border:1px solid #2E2E2E; border-radius:6px; height:40px; display:flex; align-items:center; gap:12px; padding:0 12px">
+            <span style="color:#C8C8C8; font-size:10px">&#94;</span>
+            <div style="--track:#3D3D3D;--fill:#3A96DD;--fill-high:#B47F1E;--fill-exhausted:#E0685E;--ink:#FFFFFF;--bad:#F0796F;--layer:#1C1C1C; display:flex; align-items:center; gap:10px">
+              <dc-import name="TrayGlyph" tone="{{ tone }}" size="16" digits="92" digitSize="8" overlay="" bars="{{ barsClaude }}" hint-size="16px,16px"></dc-import>
+              <dc-import name="TrayGlyph" tone="{{ tone }}" size="16" digits="" digitSize="8" overlay="cross" bars="{{ barsCodex }}" hint-size="16px,16px"></dc-import>
+            </div>
+            <span style="flex:1"></span>
+            <span style="color:#C8C8C8; font-size:11px">ENG</span>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:300px; display:flex; flex-direction:column; gap:12px">
+        <div style="background:#FFF; border:1px solid #D5D5D5; border-radius:6px; padding:12px 14px">
+          <div style="font-size:11px; letter-spacing:0.05em; text-transform:uppercase; color:#7A7A7A; font-weight:700; margin-bottom:9px">Rule tone by usage</div>
+          <sc-for list="{{ toneSteps }}" as="ts" hint-placeholder-count="3">
+            <div style="display:grid; grid-template-columns:64px 62px 1fr; column-gap:10px; align-items:center; padding:5px 0; border-top:1px solid #ECECEC">
+              <div style="height:6px; background:#E4E4E4"><div style="height:100%; width:{{ ts.w }}; background:{{ ts.bg }}"></div></div>
+              <span style="font-size:11.5px; color:#3C3C3C; font-variant-numeric:tabular-nums lining-nums">{{ ts.range }}</span>
+              <span style="font-size:11.5px; color:#5C5C5C">{{ ts.label }}</span>
+            </div>
+          </sc-for>
+          <div style="font-size:11.5px; line-height:1.45; color:#5C5C5C; margin-top:9px">Three steps, not a gradient, and the same three in both themes. Applied to every bar in the app &mdash; tray rules and widget quota rows alike &mdash; behind the <b>Colour bars by usage</b> setting. Off, every bar returns to the single accent and the exhausted red. Bar length and the written percentage already carry the value, so tone is redundant reinforcement rather than the sole signal, which is what keeps it inside the no-colour-only rule. It does cost the "at most one accent hue" restraint rule; that trade is worth confirming.</div>
+        </div>
+        <div style="border-left:2px solid #B33A3A; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#3C3C3C"><b>B is the recommendation.</b> Windows already stacks one icon per app in the overflow, and a single digit pair cannot honestly stand for two providers at once. One icon per provider means the number always belongs to something nameable, and Codex's weekly window gets a full-width rule instead of a third of one.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">The number is the <b>highest percentage the provider reported</b>, not an average and not a chosen window &mdash; averaging separate allowances would be an invented value. The rules underneath are every window in reported order, so the number always has a rule that matches it.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A"><b>100% never renders as digits.</b> Three glyphs do not fit in a 16&nbsp;px cell at a legible size, and a truncated "10" would be a wrong number. At 100% with rate-limit-reached the digits are replaced by the limit-reached disc, which is the state that matters more than the figure.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">Every variant sums to exactly 16&nbsp;px at 1&times; with integer parts: variant B is 8&nbsp;px of digits over three 2&nbsp;px rules with 1&nbsp;px gaps; variant A drops the digits to 7&nbsp;px to buy the 2&nbsp;px group gap above the Codex rule. Nothing is shrunk to fit. The icon is authored as vector and Windows renders it at 20, 24 and 32&nbsp;px for 125%, 150% and 200% scaling, so the 16&nbsp;px case is the floor, not the norm. In high-contrast mode the fills become <i>Highlight</i> on <i>Control</i> and the digits <i>WindowText</i>. The limit-reached disc sits flush in the bottom-right corner, where it can only clip the tail of the lowest rule &mdash; the exhausted one, whose fill runs the full width anyway.</div>
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">The tooltip states reset times as countdowns only. Absolute clock times would have to be computed and are not in the provider payload, and nothing in the tooltip projects forward.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ UNKNOWN LABEL ============ -->
+  <section style="display:flex; flex-direction:column; gap:14px">
+    <div style="max-width:820px">
+      <h2 style="margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:-0.01em">State 10 &middot; Known versus unknown window names</h2>
+    </div>
+    <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap">
+      <div style="background:#EDEDED; border:1px solid #D5D5D5; border-radius:8px; padding:20px; width:420px">
+        <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:12px 13px; display:flex; flex-direction:column; gap:11px">
+          <div style="display:flex; align-items:center; gap:12px">
+            <span style="font-size:12.5px; color:var(--ink); width:150px">5-hour window</span>
+            <span style="font-size:11.5px; color:var(--ink-2); line-height:1.4">Resolved name. Interface type, sentence case, marker permitted.</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px">
+            <span style="width:150px"><span style="font-family:'Cascadia Mono',Consolas,'Courier New',monospace; font-size:11.5px; color:var(--ink-2); background:var(--token-bg); border:1px solid var(--token-stroke); border-radius:3px; padding:1px 4px">nimbus_quill</span></span>
+            <span style="font-size:11.5px; color:var(--ink-2); line-height:1.4">Unresolved. The provider's literal token, in a monospace chip, no marker.</span>
+          </div>
+        </div>
+      </div>
+      <div style="--win:#202020;--win-stroke:#3A3A3A;--layer:#2B2B2B;--layer-alt:#323232;--stroke:#383838;--divider:#333333;--ink:#FFFFFF;--ink-2:#C8C8C8;--ink-3:#A6A6A6;--track:#3D3D3D;--token-bg:#333333;--token-stroke:#3F3F3F; background:#171717; border:1px solid #2E2E2E; border-radius:8px; padding:20px; width:420px">
+        <div style="background:var(--layer); border:1px solid var(--stroke); border-radius:6px; padding:12px 13px; display:flex; flex-direction:column; gap:11px">
+          <div style="display:flex; align-items:center; gap:12px">
+            <span style="font-size:12.5px; color:var(--ink); width:150px">5-hour window</span>
+            <span style="font-size:11.5px; color:var(--ink-2); line-height:1.4">Resolved name. Interface type, sentence case, marker permitted.</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px">
+            <span style="width:150px"><span style="font-family:'Cascadia Mono',Consolas,'Courier New',monospace; font-size:11.5px; color:var(--ink-2); background:var(--token-bg); border:1px solid var(--token-stroke); border-radius:3px; padding:1px 4px">nimbus_quill</span></span>
+            <span style="font-size:11.5px; color:var(--ink-2); line-height:1.4">Unresolved. The provider's literal token, in a monospace chip, no marker.</span>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:300px">
+        <div style="border-left:2px solid #C3C3C3; padding:2px 0 2px 11px; font-size:12.5px; line-height:1.5; color:#4A4A4A">The chip says "this string came from the provider, we are relaying it". It is quieter than the resolved label, not louder — an unknown window is ordinary, not an error. Every row, resolved or not, carries the raw identifier in its tooltip.</div>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;toneByUsage&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Bars&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const tb = (pct, ex, gap) => ({ pct, exhausted: !!ex, gap: !!gap });
+    const w = (label, raw, pct, countdown, marker, extra) => Object.assign(
+      { label, raw, unknown: false, pct, countdown: countdown || null, marker: (marker === undefined ? null : marker), exhausted: false, caption: null }, extra || {});
+
+    const five = w("5-hour window", "five_hour", 47, "4h 55m", 1.7);
+    const seven = w("7-day window", "seven_day", 92, "3h 12m", 98.1);
+    const nimbus = w("nimbus_quill", "nimbus_quill", 34, null, null, { unknown: true });
+    const codex = w("codex", "codex", 100, "5d 08h", 24, { unknown: true, exhausted: true });
+
+    const cap = (o, c) => Object.assign({}, o, { caption: c });
+    const inferred = "Duration inferred from window name";
+    const supplied = "Duration supplied by provider";
+
+    const winA = [five, seven, nimbus];
+    const winACap = [cap(five, inferred), cap(seven, inferred), cap(nimbus, null)];
+    const winB = [codex];
+
+    const winF = [
+      five, seven,
+      w("7-day window \u00b7 Opus", "seven_day_opus", 92, "3h 12m", 98.1),
+      w("7-day window \u00b7 Sonnet", "seven_day_sonnet", 47, "3h 12m", 98.1),
+      w("Extra usage", "extra_usage", 34, null, null),
+      nimbus
+    ];
+
+    const rowStates = [
+      Object.assign({ title: "1 \u00b7 Complete row \u2014 Fixture A, five_hour" }, five),
+      Object.assign({ title: "2 \u00b7 Partial row \u2014 Fixture A, nimbus_quill" }, nimbus),
+      Object.assign({ title: "3 \u00b7 Baseline bar, no marker \u2014 Fixture A, five_hour, duration unverified" }, five, { marker: null }),
+      Object.assign({ title: "5 + 6 \u00b7 Exhausted, usage far ahead of elapsed \u2014 Fixture B" }, codex),
+      Object.assign({ title: "4 \u00b7 Marker at 0% \u2014 Fixture A values" }, five, { marker: 0 }),
+      Object.assign({ title: "4 \u00b7 Marker at 100% \u2014 Fixture A values" }, seven, { marker: 100 })
+    ];
+
+    const extremes = [
+      Object.assign({ title: "Marker at 0% \u2014 sits inside the left cap" }, five, { marker: 0 }),
+      Object.assign({ title: "Marker at 100%, fill 92% \u2014 clear of the right cap" }, seven, { marker: 100 }),
+      Object.assign({ title: "Marker at 100%, fill 100% \u2014 marker and fill edge coincide" }, codex, { marker: 100 }),
+      Object.assign({ title: "Marker at 24%, fill 100% \u2014 Fixture B as reported" }, codex)
+    ];
+
+    const connStates = [
+      { kind: "notinstalled", ink: "var(--ink-2)", desc: "Tool is not present on this machine." },
+      { kind: "discovering", ink: "var(--ink-2)", desc: "Locating the tool and its usage source." },
+      { kind: "waiting", ink: "var(--ink-2)", desc: "Found. Waiting for the first usage report." },
+      { kind: "connected", ink: "var(--ink)", desc: "Reading usage normally." },
+      { kind: "stale", ink: "var(--warn)", desc: "Last known values retained; the latest read did not succeed." },
+      { kind: "unavailable", ink: "var(--bad)", desc: "The usage source stopped returning data. No fallback exists." },
+      { kind: "unsupported", ink: "var(--ink-2)", desc: "Installed version does not expose usage." },
+      { kind: "error", ink: "var(--bad)", desc: "The last read failed. Category shown in diagnostics." }
+    ];
+
+    const blank = { mark: "", version: null, plan: null, updated: null, stale: false, staleAge: "", collapseAfter: 0, noticeTitle: "", noticeBody: "", noticeAlert: false, action: "", windows: [] };
+
+    const cardStates = [
+      Object.assign({}, blank, {
+        title: "State 8 \u00b7 Fixture C \u2014 mechanism unavailable",
+        mark: "CC", name: "Claude Code", version: "2.1.226", tier: "unofficial", state: "unavailable",
+        noticeTitle: "Usage can no longer be read", noticeAlert: true,
+        noticeBody: "The only source this provider has stopped returning usable data. There is no second source to fall back to. Last successful update 2 hours ago.",
+        action: "Open diagnostics"
+      }),
+      Object.assign({}, blank, {
+        title: "Fixture D \u2014 not installed",
+        name: "Codex", tier: "official", state: "notinstalled",
+        noticeTitle: "Not installed on this machine",
+        noticeBody: "The card stays in place. Nothing is shown in place of usage.",
+        action: "Check again"
+      }),
+      Object.assign({}, blank, {
+        title: "Fixture E \u2014 zero windows reported",
+        mark: "CC", name: "Claude Code", version: "2.1.226", tier: "unofficial", state: "connected", updated: "Updated 8s ago",
+        noticeTitle: "No quota windows reported",
+        noticeBody: "The provider is installed, authenticated and reachable, and returned no windows. This is neither an error nor zero usage."
+      }),
+      Object.assign({}, blank, {
+        title: "State 12 \u00b7 Fixture A \u2014 stale",
+        mark: "CC", name: "Claude Code", version: "2.1.226", tier: "unofficial", state: "stale",
+        stale: true, staleAge: "6 minutes ago", windows: winA
+      }),
+      Object.assign({}, blank, {
+        title: "Fixture F \u2014 six windows, hypothetical (percentages reused from A and B)",
+        mark: "CC", name: "Claude Code", version: "2.1.226", tier: "unofficial", state: "connected", updated: "Updated 12s ago",
+        windows: winF
+      })
+    ];
+
+    const tog = (on) => ({
+      isToggle: true, isSelect: false, isBadge: false,
+      toggleBg: on ? "var(--accent)" : "var(--layer-alt)",
+      toggleStroke: on ? "var(--accent)" : "var(--ink-3)",
+      knobBg: on ? "#FFFFFF" : "var(--ink-2)",
+      knobLeft: on ? "23px" : "4px", toggleLabel: on ? "On" : "Off"
+    });
+    const sel = (value) => ({ isToggle: false, isSelect: true, isBadge: false, value });
+    const row = (label, sub, ctrl) => Object.assign({ label, sub: sub || "", hasSub: !!sub, isToggle: false, isSelect: false, isBadge: false, value: "", toggleBg: "", toggleStroke: "", knobBg: "", knobLeft: "4px", toggleLabel: "" }, ctrl);
+
+    const settingGroups = [
+      { title: "Startup", rows: [ row("Start with Windows", null, tog(true)), row("Start minimised to the tray", null, tog(false)) ] },
+      { title: "Appearance", rows: [ row("Theme", null, sel("Use system setting")), row("Density", "Compact hides versions, the monogram and the connected chip", sel("Standard")), row("Colour bars by usage", "Rules and quota bars shift tone at 75% and 100%", tog(true)), row("Always on top", null, tog(false)) ] },
+      { title: "Data", rows: [ row("Refresh interval", null, sel("Every 30 seconds")), row("Claude Code", "Unofficial source", tog(true)), row("Codex", "Official source", tog(true)) ] }
+    ];
+
+    const diagBlocks = [
+      { name: "Claude Code", official: false, unofficial: true, rows: [
+        { k: "State", v: "Unavailable" },
+        { k: "Version", v: "2.1.226" },
+        { k: "Sources", v: "1 of 1 \u2014 no fallback configured" },
+        { k: "Last successful read", v: "2h 04m ago" },
+        { k: "Last attempt", v: "18s ago" },
+        { k: "Attempts since success", v: "247" },
+        { k: "Last error category", v: "SourceUnreadable" },
+        { k: "Windows reported", v: "0 (last success: 3)" }
+      ]},
+      { name: "Codex", official: true, unofficial: false, rows: [
+        { k: "State", v: "Connected" },
+        { k: "Version", v: "0.144.6 \u00b7 plan plus" },
+        { k: "Sources", v: "1 of 1" },
+        { k: "Last successful read", v: "4s ago" },
+        { k: "Rate limit reached", v: "Yes \u2014 resets in 5d 08h" },
+        { k: "Windows reported", v: "1" }
+      ]}
+    ];
+
+    const trayIcons = [
+      { bars: [tb(47), tb(92), tb(34)], overlay: "", label: "Normal \u2014 Fixture A, three windows" },
+      { bars: [tb(100, true)], overlay: "cross", label: "Limit reached \u2014 Fixture B, one window" },
+      { bars: [], overlay: "tri", label: "Unavailable \u2014 Fixture C" }
+    ];
+
+    const mi = (label, right, bg, ink) => ({ item: true, sep: false, status: false, label, right: right || "", bg: bg || "transparent", ink: ink || "var(--ink)", kind: "" });
+    const ms = (kind, label, right) => ({ item: false, sep: false, status: true, kind, label, right: right || "", bg: "", ink: "" });
+    const trayMenu = [
+      ms("connected", "Claude Code", "92% \u00b7 7-day"),
+      ms("connected", "Codex", "100% \u00b7 limit reached"),
+      { item: false, sep: true, status: false, label: "", right: "", bg: "", ink: "", kind: "" },
+      mi("Show widget", "", "var(--sel)"),
+      mi("Refresh now"),
+      { item: false, sep: true, status: false, label: "", right: "", bg: "", ink: "", kind: "" },
+      mi("Settings\u2026"),
+      mi("Diagnostics\u2026"),
+      { item: false, sep: true, status: false, label: "", right: "", bg: "", ink: "", kind: "" },
+      mi("Exit")
+    ];
+
+    const barsClaude = [tb(47), tb(92), tb(34)];
+    const barsCodex = [tb(100, true)];
+    const trayVariants = [
+      { title: "A \u00b7 One icon, both providers", icons: [ { digits: "92", digitSize: 7, overlay: "cross", bars: [tb(47), tb(92), tb(100, true, true)] } ],
+        detail: "Digits are the primary provider's highest window. Its rules sit together; the separated rule below the gap is Codex. Compact, but the number silently belongs to only one of the two providers." },
+      { title: "B \u00b7 One icon per provider \u2014 recommended", icons: [ { digits: "92", digitSize: 8, overlay: "", bars: barsClaude }, { digits: "", digitSize: 8, overlay: "cross", bars: barsCodex } ],
+        detail: "Claude Code: 92 with three rules. Codex: one full rule, limit-reached disc instead of digits. Every number belongs to a named provider." },
+      { title: "B \u00b7 Codex below its limit", icons: [ { digits: "92", digitSize: 8, overlay: "", bars: barsClaude }, { digits: "47", digitSize: 8, overlay: "", bars: [tb(47)] } ],
+        detail: "The same pair with Codex not exhausted. Its 47% is reused from Fixture A \u2014 the fixtures only ever observed Codex at 100%, so nothing here is a new observation. No disc, digits instead." },
+      { title: "C \u00b7 Rules only, no digits", icons: [ { digits: "", digitSize: 8, overlay: "cross", bars: [tb(47), tb(92), tb(34), tb(100, true, true)] } ],
+        detail: "Four rules, Codex separated by the group gap. Reads as proportion at any scaling and never has a digit legibility floor, but no exact figure without hovering." }
+    ];
+    const toneSteps = [
+      { w: "47%", bg: "#2B7CD3", range: "0\u201374%", label: "Accent" },
+      { w: "92%", bg: "#9A6600", range: "75\u201399%", label: "High" },
+      { w: "100%", bg: "#C0453F", range: "100%", label: "Exhausted" }
+    ];
+    const tl = (text, tier, head, padTop) => ({ text, tier: tier || "", head: !!head, body: !head, padTop: padTop || "0px" });
+    const tooltipLines = [
+      tl("Claude Code", "Unofficial", true),
+      tl("5h \u00b7 47% used \u00b7 resets in 4h 55m"),
+      tl("7d \u00b7 92% used \u00b7 resets in 3h 12m"),
+      tl("nimbus_quill \u00b7 34% used"),
+      tl("Codex", "Official", true, "8px"),
+      tl("codex \u00b7 100% used \u00b7 limit reached \u00b7 resets in 5d 08h")
+    ];
+
+    const tone = this.props.toneByUsage !== false;
+    return { tone, winA, winACap, winB, rowStates, extremes, connStates, cardStates, settingGroups, diagBlocks, trayIcons, trayMenu, trayVariants, tooltipLines, barsClaude, barsCodex, toneSteps };
+  }
+}
+</script>
+</body>
+</html>

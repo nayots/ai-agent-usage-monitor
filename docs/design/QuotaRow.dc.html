@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div title="{{ tip }}" style="display:grid; grid-template-columns:1fr 42px 62px; column-gap:8px; align-items:baseline; border-top:1px solid var(--divider); padding-top:{{ padTop }}; padding-bottom:{{ padBottom }}">
+  <div style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+    <sc-if value="{{ showLabel }}" hint-placeholder-val="{{ true }}">
+      <span style="font-size:12.5px; color:{{ rowInk }}">{{ label }}</span>
+    </sc-if>
+    <sc-if value="{{ showToken }}" hint-placeholder-val="{{ false }}">
+      <span style="font-family:'Cascadia Mono',Consolas,'Courier New',monospace; font-size:11.5px; color:var(--ink-2); background:var(--token-bg); border:1px solid var(--token-stroke); border-radius:3px; padding:1px 4px">{{ label }}</span>
+    </sc-if>
+  </div>
+  <div style="text-align:right; font-size:12.5px; font-weight:{{ pctWeight }}; color:{{ rowInk }}; font-variant-numeric:tabular-nums lining-nums">{{ pctText }}</div>
+  <div style="text-align:right; font-size:12px; font-weight:{{ cdWeight }}; color:{{ cdColor }}; font-variant-numeric:tabular-nums lining-nums">{{ countdownText }}</div>
+
+  <div style="grid-column:1/-1; position:relative; height:5px; margin-top:5px; background:var(--track); border-radius:1px">
+    <div style="position:absolute; left:0; top:0; bottom:0; border-radius:1px; width:{{ fillWidth }}; background:{{ fillBg }}"></div>
+    <sc-if value="{{ hasMarker }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; top:-3px; height:11px; width:4px; background:var(--layer); left:{{ markerLeft }}">
+        <div style="position:absolute; left:1px; top:0; bottom:0; width:2px; background:var(--marker)"></div>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ exhausted }}" hint-placeholder-val="{{ false }}">
+    <div style="grid-column:1/-1; display:flex; align-items:center; gap:5px; margin-top:6px">
+      <span style="width:9px; height:9px; line-height:9px; text-align:center; font-size:10px; font-weight:700; color:var(--bad)">&#10005;</span>
+      <span style="font-size:11.5px; font-weight:600; color:var(--bad)">Limit reached</span>
+      <span style="font-size:11.5px; color:var(--ink-2)">&middot; resets in</span>
+      <span style="font-size:11.5px; font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums lining-nums">{{ countdownText }}</span>
+    </div>
+  </sc-if>
+  <sc-if value="{{ hasCaption }}" hint-placeholder-val="{{ false }}">
+    <div style="grid-column:1/-1; margin-top:4px; font-size:11px; color:var(--ink-3)">{{ caption }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:320,&quot;height&quot;:60},&quot;label&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;5-hour window&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;raw&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;five_hour&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;unknown&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;pct&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:47,&quot;min&quot;:0,&quot;max&quot;:100,&quot;tsType&quot;:&quot;number&quot;},&quot;countdown&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;4h 55m&quot;,&quot;tsType&quot;:&quot;string | null&quot;},&quot;marker&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:2,&quot;min&quot;:0,&quot;max&quot;:100,&quot;tsType&quot;:&quot;number | null&quot;},&quot;exhausted&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;stale&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;caption&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string | null&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;normal&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;normal&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const pct = typeof p.pct === "number" ? p.pct : 0;
+    const marker = (p.marker === null || p.marker === undefined || p.marker === "") ? null : Number(p.marker);
+    const exhausted = !!p.exhausted;
+    const stale = !!p.stale;
+    const dense = p.density === "compact";
+    const hatch = "repeating-linear-gradient(135deg, var(--hatch) 0 2px, transparent 2px 5px), ";
+    const tone = p.tone !== false;
+    const base = stale ? "var(--fill-stale)" : (exhausted || pct >= 100) ? "var(--fill-exhausted)" : (tone && pct >= 75) ? "var(--fill-high)" : "var(--fill)";
+    return {
+      label: p.label,
+      showLabel: !p.unknown,
+      showToken: !!p.unknown,
+      tip: "identifier: " + (p.raw || p.label),
+      pctText: pct + "%",
+      pctWeight: exhausted ? 600 : 500,
+      countdownText: p.countdown ? p.countdown : "",
+      cdColor: exhausted ? "var(--ink)" : "var(--ink-2)",
+      cdWeight: exhausted ? 600 : 400,
+      rowInk: stale ? "var(--ink-3)" : "var(--ink)",
+      fillWidth: pct + "%",
+      fillBg: (exhausted ? hatch : "") + base,
+      hasMarker: marker !== null,
+      // 4px marker box inset so it never overhangs the track at 0% or 100%
+      markerLeft: marker === null ? "0" : "calc(" + marker + "% - " + (marker / 100 * 4).toFixed(2) + "px)",
+      exhausted,
+      caption: p.caption || "",
+      hasCaption: !!p.caption && !dense,
+      padTop: dense ? "4px" : "6px",
+      padBottom: dense ? "4px" : "5px"
+    };
+  }
+}
+</script>
+</body>
+</html>

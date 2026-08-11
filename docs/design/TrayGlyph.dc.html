@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:{{ box }}; height:{{ box }}; position:relative; display:flex; flex-direction:column; justify-content:{{ justify }}">
+  <sc-if value="{{ hasDigits }}" hint-placeholder-val="{{ true }}">
+    <div style="font-size:{{ digitPx }}; line-height:1; font-weight:700; letter-spacing:-0.04em; text-align:center; color:var(--ink); font-variant-numeric:tabular-nums lining-nums; height:{{ digitPx }}; flex:0 0 auto">{{ digits }}</div>
+  </sc-if>
+  <sc-for list="{{ rows }}" as="b" hint-placeholder-count="3">
+    <div style="height:{{ b.h }}; flex:0 0 auto; background:var(--track); margin-top:{{ b.mt }}">
+      <div style="height:100%; width:{{ b.w }}; background:{{ b.bg }}"></div>
+    </div>
+  </sc-for>
+  <sc-if value="{{ isCross }}" hint-placeholder-val="{{ false }}">
+    <span style="position:absolute; right:{{ ovOff }}; bottom:{{ ovOff }}; width:{{ ovSize }}; height:{{ ovSize }}; border-radius:50%; background:var(--bad); color:var(--layer); font-size:{{ ovFont }}; font-weight:700; display:flex; align-items:center; justify-content:center; line-height:1">&#10005;</span>
+  </sc-if>
+  <sc-if value="{{ isTri }}" hint-placeholder-val="{{ false }}">
+    <span style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:0; height:0; border-left:{{ triSide }} solid transparent; border-right:{{ triSide }} solid transparent; border-bottom:{{ triH }} solid var(--bad)"></span>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:120,&quot;height&quot;:120},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:64,&quot;tsType&quot;:&quot;number&quot;},&quot;digits&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;92&quot;,&quot;tsType&quot;:&quot;string | null&quot;},&quot;digitSize&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:9,&quot;tsType&quot;:&quot;number&quot;},&quot;overlay&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;cross&quot;,&quot;tri&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;bars&quot;:{&quot;editor&quot;:null,&quot;default&quot;:[],&quot;tsType&quot;:&quot;object[]&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const size = Number(p.size) || 16;
+    const s = size / 16;
+    const px = (n) => (n * s) + "px";
+    const bars = p.bars || [];
+    return {
+      box: size + "px",
+      hasDigits: !!p.digits,
+      digits: p.digits || "",
+      digitPx: px(Number(p.digitSize) || 8),
+      rows: bars.map((b, i) => ({
+        h: px(2),
+        mt: px(i === 0 ? 0 : (b.gap ? 2 : 1)),
+        w: (b.pct || 0) + "%",
+        bg: (b.exhausted || (b.pct || 0) >= 100) ? "var(--fill-exhausted)" : ((p.tone !== false && (b.pct || 0) >= 75) ? "var(--fill-high)" : "var(--fill)")
+      })),
+      isCross: p.overlay === "cross",
+      isTri: p.overlay === "tri",
+      justify: p.digits ? "flex-end" : "center",
+      ovSize: px(6), ovOff: px(0), ovFont: px(4),
+      triSide: px(3.5), triH: px(6)
+    };
+  }
+}
+</script>
+</body>
+</html>

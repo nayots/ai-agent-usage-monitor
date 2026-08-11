@@ -10,10 +10,11 @@ publish/
 *.exe
 *.pdb
 
-# .NET / VS / Rider
+# .NET / VS / Rider / editors
 .vs/
 .vscode/
 .idea/
+.obsidian/
 *.user
 *.suo
 *.userosscache
