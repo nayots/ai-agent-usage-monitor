@@ -57,14 +57,18 @@ copy("<!DOCTYPE html>\n" + doc.outerHTML);   // then paste over widget-states.ht
 
 Keep the provenance comment at the top of the file when you replace it.
 
-## Open questions this design raises
+## Departures from the brief — both accepted
 
-These are product decisions, not design defects — recorded here so they are not lost:
+The design raised two decisions the brief did not settle. Both were accepted on 2026-08-11
+and are now recorded in the PRD, which governs:
 
-- **`ColourBarsByUsage` is a new setting** the brief did not ask for (bars take one of three
-  fixed tones by usage band). It is not in `docs/PRD.md`, and it deliberately breaks the
-  brief's "at most one accent hue" rule, which is why the design ships it behind a toggle.
-  PRD §7 needs to either adopt or reject it.
-- **The 360×420 size target was missed by design**, at 410px for the default widget only
-  because the column captions and duration provenance were moved to the expanded card.
-  `rationale.md` says restoring them needs a 445px budget.
+- **Colouring bars by usage band** is adopted, as a user-controlled setting that is **on by
+  default**. PRD §16.1 bounds it: three fixed bands and never a gradient, thresholds on the
+  reported percentage alone, colour never the sole signal, and the exhausted treatment at
+  100% applying regardless of the setting. Listed in PRD §19; token values in `tokens.md` §1.
+  The app spells it `ColorBarsByUsage` and labels it "Color bars by usage" — the app's copy
+  is en-US, and this is the only permitted copy divergence from the render below.
+- **The measured sizes supersede the brief's 360×420 target.** 360×410 default, 360×326
+  compact, list scrolling above 520 — the values in `tokens.md` §3 are what implementation
+  targets. The column captions and duration provenance stay in the expanded provider card.
+  PRD §7.5 records this.

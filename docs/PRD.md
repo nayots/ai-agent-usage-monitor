@@ -232,6 +232,13 @@ The approved design output is a required input to implementation. Engineering ma
 
 The design output is a reference, not a source of shipping code. No generated markup or styling is compiled into the application.
 
+The approved output was accepted on 2026-08-11 and is recorded in `docs/design/`: `widget-states.html` renders every state required by §7.1 and §7.2, `tokens.md` carries the token layer with measured contrast ratios, and `rationale.md` records the hierarchy decisions and the conflicts between requirements. The `.dc.html` files are the editable sources; `README.md` explains which file to read for what.
+
+The design raised two departures from `docs/design/design-prompt.md`. Both are **accepted**:
+
+- **Colouring quota bars by usage band** departs from the brief's "at most one accent hue" restraint rule. It is adopted as a user-controlled setting, bounded by §16.1 and listed in §19.
+- **The brief's 360×420 size target is superseded** by the measured design: 360×410 default and 360×326 compact at 100% scaling, with the provider list scrolling above 520. The difference was spent on the column captions and duration provenance, which the design moved into the expanded provider card rather than shrinking type below 11px or dropping a quota window. Implementation targets the measured values in `tokens.md` §3.
+
 ### 8. Generic Provider and Quota Model
 
 The application must use a provider-neutral domain model.
@@ -477,6 +484,21 @@ This comparison is informative only. The UI must not claim that a user will run 
 
 The marker must remain visually secondary to the primary usage fill, meet contrast requirements, and remain visible in light, dark, high-contrast, and scaled display modes.
 
+#### 16.1 Bar tone by usage
+
+A quota bar may take its fill color from the band its reported percentage falls in: one tone below 75%, a distinct tone from 75% through 99%, and the exhausted tone at 100%. This is controlled by the **Color bars by usage** setting defined in §19, which is on by default.
+
+This is the single accepted departure from the design brief's one-accent-hue restraint rule, per §7.5. It is bounded by all of the following:
+
+- Exactly three fixed bands. Never a gradient, never an interpolated color. A continuously varying color communicates a rate, which this section forbids.
+- The band boundaries are fixed thresholds on the reported percentage alone. They are not derived from the elapsed-time marker, the window duration, the time remaining, or any provider signal, and they assert nothing about whether a rate of consumption is safe.
+- Color never carries a value by itself. Bar length and the written percentage remain the primary signals and tone only reinforces them. Where no percentage is written, such as the tray glyph, a shape overlay must carry what color would otherwise have to.
+- The exhausted treatment at 100% is not part of this setting. A window at 100% renders as exhausted whether the setting is on or off, as required by §7.2 item 5.
+- With the setting off, every bar below 100% uses the single accent fill.
+- A band fill must not reuse a text-weight state color. Each band must clear 3:1 against both the bar track and the elapsed marker in both themes; `docs/design/tokens.md` §1 records the values that do.
+
+The application's own spelling is en-US throughout, so the setting is named `ColorBarsByUsage` and labelled "Color bars by usage". The approved design render spells the label "Colour bars by usage"; this one-word difference is deliberate and is the only permitted copy divergence from that render.
+
 ### 17. Widget Modes and Window Behavior
 
 The application must provide:
@@ -528,6 +550,7 @@ The settings experience must support:
 - Always on top.
 - Compact or expanded default mode.
 - Light, dark, or system theme.
+- Color bars by usage, on by default, bounded by §16.1.
 - Refresh behavior where provider integration permits configuration.
 - Stale-data threshold display and behavior.
 - Whether unavailable providers remain visible.
