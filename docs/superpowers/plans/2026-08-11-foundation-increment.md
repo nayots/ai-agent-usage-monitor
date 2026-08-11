@@ -51,6 +51,15 @@ Measured on 2026-08-11, SDK 10.0.301, against a throwaway `net10.0-windows` WPF 
 | All integration tests | Provider adapters stay in the POC this increment. |
 | All UI verification | Requires an approved design. |
 
+**Correction (2026-08-11):** The "Covered by this plan" line above overclaims. It lists
+"percentage and raw-value formatting", but only percentage formatting was delivered
+(`QuotaFormatting.FormatUsedPercent` / `FormatRemainingPercent`). There is no raw-value
+formatter, no raw-value field on `QuotaWindow`, and no test for one. PRD §8 requires "percentage
+used, percentage remaining, or raw values when a provider exposes only one of these" and §13
+requires a unit of measurement, so this is a real deferral, not a non-requirement. Raw-value
+formatting is deferred to a later increment. Nothing is currently broken by the gap: both
+verified providers (Claude Code, Codex) report percentages only.
+
 ---
 
 ### Task 1: Shared build settings and line-ending policy
