@@ -4,6 +4,11 @@ namespace AiUsageMonitor.Domain;
 /// A single provider-reported quota window (e.g. a rolling usage bucket with a reset time).
 /// Provider-neutral: nothing here assumes a specific window name, count, or duration.
 /// </summary>
+/// <param name="LabelIsProviderToken">
+/// True when <paramref name="Label"/> is the provider's raw identifier because the name could not
+/// be resolved to a duration. The UI must render these distinctly so a provider term is never
+/// mistaken for a label this application understands (PRD SS7.2 item 10).
+/// </param>
 public sealed record QuotaWindow(
     string Id,
     string Label,
@@ -12,7 +17,8 @@ public sealed record QuotaWindow(
     TimeSpan? WindowDuration,
     int Order,
     bool IsPartial,
-    IReadOnlyDictionary<string, string> Extra)
+    IReadOnlyDictionary<string, string> Extra,
+    bool LabelIsProviderToken = false)
 {
     /// <summary>Percent remaining, derived from <see cref="UsedPercent"/>. Null when usage is unknown.</summary>
     public double? RemainingPercent => UsedPercent is double used ? Math.Clamp(100.0 - used, 0.0, 100.0) : null;

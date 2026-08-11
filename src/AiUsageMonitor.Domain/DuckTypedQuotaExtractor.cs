@@ -179,15 +179,18 @@ public static class DuckTypedQuotaExtractor
             extra["source"] = "remaining";
         }
 
+        bool labelIsProviderToken = !TryHumanize(id, out string label);
+
         window = new QuotaWindow(
             Id: id,
-            Label: Humanize(id),
+            Label: label,
             UsedPercent: usedPercent,
             ResetsAt: resetsAt,
             WindowDuration: windowDuration,
             Order: order,
             IsPartial: isPartial,
-            Extra: extra);
+            Extra: extra,
+            LabelIsProviderToken: labelIsProviderToken);
         return true;
     }
 
@@ -344,6 +347,24 @@ public static class DuckTypedQuotaExtractor
         }
 
         return main;
+    }
+
+    /// <summary>
+    /// Humanises an id only when doing so is honest — that is, when the id parses as a recognised
+    /// number-word or digit run followed by a recognised time unit. Otherwise reports failure so
+    /// the caller keeps the provider's literal token. "nimbus_quill" must never become
+    /// "nimbus quill", which would read as a label this application understands.
+    /// </summary>
+    public static bool TryHumanize(string id, out string label)
+    {
+        if (TryInferDurationFromName(id) is null)
+        {
+            label = id;
+            return false;
+        }
+
+        label = Humanize(id);
+        return true;
     }
 
     private static List<string> SplitTokens(string id)
