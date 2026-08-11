@@ -12,10 +12,10 @@ public class QuotaOrderingTests
         // Verified 2026-08-10: seven_day reset SOONER than five_hour on the same account.
         // Sorting by assumed duration or by countdown would reorder them wrongly. PRD SS7.3.
         QuotaWindow fiveHour = QuotaWindowTests.Window(
-            id: "five_hour", resetsAt: Now.AddHours(3).AddMinutes(12),
+            id: "five_hour", resetsAt: Now.AddHours(4).AddMinutes(55),
             windowDuration: TimeSpan.FromHours(5), order: 0);
         QuotaWindow sevenDay = QuotaWindowTests.Window(
-            id: "seven_day", resetsAt: Now.AddHours(4).AddMinutes(55),
+            id: "seven_day", resetsAt: Now.AddHours(3).AddMinutes(12),
             windowDuration: TimeSpan.FromDays(7), order: 1);
 
         IReadOnlyList<QuotaWindow> ordered = QuotaOrdering.InProviderOrder(new[] { sevenDay, fiveHour });
