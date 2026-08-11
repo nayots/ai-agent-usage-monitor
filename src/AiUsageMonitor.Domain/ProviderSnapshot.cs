@@ -10,6 +10,7 @@ public sealed record ProviderSnapshot(
     string? ExecutablePath,
     ConnectionState State,
     string Mechanism,
+    MechanismTier Tier,
     string? UpdateModel,
     IReadOnlyList<QuotaWindow> Windows,
     DateTimeOffset? RetrievedAt,

@@ -62,6 +62,7 @@ static async Task<(ProviderSnapshot Snapshot, double ElapsedMs)> RunTimedAsync(I
             ExecutablePath: null,
             State: ConnectionState.Error,
             Mechanism: "n/a",
+            Tier: MechanismTier.Unofficial,
             UpdateModel: "unavailable",
             Windows: [],
             RetrievedAt: null,
@@ -102,7 +103,7 @@ static void PrintProviderReport(ProviderSnapshot s, double elapsedMs)
     Console.WriteLine($"  Version       : {s.Version ?? "(unknown)"}");
     Console.WriteLine($"  Executable    : {s.ExecutablePath ?? "(not found)"}");
     Console.WriteLine($"  State         : {s.State}");
-    Console.WriteLine($"  Mechanism     : {s.Mechanism}");
+    Console.WriteLine($"  Mechanism     : {s.Mechanism} [{s.Tier}]");
     Console.WriteLine($"  Update model  : {s.UpdateModel ?? "(unknown)"}");
     Console.WriteLine($"  Retrieved at  : {(s.RetrievedAt is { } r ? r.ToLocalTime().ToString("u") : "(never)")}");
     Console.WriteLine($"  Probe latency : {elapsedMs:0} ms");

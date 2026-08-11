@@ -158,6 +158,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             ExecutablePath: null,
             State: state,
             Mechanism: Mechanism,
+            Tier: MechanismTier.Unofficial,
             UpdateModel: UpdateModel,
             Windows: windows,
             RetrievedAt: retrievedAt,
