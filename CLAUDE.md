@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Windows desktop widget (WPF, planned) that shows live quota/usage for locally installed AI coding tools — Claude Code and Codex. `docs/PRD.md` is the authoritative spec; read it before non-trivial work.
+A Windows desktop widget (WPF) that shows live quota/usage for locally installed AI coding tools — Claude Code and Codex. `docs/PRD.md` is the authoritative spec; read it before non-trivial work.
 
-The repo is currently at the **verification spike** stage: `src/AiUsageMonitor.Poc` is a console harness that proves the provider retrieval mechanisms actually work. The WPF app does not exist yet.
+The repo has three projects today. `src/AiUsageMonitor.Domain` is a provider-neutral `net10.0` class library (models, states, extraction) with zero `PackageReference`, backed by `tests/AiUsageMonitor.Domain.Tests` (xUnit, 70 tests). `src/AiUsageMonitor.App` is the WPF shell — it exists and builds, but is **deliberately empty** pending the design brief (`docs/design/design-prompt.md`); do not add UI to it without one. `src/AiUsageMonitor.Poc` is retained as the live console harness that proves the provider retrieval mechanisms actually work against real installs — it is not superseded by the other two projects.
 
 ## Commands
 
@@ -60,7 +60,7 @@ Investigated and confirmed to carry **no** quota data: hook payloads, OpenTeleme
 
 ## Architecture rules
 
-Layering follows PRD §21: `Domain/` is provider-neutral (models, states, extraction); `Providers/` holds adapters behind `IProviderProbe`. Provider-specific semantics must not leak into shared or UI code.
+Layering follows PRD §21: `Domain/` (i.e. the `src/AiUsageMonitor.Domain` class library) is provider-neutral (models, states, extraction); `Providers/` is a folder inside `src/AiUsageMonitor.Poc` holding adapters behind `IProviderProbe`. These are **not** peer folders under one project — `Domain/` is its own standalone project precisely so it can be referenced without depending on the POC or any provider adapter. Provider-specific semantics must not leak into shared or UI code.
 
 **The domain model must stay generic.** No property may be named after a plan period — no `FiveHourQuota`, no `WeeklyQuota`. Quota windows are *discovered*, and their count, names, and durations are never assumed. Codex already returns `secondary: null` and a nullable `windowDurationMins`, so a fixed two-window shape is wrong today, not just in theory.
 
@@ -82,6 +82,7 @@ Per PRD §4.1.1 and §23 — these are product requirements, not style preferenc
 - Never modify provider configuration without explicit user approval, a preview, a backup, and a restore path (PRD §11). Currently moot in practice — the app's one Claude Code mechanism reads a credential file and calls an HTTP endpoint; it does not touch `~/.claude/settings.json` or any other provider configuration — but the constraint stands should config modification ever become necessary.
 - No administrator privileges.
 - Every mechanism carries a visible tier (Official/Unofficial). A value obtained unofficially must never be presented as official.
+- **User- and machine-agnostic (added 2026-08-11).** Someone who is not the author, on a Windows machine that is not the author's, must be able to download the GitHub release artifact and run it. No hardcoded user paths — resolve per-user locations at runtime via `Environment.GetFolderPath`. The release artifact stays self-contained, never the framework-dependent build, which requires the .NET 10 Desktop Runtime preinstalled. Both providers must degrade to `NotInstalled` where absent, never crash.
 
 ## Conventions
 
