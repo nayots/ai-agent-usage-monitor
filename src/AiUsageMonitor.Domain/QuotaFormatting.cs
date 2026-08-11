@@ -5,7 +5,7 @@ namespace AiUsageMonitor.Domain;
 /// <summary>
 /// Renders quota values as display strings. Every method returns null for null input:
 /// a caller omits the element entirely rather than substituting a placeholder, because a
-/// rendered "0%" or "--" is indistinguishable from real data at a glance (PRD SS4.3).
+/// rendered "0%" or "--" is indistinguishable from real data at a glance (PRD §4.3).
 /// </summary>
 public static class QuotaFormatting
 {

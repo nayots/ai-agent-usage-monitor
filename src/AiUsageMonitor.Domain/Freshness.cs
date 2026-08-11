@@ -9,13 +9,13 @@ public enum FreshnessState
     /// <summary>Retrieved within the threshold.</summary>
     Fresh,
 
-    /// <summary>Older than the threshold. Values may still be shown, but must be marked (PRD SS18).</summary>
+    /// <summary>Older than the threshold. Values may still be shown, but must be marked (PRD §18).</summary>
     Stale
 }
 
 /// <summary>
 /// Decides whether a snapshot has aged past its threshold. Thresholds are configurable per
-/// provider integration and conservative by default (PRD SS14).
+/// provider integration and conservative by default (PRD §14).
 /// </summary>
 public sealed record FreshnessPolicy(TimeSpan StaleAfter)
 {

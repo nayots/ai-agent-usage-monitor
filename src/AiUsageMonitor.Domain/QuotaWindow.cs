@@ -7,7 +7,7 @@ namespace AiUsageMonitor.Domain;
 /// <param name="LabelIsProviderToken">
 /// True when <paramref name="Label"/> is the provider's raw identifier because the name could not
 /// be resolved to a duration. The UI must render these distinctly so a provider term is never
-/// mistaken for a label this application understands (PRD SS7.2 item 10).
+/// mistaken for a label this application understands (PRD §7.2 item 10).
 /// </param>
 public sealed record QuotaWindow(
     string Id,

@@ -52,7 +52,7 @@ public class QuotaWindowTests
     public void ElapsedFraction_IsNull_WhenTheWindowDurationIsUnknown()
     {
         // This is the nimbus_quill case: a real live window with a percentage and nothing else.
-        // PRD SS16 requires the elapsed marker to be omitted, never guessed.
+        // PRD §16 requires the elapsed marker to be omitted, never guessed.
         QuotaWindow window = Window(resetsAt: Now.AddHours(2), windowDuration: null);
 
         Assert.Null(window.ElapsedFraction(Now));
@@ -102,7 +102,7 @@ public class QuotaWindowTests
     public void ElapsedFraction_ReproducesTheVerifiedCodexState()
     {
         // Verified 2026-08-10: 100% used with only ~24% of a 7-day window elapsed.
-        // The gap between fill and marker is the whole reason the marker exists (PRD SS16).
+        // The gap between fill and marker is the whole reason the marker exists (PRD §16).
         var duration = TimeSpan.FromDays(7);
         QuotaWindow window = Window(
             usedPercent: 100,

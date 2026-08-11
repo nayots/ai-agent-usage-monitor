@@ -8,7 +8,7 @@ public class QuotaFormattingTests
     public void FormatUsedPercent_IsNull_WhenUsageIsUnknown()
     {
         // The single most important assertion in this file. Missing data is null and
-        // surfaces as Waiting/Unavailable - never as "0% used". PRD SS4.3 / SS13.
+        // surfaces as Waiting/Unavailable - never as "0% used". PRD §4.3 / §13.
         Assert.Null(QuotaFormatting.FormatUsedPercent(null));
     }
 
@@ -20,7 +20,7 @@ public class QuotaFormattingTests
     [InlineData(42.4, "42% used")]
     public void FormatUsedPercent_StatesTheDirectionExplicitly(double used, string expected)
     {
-        // PRD SS16: the visible percentage text must make the direction explicit.
+        // PRD §16: the visible percentage text must make the direction explicit.
         Assert.Equal(expected, QuotaFormatting.FormatUsedPercent(used));
     }
 

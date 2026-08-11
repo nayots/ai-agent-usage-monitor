@@ -54,7 +54,7 @@ public class DuckTypedQuotaExtractorTests
     public void Extract_ExcludesContextWindowFill_BecauseItCarriesNoResetKey()
     {
         // context_window has used_percentage but no reset-ish key. It is conversation fill,
-        // not subscription quota, and must never surface as a quota window. PRD SS7.3.
+        // not subscription quota, and must never surface as a quota window. PRD §7.3.
         string json = File.ReadAllText(FixturePath("claude-statusline-sample.json"));
         using JsonDocument doc = JsonDocument.Parse(json);
 

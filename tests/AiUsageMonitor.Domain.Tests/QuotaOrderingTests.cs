@@ -50,7 +50,7 @@ public class QuotaOrderingTests
     [Fact]
     public void InProviderOrder_HandlesAnEmptySequence()
     {
-        // A provider reporting zero windows is a valid state, not an error. PRD SS7.2 item 11.
+        // A provider reporting zero windows is a valid state, not an error. PRD §7.2 item 11.
         Assert.Empty(QuotaOrdering.InProviderOrder(Array.Empty<QuotaWindow>()));
     }
 

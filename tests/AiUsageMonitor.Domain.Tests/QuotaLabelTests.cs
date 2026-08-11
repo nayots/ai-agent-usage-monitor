@@ -17,7 +17,7 @@ public class QuotaLabelTests
     public void UnparseableName_KeepsTheProviderToken_Verbatim()
     {
         // Verified live on 2026-08-10. "Nimbus quill" would read as a feature name this
-        // application recognises. It does not, and must not pretend to. PRD SS7.2 item 10.
+        // application recognises. It does not, and must not pretend to. PRD §7.2 item 10.
         QuotaWindow window = ExtractSingle("nimbus_quill");
 
         Assert.Equal("nimbus_quill", window.Label);
@@ -55,7 +55,7 @@ public class QuotaLabelTests
     [Fact]
     public void TheRawIdentifierIsAlwaysPreserved_RegardlessOfLabelling()
     {
-        // PRD SS7.2 item 10: the provider-supplied identifier stays available for every
+        // PRD §7.2 item 10: the provider-supplied identifier stays available for every
         // window, so a tooltip and diagnostics can always show it.
         Assert.Equal("nimbus_quill", ExtractSingle("nimbus_quill").Id);
         Assert.Equal("five_hour", ExtractSingle("five_hour").Id);
