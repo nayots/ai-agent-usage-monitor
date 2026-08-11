@@ -618,7 +618,7 @@ public class RollingFileWriterTests
 
         writer.Write("hello");
 
-        Assert.Equal(["hello"], File.ReadAllLines(dir.File("app.log")));
+        Assert.Equal(new[] { "hello" }, File.ReadAllLines(dir.File("app.log")));
     }
 
     [Fact]
