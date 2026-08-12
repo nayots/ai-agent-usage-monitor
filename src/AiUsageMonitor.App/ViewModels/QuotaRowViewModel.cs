@@ -31,6 +31,14 @@ public sealed class QuotaRowViewModel : ObservableObject
     /// </summary>
     public bool IsProviderToken => _window.LabelIsProviderToken;
 
+    /// <summary>
+    /// The provider's own identifier for this window. Rows are rebuilt from scratch on every
+    /// snapshot, so anything that has to remember something about a window across snapshots - the
+    /// alert watcher's high-water rung, for one - has to key off this rather than off the row
+    /// instance or its position in the list.
+    /// </summary>
+    public string Id => _window.Id;
+
     /// <summary>The provider's identifier stays reachable for every window, resolved or not.</summary>
     public string IdentifierTooltip => $"identifier: {_window.Id}";
 

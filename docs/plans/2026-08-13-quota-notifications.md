@@ -83,14 +83,30 @@ Rules, all edge-triggered:
 | Transition | Alert |
 |---|---|
 | First reading of a window | none — seeds silently |
-| Crossed rung rises | `Milestone`, or `LimitReached` at 100 |
-| Crossed rung falls from ≥ 80 | `Recovered` |
-| Crossed rung falls from < 80 | none — the window rolled while it did not matter |
+| Crossed rung rises to 100 | `LimitReached` |
+| Crossed rung rises below 100 | `Milestone` |
+| Crossed rung falls from ≥ 80 to < 80 | `Recovered` |
+| Crossed rung falls, either end on the same side of 80 | none |
 | Provider working → failing | `ProviderFailed` |
 | Provider failing → working | `ProviderRecovered` |
 | First settled provider state | none — seeds silently |
 
-A card that is not `Connected` is not evaluated at all, so a stale reading never raises anything and never advances the state. `Discovering` and `Waiting` do not even seed: they are "not known yet", and seeding on them would fire a failure alert at startup for a provider that was already broken when the widget opened.
+Recovery is the **80 boundary crossed downward**, not merely a fall. 86% → 82% moves the rung from 85 to 80 and is still deep in the tight zone; announcing relief there would be wrong.
+
+Provider health maps `Connected`/`Stale` → working, `Error`/`Unavailable` → failing, `NotInstalled`/`Unsupported` → absent (never announced, in either direction — a provider that is not on the machine is not news). A card that is not `Connected` has no window evaluated at all, so a stale reading never raises anything and never advances a rung. `Discovering` and `Waiting` do not even seed health: they mean "not known yet", and seeding on them would fire a failure alert at startup for a provider that was already broken when the widget opened.
+
+**Copy.** The title carries the threshold; the body carries the reading. They must not be merged, because the rung is a boundary the application chose and the percentage is a number the provider reported — writing "80% used" when the provider said 81.4% would state a measurement the provider never made.
+
+| Kind | Title | Body |
+|---|---|---|
+| `Milestone` | `Claude Code · 5-hour past 80%` | `81% used. Resets in 1h 12m.` |
+| `LimitReached` | `Claude Code · 5-hour limit reached` | `100% used. Resets in 47m.` |
+| `Recovered`, previous rung 100 | `Claude Code · 5-hour limit reset` | `12% used. Resets in 4h 58m.` |
+| `Recovered`, previous rung 80–95 | `Claude Code · 5-hour back under 80%` | `62% used. Resets in 2h 3m.` |
+| `ProviderFailed` | `Claude Code stopped reporting usage` | `Open the widget for the reason.` |
+| `ProviderRecovered` | `Claude Code is reporting usage again` | `The numbers on the card are current.` |
+
+Provider name and window label are `ProviderCardViewModel.DisplayName` and `QuotaRowViewModel.Label` verbatim — a provider that invents `three_hour_nimbus` gets a notification saying `three_hour_nimbus`. The percentage is `QuotaRowViewModel.UsedText`, so the toast and the row round identically. The second sentence of a body is dropped entirely when `CountdownText` is null; it is never replaced with a placeholder. `ProviderFailed` names no reason on purpose — see the credential constraint above.
 
 - [ ] **Step 1: Write the failing tests** — one per row of the table above, plus: a jump from 12% to 92% raises exactly one alert naming 90; a null percentage raises nothing and leaves the state alone; two providers keep separate state; a window keeps its state across a provider failure.
 - [ ] **Step 2: Run and watch them fail**
@@ -157,6 +173,10 @@ A double-click also delivers a `WM_LBUTTONUP` first, so `Activated` fires before
 
 Verification is against the running widget, not only the suite: a real balloon raised from real provider data, and a real double-click measured on the real window.
 
-- [ ] **Step 1: `dotnet build` clean, `dotnet test` green**
-- [ ] **Step 2: Drive the alert path against live provider data**
-- [ ] **Step 3: Commit and merge**
+- [ ] **Step 1: `dotnet build`, clean** — run as its own command
+- [ ] **Step 2: `dotnet test`, green** — run as its own command, never chained onto the build
+- [ ] **Step 3: Commit**
+
+Steps 1 and 2 are separate shell calls deliberately. `CLAUDE.md`'s Commands section writes them for a human at a terminal; a delegate runs a chain under a per-command time limit and loses the result of a build that already succeeded.
+
+Driving a real balloon against live provider data, and merging, stay with the session that owns the running widget.
