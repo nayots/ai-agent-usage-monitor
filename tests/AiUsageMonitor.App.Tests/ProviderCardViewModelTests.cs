@@ -94,6 +94,60 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
+    public void AFreshCardGoesStaleFromTheClockAloneWithoutANewSnapshot()
+    {
+        // The test above ages the snapshot before Apply ever sees it, so it passes even if
+        // freshness is evaluated once and never again. This is the case that actually happens: a
+        // card that was fresh when applied and is still holding that same snapshot when the
+        // threshold passes. Nothing new arrives to re-trigger Apply while a provider is mid-backoff
+        // (skipped for up to eight refresh intervals), after a resume from sleep, or whenever
+        // RefreshIntervalSeconds is set longer than StaleAfterSeconds - both are user-editable and
+        // clamped independently, so that combination is legal.
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: Now), Now, Policy);
+
+        Assert.Equal(ConnectionState.Connected, card.State);
+        Assert.False(card.Windows[0].IsStale);
+
+        card.Tick(Now.AddMinutes(6));
+
+        Assert.Equal(ConnectionState.Stale, card.State);
+        Assert.True(card.IsStale);
+        Assert.True(card.Windows[0].IsStale);
+    }
+
+    [Fact]
+    public void AStaleCardRecoversOnTheNextSuccessfulSnapshot()
+    {
+        // ApplyFreshness reads the snapshot's own state rather than the card's, so ageing must be
+        // reversible: a card that went Stale purely from the clock has to come back to Connected
+        // when a fresh snapshot lands, not stay latched.
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: Now), Now, Policy);
+        card.Tick(Now.AddMinutes(6));
+        Assert.Equal(ConnectionState.Stale, card.State);
+
+        DateTimeOffset later = Now.AddMinutes(6);
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: later), later, Policy);
+
+        Assert.Equal(ConnectionState.Connected, card.State);
+        Assert.False(card.Windows[0].IsStale);
+    }
+
+    [Fact]
+    public void TickingAnErrorCardNeverAgesItIntoStale()
+    {
+        // Recomputing state every tick must not let age mask a failure any more than Apply does.
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: Now, error: "boom"), Now, Policy);
+
+        card.Tick(Now.AddHours(3));
+
+        Assert.Equal(ConnectionState.Error, card.State);
+        Assert.False(card.IsStale);
+    }
+
+    [Fact]
     public void AgeNeverMasksARealFailure()
     {
         ProviderCardViewModel card = Card();
