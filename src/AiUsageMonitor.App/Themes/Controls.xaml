@@ -74,7 +74,11 @@
                          RadiusY="{Binding CornerRadius.TopLeft, ElementName=Background}" />
               <StackPanel Orientation="Horizontal" Margin="2,0">
                 <Grid Width="7" Height="6" VerticalAlignment="Center">
-                  <Polygon x:Name="Triangle" Points="0,6 3.5,0 7,6" Stroke="{DynamicResource TextTertiaryBrush}" StrokeThickness="1" />
+                  <!-- Filled, as the design draws it (a CSS border triangle, 7x6 solid ink-3).
+                       Stroked it was a chevron riding above the capitals: a 1px pen straddles the
+                       path, so the base fell on a half-pixel and faded to nothing, while the miter
+                       join at the apex spiked a whole pixel above the 7x6 box it was allotted. -->
+                  <Polygon x:Name="Triangle" Points="0,6 3.5,0 7,6" Fill="{DynamicResource TextTertiaryBrush}" />
                   <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource TextSecondaryBrush}" Visibility="Collapsed" />
                 </Grid>
                 <TextBlock x:Name="Label" Margin="4,0,0,0" Text="UNOFFICIAL" Style="{StaticResource CaptionMicroTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
