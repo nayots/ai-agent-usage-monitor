@@ -24,6 +24,7 @@
 - Copy is en-US: "Color bars by usage", not "Colour".
 - Windows-only. PowerShell 5.1 is the shell: no `&&`, no ternary. Run `dotnet build` and `dotnet test` as two separate commands, never chained.
 - Test files already have their own helpers, and their signatures differ between files. Each task that appends tests states the exact signatures to call. Use them as given; never assume a helper exists because the prose implies one, and never invent one to make a call site compile.
+- `tests/AiUsageMonitor.App.Tests` does **not** get `System.IO` from implicit usings — verified, `Path` fails to resolve there with CS0103. Any file in that project touching `Path`, `File` or `Directory` needs an explicit `using System.IO;`. The Infrastructure test project does not have this problem.
 
 ---
 
@@ -689,6 +690,7 @@ git commit -m "feat: let a settings change reach the cards and the refresh caden
 Create `tests/AiUsageMonitor.App.Tests/SettingsViewModelTests.cs`:
 
 ```csharp
+using System.IO;
 using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.Infrastructure.Settings;
