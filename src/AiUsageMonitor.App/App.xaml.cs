@@ -30,6 +30,10 @@ public partial class App : Application
         ServiceCollection services = new();
         services.AddSingleton(store);
         services.AddSingleton(loaded.Settings);
+        services.AddSingleton(provider => new SettingsService(
+            provider.GetRequiredService<AppSettingsStore>(),
+            loaded.Settings,
+            provider.GetRequiredService<ILogger<SettingsService>>()));
         services.AddSingleton(new ThemeManager(this));
         services.AddLogging(builder =>
         {
@@ -72,8 +76,8 @@ public partial class App : Application
 
             new WidgetWindow(
                 model,
-                loaded.Settings,
-                _services.GetRequiredService<AppSettingsStore>(),
+                _services.GetRequiredService<SettingsService>(),
+                _services.GetRequiredService<ProviderRefreshService>(),
                 _services.GetRequiredService<ThemeManager>()).Show();
         }
         catch (Exception ex)

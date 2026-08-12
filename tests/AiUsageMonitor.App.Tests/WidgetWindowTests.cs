@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.App.Views;
@@ -30,6 +31,12 @@ public class WidgetWindowTests(WpfFixture wpf)
         return new MainViewModel(service, providers, settings, () => DateTimeOffset.Now);
     }
 
+    private static SettingsService Settings(AppSettings settings)
+    {
+        string path = Path.Combine(Path.GetTempPath(), "aium-widget-" + Guid.NewGuid().ToString("N"), "settings.json");
+        return new SettingsService(new AppSettingsStore(path), settings);
+    }
+
     [Fact]
     public void TheWindowConstructsWithoutXamlErrors() => wpf.Invoke(() =>
     {
@@ -38,7 +45,7 @@ public class WidgetWindowTests(WpfFixture wpf)
         IReadOnlyList<ProviderDescriptor> providers = Providers();
         MainViewModel model = Model(providers, AppSettings.Default);
 
-        WidgetWindow window = new(model, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
 
         Assert.Equal(360, window.Width);
         Assert.Equal(520, window.MaxHeight);
@@ -52,7 +59,7 @@ public class WidgetWindowTests(WpfFixture wpf)
         IReadOnlyList<ProviderDescriptor> providers = Providers();
         MainViewModel model = Model(providers, AppSettings.Default);
 
-        WidgetWindow window = new(model, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
 
         Assert.Equal(WindowStartupLocation.CenterScreen, window.WindowStartupLocation);
 
@@ -68,7 +75,7 @@ public class WidgetWindowTests(WpfFixture wpf)
         IReadOnlyList<ProviderDescriptor> providers = Providers();
         MainViewModel model = Model(providers, offscreen);
 
-        WidgetWindow window = new(model, offscreen);
+        WidgetWindow window = new(model, Settings(offscreen));
 
         Assert.Equal(WindowStartupLocation.CenterScreen, window.WindowStartupLocation);
 

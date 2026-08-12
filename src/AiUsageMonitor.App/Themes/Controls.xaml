@@ -97,4 +97,71 @@
       </Setter.Value>
     </Setter>
   </Style>
+  <Style x:Key="SettingsSectionTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionMicroTextStyle}">
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
+    <Setter Property="Margin" Value="0,12,0,4" />
+  </Style>
+
+  <Style x:Key="SettingsCheckBoxStyle" TargetType="CheckBox">
+    <Setter Property="Height" Value="{DynamicResource SettingsRowHeight}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Grid Background="Transparent">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="{TemplateBinding Content}" Style="{StaticResource BodySmallTextStyle}" Foreground="{TemplateBinding Foreground}" TextWrapping="Wrap" />
+            <Border Grid.Column="1" x:Name="Box" Width="16" Height="16" Margin="10,0,0,0" VerticalAlignment="Center" CornerRadius="{DynamicResource RadiusChip}" Background="{DynamicResource WidgetLayerAltBackgroundBrush}" BorderBrush="{DynamicResource WidgetCardStrokeBrush}" BorderThickness="1">
+              <TextBlock x:Name="Tick" Text="&#x2713;" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" Visibility="Collapsed" />
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+              <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource TextSecondaryBrush}" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="SettingsRadioButtonStyle" TargetType="RadioButton">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="Chip" Padding="8,4" CornerRadius="{DynamicResource RadiusControl}" Background="Transparent" BorderBrush="{DynamicResource WidgetCardStrokeBrush}" BorderThickness="1">
+            <TextBlock x:Name="Label" Text="{TemplateBinding Content}" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Chip" Property="Background" Value="{DynamicResource WidgetLayerAltBackgroundBrush}" />
+              <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource TextSecondaryBrush}" />
+              <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+              <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="SettingsActionButtonStyle" TargetType="Button" BasedOn="{StaticResource LinkButtonStyle}">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Padding" Value="0,6" />
+  </Style>
 </ResourceDictionary>

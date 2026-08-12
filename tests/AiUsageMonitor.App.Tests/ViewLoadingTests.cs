@@ -1,10 +1,13 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.App.Views;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
+using AiUsageMonitor.Infrastructure.Settings;
 
 namespace AiUsageMonitor.App.Tests;
 
@@ -182,5 +185,46 @@ public class ViewLoadingTests(WpfFixture wpf)
 
         FrameworkElement view = ControlLoadingTests.Measured(new ProviderCardView { DataContext = card, Width = 340 });
         Assert.True(view.ActualHeight > 0);
+    });
+
+    [Theory]
+    [InlineData("Themes/Light.xaml")]
+    [InlineData("Themes/Dark.xaml")]
+    [InlineData("Themes/HighContrast.xaml")]
+    public void TheSettingsWindowRendersInEveryPalette(string palette) => wpf.Invoke(() =>
+    {
+        ResourceDictionary dictionary = new()
+        {
+            Source = new Uri($"pack://application:,,,/AiUsageMonitor.App;component/{palette}", UriKind.Absolute)
+        };
+        Application.Current.Resources.MergedDictionaries.Add(dictionary);
+
+        try
+        {
+            string path = Path.Combine(Path.GetTempPath(), "aium-view-" + Guid.NewGuid().ToString("N"), "settings.json");
+            SettingsViewModel model = new(
+                new SettingsService(new AppSettingsStore(path), AppSettings.Default),
+                new StartupRegistration(@"Software\AiUsageMonitor\tests\ViewLoading", "AiUsageMonitorTest", null),
+                resetPosition: () => { },
+                recheckProviders: () => { },
+                openLogs: () => { });
+
+            SettingsWindow window = new(model);
+
+            // Measured on the window's content, not the window. A WPF Window's own DesiredSize
+            // stays zero until it has an HWND, so measuring the Window asserts nothing. Measuring
+            // its content still forces every template to expand and every DynamicResource in this
+            // palette to resolve, which is the whole point of the test.
+            FrameworkElement content = (FrameworkElement)window.Content;
+            content.Measure(new Size(380, 640));
+            content.Arrange(new Rect(0, 0, 380, 640));
+            content.UpdateLayout();
+
+            Assert.True(content.DesiredSize.Height > 0);
+        }
+        finally
+        {
+            Application.Current.Resources.MergedDictionaries.Remove(dictionary);
+        }
     });
 }
