@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.App.Views;
 using AiUsageMonitor.Domain;
@@ -105,6 +106,70 @@ public class ViewLoadingTests(WpfFixture wpf)
         Assert.Equal(Visibility.Visible, updated.Visibility);
         Assert.Equal("· Updated 0s ago", updated.Text);
     });
+
+    [Fact]
+    public void AnExhaustedRowStatesItsResetTimeOnceNotTwice() => wpf.Invoke(() =>
+    {
+        // The alert line under the bar used to repeat the countdown that the RESETS IN column
+        // already carries, three columns to the right of it, so a limit-reached row put the same
+        // value on screen twice.
+        QuotaRowViewModel row = new(Window(100d, false, true), colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.False(string.IsNullOrWhiteSpace(row.CountdownText));
+        Assert.Equal(1, Texts(view).Count(text => text.Contains(row.CountdownText!, StringComparison.Ordinal)));
+    });
+
+    [Fact]
+    public void AFreshExhaustedRowStatesItsLimitAtFullStrength() => wpf.Invoke(() =>
+    {
+        QuotaRowViewModel row = new(Window(100d, false, true), colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.Same(view.FindResource("TextPrimaryBrush"), Named(view, "CountdownCell").Foreground);
+        Assert.Same(view.FindResource("StateBadBrush"), Named(view, "LimitReachedText").Foreground);
+        Assert.Same(view.FindResource("StateBadBrush"), Named(view, "LimitReachedMark").Foreground);
+    });
+
+    [Fact]
+    public void AStaleExhaustedRowGreysItsAlertAlongWithEverythingElse() => wpf.Invoke(() =>
+    {
+        // A row can be stale and exhausted at once. It used to grey its label and percentage while
+        // leaving the countdown at full strength and "Limit reached" at full-saturation red - the
+        // loudest claim on the card shouting from data the card itself says may be out of date.
+        QuotaRowViewModel row = new(Window(100d, false, true), colorBarsByUsage: true) { IsStale = true };
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        object greyed = view.FindResource("TextTertiaryBrush");
+        Assert.Same(greyed, Named(view, "CountdownCell").Foreground);
+        Assert.Same(greyed, Named(view, "LimitReachedText").Foreground);
+        Assert.Same(greyed, Named(view, "LimitReachedMark").Foreground);
+    });
+
+    private static TextBlock Named(FrameworkElement view, string name) => (TextBlock)view.FindName(name);
+
+    /// <summary>Every string this element actually puts on screen, in visual-tree order.</summary>
+    private static IEnumerable<string> Texts(DependencyObject root)
+    {
+        if (root is TextBlock block)
+        {
+            yield return block.Text;
+        }
+
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            foreach (string text in Texts(VisualTreeHelper.GetChild(root, i)))
+            {
+                yield return text;
+            }
+        }
+    }
 
     [Fact]
     public void ACardWithNoWindowsStillRenders() => wpf.Invoke(() =>

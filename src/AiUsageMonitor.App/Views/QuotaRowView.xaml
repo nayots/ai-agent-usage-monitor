@@ -7,7 +7,15 @@
   <UserControl.Resources>
     <Style x:Key="RowLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}"><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /><Setter Property="TextTrimming" Value="CharacterEllipsis" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
     <Style x:Key="RowPercentStyle" TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}"><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /><Setter Property="FontWeight" Value="Medium" /><Setter Property="TextAlignment" Value="Right" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger><DataTrigger Binding="{Binding IsExhausted}" Value="True"><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger></Style.Triggers></Style>
-    <Style x:Key="RowCountdownStyle" TargetType="TextBlock" BasedOn="{StaticResource NumericTextStyle}"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" /><Setter Property="TextAlignment" Value="Right" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger><DataTrigger Binding="{Binding IsExhausted}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger></Style.Triggers></Style>
+    <!-- IsStale is declared LAST in every style here, and that ordering is load-bearing: WPF applies
+         the last matching trigger, so whichever one comes second wins on any property both set. A
+         row can be stale and exhausted at once, and staleness has to win, because it qualifies how
+         much the exhaustion claim can be trusted. Declared the other way round, this style put a
+         full-strength countdown next to a greyed-out label and percent on the same row. Exhaustion
+         still carries through the weight, which nothing greys. -->
+    <Style x:Key="RowCountdownStyle" TargetType="TextBlock" BasedOn="{StaticResource NumericTextStyle}"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" /><Setter Property="TextAlignment" Value="Right" /><Style.Triggers><DataTrigger Binding="{Binding IsExhausted}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
+    <Style x:Key="ExhaustedMarkStyle" TargetType="TextBlock"><Setter Property="FontSize" Value="10" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource StateBadBrush}" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
+    <Style x:Key="ExhaustedTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodySmallTextStyle}"><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{DynamicResource StateBadBrush}" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
   </UserControl.Resources>
   <Border BorderBrush="{DynamicResource WidgetRowDividerBrush}" BorderThickness="0,1,0,0" Padding="{DynamicResource QuotaRowPadding}">
     <Grid>
@@ -18,11 +26,15 @@
       </TextBlock>
       <Border Grid.Row="0" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center" Padding="4,1" CornerRadius="{DynamicResource RadiusChip}" Background="{DynamicResource WidgetTokenChipBackgroundBrush}" BorderBrush="{DynamicResource WidgetTokenChipStrokeBrush}" BorderThickness="1" Visibility="{Binding IsProviderToken, Converter={StaticResource BooleanToVisibility}}"><TextBlock Text="{Binding Label}" Style="{StaticResource TokenTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" /></Border>
       <TextBlock Grid.Row="0" Grid.Column="2" VerticalAlignment="Center" Style="{StaticResource RowPercentStyle}" Text="{Binding UsedText}" />
-      <TextBlock Grid.Row="0" Grid.Column="4" VerticalAlignment="Center" Style="{StaticResource RowCountdownStyle}" Text="{Binding CountdownText}" />
+      <TextBlock x:Name="CountdownCell" Grid.Row="0" Grid.Column="4" VerticalAlignment="Center" Style="{StaticResource RowCountdownStyle}" Text="{Binding CountdownText}" />
       <controls:QuotaBar Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Margin="0,2,0,0" UsedPercent="{Binding UsedPercent}" ElapsedFraction="{Binding ElapsedFraction}" ColorBarsByUsage="{Binding ColorBarsByUsage}" IsStale="{Binding IsStale}" />
+      <!-- The countdown is NOT repeated here. It is already on this row, right-aligned under the
+           RESETS IN header, and the exhausted styling above makes it the strongest thing on the
+           row. Restating it as prose put the same value on screen twice, three columns apart. When
+           the provider reports no reset time the column is simply blank, which is the honest
+           reading: the limit is reached and nobody said when it lifts. -->
       <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding IsExhausted, Converter={StaticResource BooleanToVisibility}}">
-        <TextBlock Text="&#x2715;" FontSize="10" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource StateBadBrush}" /><TextBlock Text="Limit reached" Margin="5,0,0,0" Style="{StaticResource BodySmallTextStyle}" FontWeight="SemiBold" Foreground="{DynamicResource StateBadBrush}" />
-        <StackPanel Orientation="Horizontal" Visibility="{Binding HasCountdown, Converter={StaticResource BooleanToVisibility}}"><TextBlock Text="&#x00B7; resets in" Margin="5,0,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" /><TextBlock Text="{Binding CountdownText}" Margin="5,0,0,0" Style="{StaticResource BodySmallTextStyle}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" /></StackPanel>
+        <TextBlock x:Name="LimitReachedMark" Text="&#x2715;" VerticalAlignment="Center" Style="{StaticResource ExhaustedMarkStyle}" /><TextBlock x:Name="LimitReachedText" Text="Limit reached" Margin="5,0,0,0" Style="{StaticResource ExhaustedTextStyle}" />
       </StackPanel>
     </Grid>
   </Border>

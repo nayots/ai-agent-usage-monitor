@@ -15,7 +15,9 @@
       <Border Margin="0,0,0,6" Padding="7,5" CornerRadius="{DynamicResource RadiusControl}" Background="{DynamicResource WidgetLayerAltBackgroundBrush}" BorderBrush="{DynamicResource WidgetCardStrokeBrush}" BorderThickness="1" Visibility="{Binding IsStale, Converter={StaticResource BooleanToVisibility}}">
         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
           <Rectangle Grid.Column="0" Width="7" Height="7" Margin="0,3,6,0" VerticalAlignment="Top" Fill="{DynamicResource StateWarnBrush}" RenderTransformOrigin="0.5,0.5"><Rectangle.RenderTransform><RotateTransform Angle="45" /></Rectangle.RenderTransform></Rectangle>
-          <TextBlock Grid.Column="1" TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}"><Run Text="Values may no longer be current. Last successful update" /><Run Text=" " /><Run Text="{Binding StaleAgeText, Mode=OneWay}" /><Run Text="." /></TextBlock>
+          <!-- The age is not repeated here. It is four pixels above, in the header's "Updated ..."
+               line, computed from the same timestamp under the same condition. -->
+          <TextBlock Grid.Column="1" TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" Text="Values may no longer be current." />
           <Button Grid.Column="2" Margin="6,0,0,0" VerticalAlignment="Top" Content="Refresh" Style="{StaticResource LinkButtonStyle}" Command="{Binding RetryCommand}" />
         </Grid>
       </Border>

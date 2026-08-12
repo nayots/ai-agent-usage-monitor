@@ -107,7 +107,7 @@ public class ProviderCardViewModelTests
 
         Assert.Equal(ConnectionState.Stale, card.State);
         Assert.True(card.IsStale);
-        Assert.Equal("6 minutes ago", card.StaleAgeText);
+        Assert.Equal("Updated 6 minutes ago", card.UpdatedText);
         Assert.True(card.Windows[0].IsStale);
     }
 
@@ -235,17 +235,33 @@ public class ProviderCardViewModelTests
         Assert.True(card.Notice.IsAlert);
         Assert.Contains("no second source", card.Notice.Body);
         Assert.Contains("Claude Code is installed but has not stored a sign-in", card.Notice.Body);
-        Assert.Contains("2 hours ago", card.Notice.Body);
         Assert.Equal("Retry now", card.Notice.ActionText);
+    }
+
+    [Fact]
+    public void ACardStatesItsAgeOnceAndOnlyInTheHeader()
+    {
+        // Both the notice body and the stale banner used to restate the header's age from the same
+        // RetrievedAt, under the same condition, a few pixels below it. A card that has an age says
+        // so exactly once.
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(state: ConnectionState.Unavailable, retrievedAt: Now.AddHours(-2), error: "boom"), Now, Policy);
+
+        Assert.Equal("Updated 2 hours ago", card.UpdatedText);
+        Assert.DoesNotContain("2 hours ago", card.Notice!.Body);
+        Assert.DoesNotContain("Last successful update", card.Notice.Body);
     }
 
     [Fact]
     public void ANoticeNeverInventsAnAgeThatDoesNotExist()
     {
+        // The production failure paths all report RetrievedAt: null, so this is the shape a real
+        // Unavailable card has - and neither line may fabricate an age to fill the gap.
         ProviderCardViewModel card = Card();
         card.Apply(Snapshot(state: ConnectionState.Unavailable, retrievedAt: null), Now, Policy);
 
-        Assert.DoesNotContain("Last successful update", card.Notice!.Body);
+        Assert.Null(card.UpdatedText);
+        Assert.DoesNotContain("ago", card.Notice!.Body);
     }
 
     [Fact]

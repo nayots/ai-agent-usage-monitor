@@ -51,8 +51,6 @@ public sealed class QuotaRowViewModel : ObservableObject
 
     public string? CountdownText { get => _countdownText; private set => Set(ref _countdownText, value); }
 
-    public bool HasCountdown => CountdownText is not null;
-
     public double? ElapsedFraction { get => _elapsedFraction; private set => Set(ref _elapsedFraction, value); }
 
     public bool IsStale { get => _isStale; set => Set(ref _isStale, value); }
@@ -75,7 +73,6 @@ public sealed class QuotaRowViewModel : ObservableObject
     {
         CountdownText = QuotaFormatting.FormatCountdown(_window.TimeUntilReset(now));
         ElapsedFraction = _window.ElapsedFraction(now);
-        Raise(nameof(HasCountdown));
         Raise(nameof(AccessibleName));
     }
 }

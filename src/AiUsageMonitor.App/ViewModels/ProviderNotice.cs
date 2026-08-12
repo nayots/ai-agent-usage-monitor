@@ -11,11 +11,12 @@ public sealed record ProviderNotice(string Title, string Body, bool IsAlert, str
 
 public static class ProviderNoticeSelector
 {
-    public static ProviderNotice? For(ProviderSnapshot snapshot, ConnectionState state, DateTimeOffset now)
+    /// <summary>
+    /// Takes no clock. A notice says what is wrong, never how old anything is — the header line
+    /// owns age — so there is deliberately nothing here for a timestamp to feed.
+    /// </summary>
+    public static ProviderNotice? For(ProviderSnapshot snapshot, ConnectionState state)
     {
-        string? age = RelativeTime.FormatAge(
-            snapshot.RetrievedAt is DateTimeOffset at ? now - at : null);
-
         return state switch
         {
             ConnectionState.NotInstalled => new ProviderNotice(
@@ -40,14 +41,13 @@ public static class ProviderNoticeSelector
                 "Usage can no longer be read",
                 Compose(
                     "The only source this provider has stopped returning usable data. There is no second source to fall back to.",
-                    snapshot.Error,
-                    age),
+                    snapshot.Error),
                 IsAlert: true,
                 ActionText: "Retry now"),
 
             ConnectionState.Error => new ProviderNotice(
                 "The last read failed",
-                Compose("The most recent attempt did not return usable data.", snapshot.Error, age),
+                Compose("The most recent attempt did not return usable data.", snapshot.Error),
                 IsAlert: true,
                 ActionText: "Retry now"),
 
@@ -62,23 +62,15 @@ public static class ProviderNoticeSelector
     }
 
     /// <summary>
-    /// Appends only what exists. A missing reason and a missing age are each simply left out —
-    /// never replaced by "unknown", which reads as a value.
+    /// Appends only what exists. A missing reason is simply left out — never replaced by "unknown",
+    /// which reads as a value.
+    /// <para>
+    /// This deliberately does NOT restate how old the data is. The card header already carries
+    /// "Updated {age}" from the same <c>RetrievedAt</c>, immediately above, and under exactly the
+    /// same condition — so every sentence added here was the second copy of a line already on
+    /// screen. Age has one home on a card, and it is the header.
+    /// </para>
     /// </summary>
-    private static string Compose(string lead, string? reason, string? age)
-    {
-        List<string> parts = [lead];
-
-        if (!string.IsNullOrWhiteSpace(reason))
-        {
-            parts.Add(reason);
-        }
-
-        if (age is not null)
-        {
-            parts.Add($"Last successful update {age}.");
-        }
-
-        return string.Join(" ", parts);
-    }
+    private static string Compose(string lead, string? reason) =>
+        string.IsNullOrWhiteSpace(reason) ? lead : lead + " " + reason;
 }

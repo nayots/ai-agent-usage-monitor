@@ -18,7 +18,6 @@ public sealed class ProviderCardViewModel : ObservableObject
     private MechanismTier _tier = MechanismTier.Unofficial;
     private string? _versionText;
     private string? _updatedText;
-    private string? _staleAgeText;
     private ProviderNotice? _notice;
 
     public ProviderCardViewModel(ProviderDescriptor descriptor, bool colorBarsByUsage, Action<ProviderDescriptor> retry)
@@ -54,10 +53,14 @@ public sealed class ProviderCardViewModel : ObservableObject
     /// False whenever nothing has been retrieved yet, which is every NotInstalled, Discovering and
     /// Waiting card. The view hides the whole line rather than rendering its separator against an
     /// absent value - missing data is absent, never a placeholder that reads like one.
+    /// <para>
+    /// This line is the only place a card states its age. The stale banner and the notice body both
+    /// used to restate it from this same <c>RetrievedAt</c>, a few pixels below and under the same
+    /// condition, so a stale card read "Stale . Updated 37 minutes ago" and then "Last successful
+    /// update 37 minutes ago." Neither says it any more; do not reintroduce either.
+    /// </para>
     /// </summary>
     public bool HasUpdatedText => UpdatedText is not null;
-
-    public string? StaleAgeText { get => _staleAgeText; private set => Set(ref _staleAgeText, value); }
 
     public ProviderNotice? Notice { get => _notice; private set { if (Set(ref _notice, value)) { Raise(nameof(HasNotice)); } } }
 
@@ -125,8 +128,7 @@ public sealed class ProviderCardViewModel : ObservableObject
 
         TimeSpan? age = snapshot.RetrievedAt is DateTimeOffset at ? now - at : null;
         UpdatedText = RelativeTime.FormatAge(age) is string formatted ? "Updated " + formatted : null;
-        StaleAgeText = RelativeTime.FormatAge(age);
-        Notice = ProviderNoticeSelector.For(snapshot, State, now);
+        Notice = ProviderNoticeSelector.For(snapshot, State);
 
         foreach (QuotaRowViewModel window in Windows)
         {
