@@ -70,10 +70,52 @@ public sealed class TrayIcon : IDisposable
 
         _source = HwndSource.FromHwnd(handle);
         _source?.AddHook(WndProc);
-        _icon = LoadIcon();
+
+        // Only when nothing has set one already, so a glyph rendered before the icon was added is
+        // not silently replaced by the static one - and leaked.
+        if (_icon == IntPtr.Zero)
+        {
+            _icon = LoadIcon();
+        }
 
         Send(NIM_ADD);
         _added = true;
+    }
+
+    /// <summary>
+    /// The edge length, in pixels, the shell wants a notification-area icon to be. Already scaled
+    /// for the display, so it is 16 at 100% and larger above it.
+    /// </summary>
+    public static int SmallIconSize => Math.Max(1, GetSystemMetrics(SM_CXSMICON));
+
+    /// <summary>
+    /// Replaces the icon and takes ownership of the handle. The previous one is destroyed once the
+    /// shell has been told about the new one - in that order, because destroying an icon the shell
+    /// is still drawing leaves a blank square in the tray.
+    /// <para>
+    /// This runs on every change of state, so a handle left behind is not a one-off leak but one
+    /// that accumulates for as long as the widget runs.
+    /// </para>
+    /// </summary>
+    public void SetIcon(IntPtr icon)
+    {
+        if (_disposed || icon == IntPtr.Zero || icon == _icon)
+        {
+            return;
+        }
+
+        IntPtr previous = _icon;
+        _icon = icon;
+
+        if (_added)
+        {
+            Send(NIM_MODIFY);
+        }
+
+        if (previous != IntPtr.Zero)
+        {
+            DestroyIcon(previous);
+        }
     }
 
     /// <summary>A one-off balloon. Used once, to say where the window went the first time it hides.</summary>

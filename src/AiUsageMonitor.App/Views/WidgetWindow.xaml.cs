@@ -26,6 +26,8 @@ public partial class WidgetWindow : Window
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _poll = new();
     private TrayIcon? _tray;
+    private TrayGlyphState _glyph = TrayGlyphState.Empty;
+    private ThemeVariant? _glyphVariant;
     private bool _shuttingDown;
 
     public WidgetWindow(MainViewModel model, SettingsService settings, ProviderRefreshService? refresh = null, ThemeManager? theme = null)
@@ -41,7 +43,7 @@ public partial class WidgetWindow : Window
         Topmost = settings.Current.AlwaysOnTop;
         RestorePlacement(settings.Current);
 
-        _tick.Tick += (_, _) => _model.Tick();
+        _tick.Tick += OnTick;
         _poll.Interval = settings.Current.RefreshInterval;
         _poll.Tick += (_, _) => _ = _model.RefreshAsync(force: false);
 
@@ -99,6 +101,57 @@ public partial class WidgetWindow : Window
         base.OnClosed(e);
     }
 
+    private void OnTick(object? sender, EventArgs e)
+    {
+        _model.Tick();
+        UpdateTrayGlyph();
+    }
+
+    /// <summary>
+    /// Redraws the notification-area glyph, and only when it would actually differ.
+    /// <para>
+    /// This is driven from the one-second tick rather than from a refresh because not every change
+    /// the glyph shows comes from a refresh: a card goes stale, and its bars grey, on the clock
+    /// alone. Rebuilding the state costs a walk over a handful of rows; what must not happen sixty
+    /// times a minute is the redraw, because each one is a new icon handle and a message to another
+    /// process. So the state is compared, not the trigger.
+    /// </para>
+    /// </summary>
+    private void UpdateTrayGlyph()
+    {
+        if (_tray is null)
+        {
+            return;
+        }
+
+        TrayGlyphState state = TrayGlyphState.From(_model.Providers);
+        ThemeVariant variant = TrayGlyphPalette.TaskbarVariant;
+
+        if (!state.HasContent || (variant == _glyphVariant && state.Matches(_glyph)))
+        {
+            return;
+        }
+
+        IntPtr icon = TrayGlyphRenderer.Render(
+            state.Bars,
+            state.Digits,
+            state.DigitsAreStale,
+            state.Overlay,
+            TrayIcon.SmallIconSize,
+            TrayGlyphPalette.For(variant));
+
+        if (icon == IntPtr.Zero)
+        {
+            // GDI refused the bitmap. Keeping the icon already in the tray says something slightly
+            // out of date; replacing it with nothing would say the widget had gone.
+            return;
+        }
+
+        _tray.SetIcon(icon);
+        _glyph = state;
+        _glyphVariant = variant;
+    }
+
     private void OnThemeChanged(object? sender, EventArgs e) =>
         ApplyTitleBarTheme(new WindowInteropHelper(this).Handle);
 
@@ -120,6 +173,7 @@ public partial class WidgetWindow : Window
 
         _theme?.Apply(settings.Theme);
         _model.ApplySettings(settings);
+        UpdateTrayGlyph();
     }
 
     /// <summary>Opens the settings window, or focuses the one already open.</summary>

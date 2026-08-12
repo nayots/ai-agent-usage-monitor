@@ -15,19 +15,26 @@ public static class SystemTheme
     /// True when Windows is set to a light app theme. Defaults to true when the value is absent
     /// or unreadable, matching the Windows default rather than guessing dark.
     /// </summary>
-    public static bool UsesLightTheme
+    public static bool UsesLightTheme => LightThemeFlag("AppsUseLightTheme");
+
+    /// <summary>
+    /// True when the taskbar is light. Windows keeps this separate from the app theme and lets the
+    /// two differ, and it is this one that governs the notification-area icon: that icon is drawn
+    /// on the taskbar, not in this application's window, so an icon coloured from the app's palette
+    /// can come out black on black.
+    /// </summary>
+    public static bool TaskbarUsesLightTheme => LightThemeFlag("SystemUsesLightTheme");
+
+    private static bool LightThemeFlag(string name)
     {
-        get
+        try
         {
-            try
-            {
-                using RegistryKey? key = Registry.CurrentUser.OpenSubKey(PersonalizeKey);
-                return key?.GetValue("AppsUseLightTheme") is not int value || value != 0;
-            }
-            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
-            {
-                return true;
-            }
+            using RegistryKey? key = Registry.CurrentUser.OpenSubKey(PersonalizeKey);
+            return key?.GetValue(name) is not int value || value != 0;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return true;
         }
     }
 

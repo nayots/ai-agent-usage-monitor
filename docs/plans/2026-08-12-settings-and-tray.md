@@ -2149,13 +2149,25 @@ It matters more than it looks. Hiding to tray is the feature Task 7 adds, and wi
 
 **Interfaces:**
 - Consumes: `TrayIcon` (Task 6), `ProviderCardViewModel` (Task 3), `QuotaBarFillSelector` (existing).
-- Produces: `TrayGlyphRenderer.Render(IReadOnlyList<double?> percentages, string? digits, TrayOverlay overlay, int size)` returning `IntPtr` (an `HICON` the caller destroys); `TrayIcon.SetIcon(IntPtr icon)`.
+- Produces: `TrayGlyphRenderer.Render(IReadOnlyList<TrayGlyphBar> bars, string? digits, bool digitsAreStale, TrayOverlay overlay, int size, TrayGlyphPalette palette)` returning `IntPtr` (an `HICON` the caller destroys); `TrayIcon.SetIcon(IntPtr icon)`; `TrayGlyphState.From(IEnumerable<ProviderCardViewModel>)`.
 
-- [ ] **Step 1:** Render a `DrawingVisual` matching `TrayGlyph.dc.html` at `GetSystemMetrics(SM_CXSMICON)`, to a `RenderTargetBitmap`, then to an `HICON` via `CreateIconIndirect`. Every previous `HICON` must be destroyed — this runs on every refresh, and a leaked icon handle per minute is a leak the user eventually notices.
-- [ ] **Step 2:** Assert the renderer returns a non-zero handle for every combination of 0, 1, 2 and 3 windows, `null` percentages, and each overlay; assert the handle is destroyable.
-- [ ] **Step 3:** Re-render from `MainViewModel` after each refresh, using the worst state across providers for the overlay and the highest percentage for the digits.
-- [ ] **Step 4:** `dotnet build`, `dotnet test`, then visual verification at 100%, 125% and 150% scaling.
-- [ ] **Step 5:** Commit.
+- [x] **Step 1:** Render a `DrawingVisual` matching `TrayGlyph.dc.html` at `GetSystemMetrics(SM_CXSMICON)`, to a `RenderTargetBitmap`, then to an `HICON` via `CreateIconIndirect`. Every previous `HICON` must be destroyed — this runs on every refresh, and a leaked icon handle per minute is a leak the user eventually notices.
+- [x] **Step 2:** Assert the renderer returns a non-zero handle for every combination of 0, 1, 2 and 3 windows, `null` percentages, and each overlay; assert the handle is destroyable.
+- [x] **Step 3:** Re-render from `MainViewModel` after each refresh, using the worst state across providers for the overlay and the highest percentage for the digits.
+- [x] **Step 4:** `dotnet build`, `dotnet test`, then visual verification at 100%, 125% and 150% scaling.
+- [x] **Step 5:** Commit.
+
+**What this task learned, and where it left the design.** Five decisions were made during implementation that the one-line steps could not anticipate. Each is a deviation from a literal reading of `TrayGlyph.dc.html`, and each is in the code with its reason.
+
+1. **The palette follows the taskbar, not the application.** Windows keeps `SystemUsesLightTheme` separate from `AppsUseLightTheme` and lets them differ. The glyph is drawn on the taskbar, so a palette taken from the app's own theme renders black on black for anyone who mixes the two. `SystemTheme.TaskbarUsesLightTheme` was added for this.
+2. **The track is the ink colour at low alpha, not `QuotaBarTrackBrush`.** That token means "a barely-there lift from the widget's own layer" (#E4E4E4 on white); on a light taskbar it is invisible. Verified by rendering a contact sheet and looking at it — the first version had no visible track at all in the light palette.
+3. **A three-character reading is dropped rather than abbreviated.** "100" does not fit in sixteen pixels. At 100 the bar is already full and the alert triangle is already up, so nothing is lost; and a 99.6 that rounds to 100 must not claim a limit the user has not hit.
+4. **The digits grey with the bars they came from.** Crisp ink over grey bars claims the number is current when the widget's own row has stopped claiming that.
+5. **The cross is two strokes, not the character `✕`.** At six pixels a glyph is a smudge.
+
+**On the layout.** The design was previewed at 64 px, where its spacing is generous; at 16 px with digits there are 8 pixels for the bars and the design's own gaps do not fit. `Layout.Fit` gives up space in a fixed order — gaps, then bar height, then, last, a whole bar — because a missing bar is a window the user cannot see at all while a thinner one still reports its number.
+
+**On verifying it.** `Shell_NotifyIconGetRect` returns the *overflow chevron's* rectangle for an icon Windows 11 has hidden, which is where a newly registered icon starts. Two hours went into reading a neighbouring application's tray icon as this one's. Confirm the icon is yours by capturing with the app stopped as well as running.
 
 ---
 
