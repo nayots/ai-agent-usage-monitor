@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using AiUsageMonitor.App.Interop;
+using AiUsageMonitor.App.Notifications;
 using AiUsageMonitor.App.Theming;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.Infrastructure.Logging;
@@ -25,6 +26,7 @@ public partial class WidgetWindow : Window
     private SettingsWindow? _settingsWindow;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _poll = new();
+    private readonly UsageAlertWatcher _alerts = new();
     private TrayIcon? _tray;
     private TrayGlyphState _glyph = TrayGlyphState.Empty;
     private ThemeVariant? _glyphVariant;
@@ -105,6 +107,11 @@ public partial class WidgetWindow : Window
     {
         _model.Tick();
         UpdateTrayGlyph();
+
+        foreach (UsageAlert alert in _alerts.Observe(_model.Providers))
+        {
+            _tray?.Notify(alert.Title, alert.Text, alert.IsSilent);
+        }
     }
 
     /// <summary>
@@ -291,7 +298,7 @@ public partial class WidgetWindow : Window
 
         if (!_settings.Current.TrayHintShown)
         {
-            _tray?.ShowHint("Quota Monitor", "Still running in the notification area. Click the icon to bring it back.");
+            _tray?.Notify("Quota Monitor", "Still running in the notification area. Click the icon to bring it back.", silent: true);
             _settings.Update(s => s with { TrayHintShown = true });
         }
     }

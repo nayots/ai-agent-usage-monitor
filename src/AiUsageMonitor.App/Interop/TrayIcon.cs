@@ -33,6 +33,7 @@ public sealed class TrayIcon : IDisposable
     private const int NIF_ICON = 0x2;
     private const int NIF_TIP = 0x4;
     private const int NIF_INFO = 0x10;
+    private const int NIIF_NOSOUND = 0x10;
 
     private readonly Window _owner;
     private readonly string _tooltip;
@@ -118,19 +119,25 @@ public sealed class TrayIcon : IDisposable
         }
     }
 
-    /// <summary>A one-off balloon. Used once, to say where the window went the first time it hides.</summary>
-    public void ShowHint(string title, string text)
+    /// <summary>Shows a balloon notification in the notification area.</summary>
+    public void Notify(string title, string text, bool silent)
     {
         if (!_added)
         {
             return;
         }
 
+        (title, text) = FormatNotification(title, text);
         NOTIFYICONDATA data = Data(NIF_INFO);
         data.szInfoTitle = title;
         data.szInfo = text;
+        data.dwInfoFlags = silent ? NIIF_NOSOUND : 0;
         Shell_NotifyIcon(NIM_MODIFY, ref data);
     }
+
+    /// <summary>Fits notification copy into the fixed shell buffers, reserving their null terminators.</summary>
+    public static (string Title, string Text) FormatNotification(string title, string text) =>
+        (title[..Math.Min(title.Length, 63)], text[..Math.Min(text.Length, 255)]);
 
     public void Dispose()
     {

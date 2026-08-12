@@ -2,6 +2,9 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Reflection;
+using AiUsageMonitor.App.Interop;
+using AiUsageMonitor.App.Notifications;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.App.Views;
 using AiUsageMonitor.Domain;
@@ -37,6 +40,30 @@ public class WidgetWindowTests(WpfFixture wpf)
     {
         string path = Path.Combine(Path.GetTempPath(), "aium-widget-" + Guid.NewGuid().ToString("N"), "settings.json");
         return new SettingsService(new AppSettingsStore(path), settings);
+    }
+
+    [Fact]
+    public void TheWidgetBuildsAUsageAlertWatcherThatIsQuietOnFirstObservation() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+
+        FieldInfo watcherField = typeof(WidgetWindow).GetField("_alerts", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        UsageAlertWatcher watcher = Assert.IsType<UsageAlertWatcher>(watcherField.GetValue(window));
+
+        Assert.Empty(watcher.Observe(model.Providers));
+
+        model.Dispose();
+    });
+
+    [Fact]
+    public void NotificationFormattingFitsTheShellInformationBuffers()
+    {
+        (string title, string text) = TrayIcon.FormatNotification(new string('t', 64), new string('x', 256));
+
+        Assert.Equal(new string('t', 63), title);
+        Assert.Equal(new string('x', 255), text);
     }
 
     [Fact]
