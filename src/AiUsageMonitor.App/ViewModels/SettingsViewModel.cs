@@ -73,6 +73,12 @@ public sealed class SettingsViewModel : ObservableObject
         set => _settings.Update(s => s with { ColorBarsByUsage = value });
     }
 
+    public bool NotifyOnQuotaEvents
+    {
+        get => _settings.Current.NotifyOnQuotaEvents;
+        set => _settings.Update(s => s with { NotifyOnQuotaEvents = value });
+    }
+
     public bool ShowUnavailableProviders
     {
         get => _settings.Current.ShowUnavailableProviders;

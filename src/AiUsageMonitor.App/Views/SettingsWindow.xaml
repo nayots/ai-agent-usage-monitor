@@ -45,6 +45,9 @@
         </TextBlock.Style>
       </TextBlock>
 
+      <TextBlock Text="NOTIFICATIONS" Style="{StaticResource SettingsSectionTextStyle}" />
+      <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Notify on quota milestones and resets" IsChecked="{Binding NotifyOnQuotaEvents, Mode=TwoWay}" AutomationProperties.Name="Notify on quota milestones and resets" />
+
       <TextBlock Text="REFRESH" Style="{StaticResource SettingsSectionTextStyle}" />
       <TextBlock Text="Check providers every" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
       <ItemsControl ItemsSource="{Binding RefreshIntervals}" Margin="0,5,0,0" Focusable="False">

@@ -32,6 +32,34 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public void QuotaNotificationsAreOnByDefault()
+    {
+        SettingsViewModel model = Model(out _);
+
+        Assert.True(model.NotifyOnQuotaEvents);
+    }
+
+    [Fact]
+    public void TheQuotaNotificationsTogglePersistsThroughTheService()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        model.NotifyOnQuotaEvents = false;
+
+        Assert.False(service.Current.NotifyOnQuotaEvents);
+    }
+
+    [Fact]
+    public void AQuotaNotificationsChangeMadeElsewhereIsReflectedBack()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        service.Update(s => s with { NotifyOnQuotaEvents = false });
+
+        Assert.False(model.NotifyOnQuotaEvents);
+    }
+
+    [Fact]
     public void AChangeMadeElsewhereIsReflectedBack()
     {
         SettingsViewModel model = Model(out SettingsService service);

@@ -31,6 +31,8 @@ public sealed record AppSettings
     /// </summary>
     public bool ColorBarsByUsage { get; init; } = true;
 
+    public bool NotifyOnQuotaEvents { get; init; } = true;
+
     public bool AlwaysOnTop { get; init; }
 
     public bool StartWithWindows { get; init; }

@@ -110,7 +110,10 @@ public partial class WidgetWindow : Window
 
         foreach (UsageAlert alert in _alerts.Observe(_model.Providers))
         {
-            _tray?.Notify(alert.Title, alert.Text, alert.IsSilent);
+            if (_settings.Current.NotifyOnQuotaEvents)
+            {
+                _tray?.Notify(alert.Title, alert.Text, alert.IsSilent);
+            }
         }
     }
 
