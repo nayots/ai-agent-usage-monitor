@@ -152,4 +152,59 @@ public class WidgetWindowTests(WpfFixture wpf)
 
         model.Dispose();
     });
+
+    private static FrameworkElement Content(WidgetWindow window)
+    {
+        FrameworkElement content = (FrameworkElement)window.Content;
+        content.Measure(new Size(360, 520));
+        content.Arrange(new Rect(0, 0, 360, 520));
+        content.UpdateLayout();
+        return content;
+    }
+
+    [Fact]
+    public void TheChromeShrinksAtCompactDensity() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default with { Density = WidgetDensity.Compact });
+        WidgetWindow window = new(model, Settings(AppSettings.Default with { Density = WidgetDensity.Compact }));
+        FrameworkElement content = Content(window);
+        Assert.Equal(28d, ((FrameworkElement)window.FindName("TitleBar")).Height);
+        Assert.Equal(24d, ((FrameworkElement)window.FindName("Footer")).Height);
+        Assert.Equal(new Thickness(8, 0, 8, 2), ((FrameworkElement)window.FindName("ProviderList")).Margin);
+        Assert.True(content.DesiredSize.Height > 0);
+        model.Dispose();
+    });
+
+    [Fact]
+    public void TheWholeWidgetIsShorterAtCompactDensity() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> standardProviders = Providers();
+        MainViewModel standardModel = Model(standardProviders, AppSettings.Default);
+        WidgetWindow standardWindow = new(standardModel, Settings(AppSettings.Default));
+        double standard = Content(standardWindow).DesiredSize.Height;
+        AppSettings compactSettings = AppSettings.Default with { Density = WidgetDensity.Compact };
+        IReadOnlyList<ProviderDescriptor> compactProviders = Providers();
+        MainViewModel compactModel = Model(compactProviders, compactSettings);
+        WidgetWindow compactWindow = new(compactModel, Settings(compactSettings));
+        double compact = Content(compactWindow).DesiredSize.Height;
+        Assert.True(compact < standard, $"compact measured {compact} against standard {standard}");
+        standardModel.Dispose();
+        compactModel.Dispose();
+    });
+
+    [Fact]
+    public void ChangingDensityMovesTheChromeWithoutRebuildingTheWindow() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        WidgetWindow window = new(model, settings);
+        Content(window);
+        Assert.Equal(32d, ((FrameworkElement)window.FindName("TitleBar")).Height);
+        settings.Update(s => s with { Density = WidgetDensity.Compact });
+        Content(window);
+        Assert.Equal(28d, ((FrameworkElement)window.FindName("TitleBar")).Height);
+        model.Dispose();
+    });
 }
