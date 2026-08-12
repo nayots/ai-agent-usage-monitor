@@ -34,6 +34,12 @@ public sealed class SettingsViewModel : ObservableObject
             Theme("Dark", ThemePreference.Dark)
         ];
 
+        Densities =
+        [
+            Density("Standard", WidgetDensity.Normal),
+            Density("Compact", WidgetDensity.Compact)
+        ];
+
         RefreshIntervals = Durations(
             "refresh",
             RefreshPresets,
@@ -105,6 +111,8 @@ public sealed class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<ChoiceViewModel> Themes { get; }
 
+    public IReadOnlyList<ChoiceViewModel> Densities { get; }
+
     public ObservableCollection<ChoiceViewModel> RefreshIntervals { get; }
 
     public ObservableCollection<ChoiceViewModel> StaleThresholds { get; }
@@ -123,6 +131,13 @@ public sealed class SettingsViewModel : ObservableObject
         "theme",
         () => (int)_settings.Current.Theme,
         value => _settings.Update(s => s with { Theme = (ThemePreference)value }));
+
+    private ChoiceViewModel Density(string label, WidgetDensity density) => new(
+        label,
+        (int)density,
+        "density",
+        () => (int)_settings.Current.Density,
+        value => _settings.Update(s => s with { Density = (WidgetDensity)value }));
 
     /// <summary>
     /// The presets, plus <paramref name="current"/> when a hand-edited settings file holds
@@ -160,7 +175,7 @@ public sealed class SettingsViewModel : ObservableObject
     {
         Raise(null);
 
-        foreach (ChoiceViewModel choice in Themes.Concat(RefreshIntervals).Concat(StaleThresholds))
+        foreach (ChoiceViewModel choice in Themes.Concat(Densities).Concat(RefreshIntervals).Concat(StaleThresholds))
         {
             choice.Refresh();
         }

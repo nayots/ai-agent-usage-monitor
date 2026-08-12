@@ -118,4 +118,23 @@ public class SettingsViewModelTests
         Assert.Equal(1, recheck);
         Assert.Equal(1, logs);
     }
+
+    [Fact]
+    public void TheDensityChoicesOfferStandardAndCompactAndWriteThrough()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+        Assert.Equal(new[] { "Standard", "Compact" }, model.Densities.Select(choice => choice.Label));
+        Assert.True(model.Densities[0].IsSelected);
+        model.Densities[1].IsSelected = true;
+        Assert.Equal(WidgetDensity.Compact, service.Current.Density);
+    }
+
+    [Fact]
+    public void ADensityChangeMadeElsewhereMovesTheRadio()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+        service.Update(s => s with { Density = WidgetDensity.Compact });
+        Assert.False(model.Densities[0].IsSelected);
+        Assert.True(model.Densities[1].IsSelected);
+    }
 }
