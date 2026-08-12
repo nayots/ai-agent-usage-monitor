@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -226,5 +227,71 @@ public class ViewLoadingTests(WpfFixture wpf)
         {
             Application.Current.Resources.MergedDictionaries.Remove(dictionary);
         }
+    });
+    private static ProviderCardViewModel Card(ConnectionState state, bool compact)
+    {
+        ProviderCardViewModel card = new(
+            new ProviderDescriptor("Claude Code", "CC", new SilentProbe("Claude Code")),
+            colorBarsByUsage: true,
+            _ => { })
+        {
+            IsCompact = compact
+        };
+        card.Apply(Snapshot(state, [Window(47d, false, true), Window(62d, false, true)]), Now, FreshnessPolicy.Default);
+        return card;
+    }
+
+    private static ProviderCardView Rendered(ProviderCardViewModel card) =>
+        ControlLoadingTests.Measured(new ProviderCardView { DataContext = card, Width = 340 });
+
+    [Fact]
+    public void ACompactCardIsShorterThanTheSameCardAtStandardDensity() => wpf.Invoke(() =>
+    {
+        double standard = Rendered(Card(ConnectionState.Connected, compact: false)).DesiredSize.Height;
+        double compact = Rendered(Card(ConnectionState.Connected, compact: true)).DesiredSize.Height;
+
+        Assert.True(compact < standard, $"compact measured {compact} against standard {standard}");
+    });
+
+    [Fact]
+    public void ACompactCardDropsItsMonogramAndVersion() => wpf.Invoke(() =>
+    {
+        ProviderCardView standard = Rendered(Card(ConnectionState.Connected, compact: false));
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)standard.FindName("Monogram")).Visibility);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)standard.FindName("VersionLine")).Visibility);
+
+        ProviderCardView compact = Rendered(Card(ConnectionState.Connected, compact: true));
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)compact.FindName("Monogram")).Visibility);
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)compact.FindName("VersionLine")).Visibility);
+    });
+
+    [Fact]
+    public void ACompactConnectedCardDropsItsStatusLineForASpacer() => wpf.Invoke(() =>
+    {
+        ProviderCardView view = Rendered(Card(ConnectionState.Connected, compact: true));
+
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)view.FindName("StatusLine")).Visibility);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)view.FindName("CompactHeaderSpacer")).Visibility);
+    });
+
+    [Theory]
+    [InlineData(ConnectionState.Error)]
+    [InlineData(ConnectionState.Stale)]
+    [InlineData(ConnectionState.Unavailable)]
+    public void ACompactCardWithAProblemKeepsItsStatusLine(ConnectionState state) => wpf.Invoke(() =>
+    {
+        ProviderCardView view = Rendered(Card(state, compact: true));
+
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)view.FindName("StatusLine")).Visibility);
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)view.FindName("CompactHeaderSpacer")).Visibility);
+    });
+
+    [Fact]
+    public void TheColumnCaptionsSurviveCompactDensity() => wpf.Invoke(() =>
+    {
+        ProviderCardView view = Rendered(Card(ConnectionState.Connected, compact: true));
+
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)view.FindName("ColumnCaptions")).Visibility);
+        Assert.Contains("USED", Texts(view));
     });
 }
