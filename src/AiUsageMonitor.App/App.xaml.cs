@@ -1,7 +1,11 @@
 using System.Windows;
 using System.Windows.Threading;
 using AiUsageMonitor.App.Theming;
+using AiUsageMonitor.App.ViewModels;
+using AiUsageMonitor.App.Views;
 using AiUsageMonitor.Infrastructure.Logging;
+using AiUsageMonitor.Infrastructure.Providers;
+using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -34,6 +38,13 @@ public partial class App : Application
                 new RollingFileWriter(RollingFileLoggerProvider.DefaultDirectory, "app")));
         });
 
+        services.AddSingleton<IReadOnlyList<ProviderDescriptor>>(ProviderRegistry.CreateDefault());
+        services.AddSingleton(provider => new ProviderRefreshService(
+            provider.GetRequiredService<IReadOnlyList<ProviderDescriptor>>(),
+            timeout: TimeSpan.FromSeconds(30),
+            baseInterval: loaded.Settings.RefreshInterval,
+            provider.GetRequiredService<ILogger<ProviderRefreshService>>()));
+
         _services = services.BuildServiceProvider();
         _logger = _services.GetRequiredService<ILogger<App>>();
 
@@ -52,7 +63,18 @@ public partial class App : Application
 
         try
         {
-            new MainWindow().Show();
+            MainViewModel model = new(
+                _services.GetRequiredService<ProviderRefreshService>(),
+                _services.GetRequiredService<IReadOnlyList<ProviderDescriptor>>(),
+                loaded.Settings,
+                () => DateTimeOffset.Now,
+                action => Dispatcher.Invoke(action));
+
+            new WidgetWindow(
+                model,
+                loaded.Settings,
+                _services.GetRequiredService<AppSettingsStore>(),
+                _services.GetRequiredService<ThemeManager>()).Show();
         }
         catch (Exception ex)
         {
