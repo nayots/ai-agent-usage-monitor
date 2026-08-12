@@ -1501,9 +1501,11 @@ foreach ($size in $sizes) {
     $left = 3.0 * $s
     $width = $size - (6.0 * $s)
     $top = 4.0 * $s
+    # Cast to [float] explicitly. FillRectangle has an int and a float overload, and handing
+    # PowerShell doubles makes the binder pick between them by coercion.
     foreach ($pct in @(0.85, 0.55, 0.3)) {
-        $g.FillRectangle($track, $left, $top, $width, $barHeight)
-        $g.FillRectangle($fill,  $left, $top, $width * $pct, $barHeight)
+        $g.FillRectangle($track, [float]$left, [float]$top, [float]$width, [float]$barHeight)
+        $g.FillRectangle($fill,  [float]$left, [float]$top, [float]($width * $pct), [float]$barHeight)
         $top = $top + $barHeight + (1.5 * $s)
     }
 
@@ -2119,7 +2121,7 @@ git commit -m "feat: keep the widget alive in the notification area"
 
 **Do not run the application from a delegated worker.** `dotnet run --project src/AiUsageMonitor.App` opens a GUI that never exits on its own; a background worker cannot see it and will hang. A worker that reaches this task should stop and report.
 
-- [ ] Widget starts, tray icon appears, tooltip reads "Quota Monitor".
+- [ ] Widget starts, tray icon appears, tooltip reads "Quota Monitor". **Known risk:** the generated `.ico` uses PNG-compressed frames at every size. Modern Windows loads these, but if the tray shows a blank or default icon, that is the cause — re-emit the frames below 256px as uncompressed DIBs rather than chasing the interop.
 - [ ] `✕` hides the window; the balloon appears once and never again.
 - [ ] Left-clicking the tray icon brings it back; right-clicking opens a themed menu that dismisses on an outside click.
 - [ ] Every tray menu entry does what it says. Exit ends the process — confirm in Task Manager.
