@@ -13,11 +13,12 @@ public sealed class ProviderCardViewModel : ObservableObject
     private readonly ProviderDescriptor _descriptor;
     private readonly bool _colorBarsByUsage;
     private ProviderSnapshot? _snapshot;
+    private DateTimeOffset? _lastSuccessAt;
     private FreshnessPolicy _freshness = FreshnessPolicy.Default;
     private ConnectionState _state = ConnectionState.Discovering;
     private MechanismTier _tier = MechanismTier.Unofficial;
     private string? _versionText;
-    private string? _updatedText;
+    private string? _timestampText;
     private ProviderNotice? _notice;
 
     public ProviderCardViewModel(ProviderDescriptor descriptor, bool colorBarsByUsage, Action<ProviderDescriptor> retry)
@@ -47,30 +48,52 @@ public sealed class ProviderCardViewModel : ObservableObject
 
     public string? VersionText { get => _versionText; private set => Set(ref _versionText, value); }
 
-    public string? UpdatedText { get => _updatedText; private set { if (Set(ref _updatedText, value)) { Raise(nameof(HasUpdatedText)); } } }
+    /// <summary>
+    /// The card's one statement of time - either how old the rows are, or how long the provider has
+    /// been failing. See <see cref="TimestampLine"/> for which, and why they share a line.
+    /// </summary>
+    public string? TimestampText { get => _timestampText; private set { if (Set(ref _timestampText, value)) { Raise(nameof(HasTimestampText)); } } }
 
     /// <summary>
-    /// False whenever nothing has been retrieved yet, which is every NotInstalled, Discovering and
-    /// Waiting card. The view hides the whole line rather than rendering its separator against an
-    /// absent value - missing data is absent, never a placeholder that reads like one.
+    /// False when there is nothing truthful to say: nothing retrieved yet and no failure to date
+    /// it from, which is every Discovering and Waiting card and any NotInstalled or Unsupported
+    /// one. The view hides the whole line rather than rendering its separator against an absent
+    /// value - missing data is absent, never a placeholder that reads like one.
     /// <para>
-    /// This line is the only place a card states its age. The stale banner and the notice body both
-    /// used to restate it from this same <c>RetrievedAt</c>, a few pixels below and under the same
+    /// This line is the only place a card states a time. The stale banner and the notice body both
+    /// used to restate it from the same <c>RetrievedAt</c>, a few pixels below and under the same
     /// condition, so a stale card read "Stale . Updated 37 minutes ago" and then "Last successful
     /// update 37 minutes ago." Neither says it any more; do not reintroduce either.
     /// </para>
     /// </summary>
-    public bool HasUpdatedText => UpdatedText is not null;
+    public bool HasTimestampText => TimestampText is not null;
 
     public ProviderNotice? Notice { get => _notice; private set { if (Set(ref _notice, value)) { Raise(nameof(HasNotice)); } } }
 
     public bool HasNotice => Notice is not null;
 
-    /// <summary>Replaces everything this card shows with the given snapshot. Never merges: a snapshot is whole.</summary>
+    /// <summary>
+    /// Replaces everything this card shows with the given snapshot. Never merges: a snapshot is
+    /// whole.
+    /// <para>
+    /// The single exception is <see cref="_lastSuccessAt"/>, and it is not an exception to that
+    /// rule so much as a different kind of fact. A snapshot is one observation and says nothing
+    /// about any other; how long a provider has been broken is a property of the sequence, which
+    /// only something outliving individual snapshots can hold. It is recorded here rather than
+    /// stamped onto the failing snapshot because a snapshot's <c>RetrievedAt</c> means "when THIS
+    /// data was retrieved", and a failure has no data - writing a borrowed timestamp there would
+    /// also feed <see cref="FreshnessPolicy"/> an age for something that was never fetched.
+    /// </para>
+    /// </summary>
     public void Apply(ProviderSnapshot snapshot, DateTimeOffset now, FreshnessPolicy policy)
     {
         _snapshot = snapshot;
         _freshness = policy;
+
+        if (snapshot.RetrievedAt is DateTimeOffset succeeded)
+        {
+            _lastSuccessAt = succeeded;
+        }
 
         Tier = snapshot.Tier;
         VersionText = FormatVersion(snapshot.Version);
@@ -126,8 +149,7 @@ public sealed class ProviderCardViewModel : ObservableObject
             snapshot.State,
             _freshness.Evaluate(snapshot.RetrievedAt, now));
 
-        TimeSpan? age = snapshot.RetrievedAt is DateTimeOffset at ? now - at : null;
-        UpdatedText = RelativeTime.FormatAge(age) is string formatted ? "Updated " + formatted : null;
+        TimestampText = TimestampLine(snapshot, State, now);
         Notice = ProviderNoticeSelector.For(snapshot, State);
 
         foreach (QuotaRowViewModel window in Windows)
@@ -135,5 +157,35 @@ public sealed class ProviderCardViewModel : ObservableObject
             window.IsStale = IsStale;
             window.Tick(now);
         }
+    }
+
+    /// <summary>
+    /// The one line on a card that states a time, and which of two facts it states depends on
+    /// whether the card is showing anything.
+    /// <para>
+    /// A card with rows reports how old those rows are. A card whose rows are gone reports how long
+    /// it has been failing instead: "Updated" would be claiming freshness for data that is not on
+    /// screen, and saying nothing at all leaves the user unable to tell a provider that broke a
+    /// moment ago from one that has been down all day - which is the whole question during an
+    /// outage. Both are the same shape in the same place, so the eye reads one line, not two.
+    /// </para>
+    /// <para>
+    /// Only the failure states earn the second form. NotInstalled, Unsupported and Waiting are
+    /// settled facts about the machine whose notices already say everything there is to say, and a
+    /// duration would imply something is still being attempted.
+    /// </para>
+    /// </summary>
+    private string? TimestampLine(ProviderSnapshot snapshot, ConnectionState state, DateTimeOffset now)
+    {
+        if (snapshot.RetrievedAt is DateTimeOffset retrieved)
+        {
+            return "Updated " + RelativeTime.FormatAge(now - retrieved);
+        }
+
+        bool failing = state is ConnectionState.Error or ConnectionState.Unavailable;
+
+        return failing && _lastSuccessAt is DateTimeOffset succeeded
+            ? "Last succeeded " + RelativeTime.FormatAge(now - succeeded)
+            : null;
     }
 }

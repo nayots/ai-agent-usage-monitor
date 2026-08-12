@@ -107,7 +107,7 @@ public class ProviderCardViewModelTests
 
         Assert.Equal(ConnectionState.Stale, card.State);
         Assert.True(card.IsStale);
-        Assert.Equal("Updated 6 minutes ago", card.UpdatedText);
+        Assert.Equal("Updated 6 minutes ago", card.TimestampText);
         Assert.True(card.Windows[0].IsStale);
     }
 
@@ -176,23 +176,23 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
-    public void UpdatedTextIsAbsentUntilSomethingHasSucceeded()
+    public void TheTimestampLineIsAbsentUntilSomethingHasSucceeded()
     {
         ProviderCardViewModel card = Card();
         card.Apply(Snapshot(state: ConnectionState.Waiting, retrievedAt: null), Now, Policy);
 
-        Assert.Null(card.UpdatedText);
+        Assert.Null(card.TimestampText);
     }
 
     [Fact]
-    public void UpdatedTextTracksTheLocalClock()
+    public void TheTimestampLineTracksTheLocalClock()
     {
         ProviderCardViewModel card = Card();
         card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: Now), Now, Policy);
-        Assert.Equal("Updated 0s ago", card.UpdatedText);
+        Assert.Equal("Updated 0s ago", card.TimestampText);
 
         card.Tick(Now.AddSeconds(12));
-        Assert.Equal("Updated 12s ago", card.UpdatedText);
+        Assert.Equal("Updated 12s ago", card.TimestampText);
     }
 
     [Fact]
@@ -239,15 +239,83 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
+    public void ACardThatBreaksReportsHowLongItHasBeenSinceItLastWorked()
+    {
+        // Every production failure path reports RetrievedAt null, so the failing snapshot cannot
+        // say this about itself. Without it the card cannot tell a provider that broke a moment ago
+        // from one that has been down all day - the question a user actually has during an outage.
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: Now), Now, Policy);
+
+        DateTimeOffset broke = Now.AddHours(9);
+        card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: null, error: "boom"), broke, Policy);
+
+        Assert.Equal("Last succeeded 9 hours ago", card.TimestampText);
+
+        card.Tick(broke.AddHours(1));
+        Assert.Equal("Last succeeded 10 hours ago", card.TimestampText);
+    }
+
+    [Fact]
+    public void AFailingCardNeverClaimsToHaveBeenUpdated()
+    {
+        // The two forms share one line, so the noun is what distinguishes them. A card with no rows
+        // on it saying "Updated" would be claiming freshness for data that is not on screen.
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: Now), Now, Policy);
+        card.Apply(Snapshot(state: ConnectionState.Unavailable, retrievedAt: null, error: "boom"), Now.AddMinutes(3), Policy);
+
+        Assert.DoesNotContain("Updated", card.TimestampText);
+    }
+
+    [Fact]
+    public void ACardThatHasNeverSucceededDatesNothing()
+    {
+        // Failing since launch. There is no last success to count from, and inventing one - or
+        // dating the failure from process start - would be fabricating a fact nobody reported.
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: null, error: "boom"), Now, Policy);
+
+        Assert.Null(card.TimestampText);
+    }
+
+    [Fact]
+    public void OnlyAFailureIsWorthDating()
+    {
+        // A provider uninstalled mid-session has a last success on record, but "last succeeded 3
+        // minutes ago" next to "Not installed on this machine" implies something is still being
+        // attempted. Settled facts about the machine carry no duration.
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: Now), Now, Policy);
+        card.Apply(Snapshot(state: ConnectionState.NotInstalled, version: null, retrievedAt: null), Now.AddMinutes(3), Policy);
+
+        Assert.Null(card.TimestampText);
+    }
+
+    [Fact]
+    public void ARecoveredCardGoesBackToDatingItsData()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: Now), Now, Policy);
+        card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: null, error: "boom"), Now.AddHours(9), Policy);
+
+        DateTimeOffset recovered = Now.AddHours(10);
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: recovered), recovered, Policy);
+
+        Assert.Equal("Updated 0s ago", card.TimestampText);
+    }
+
+    [Fact]
     public void ACardStatesItsAgeOnceAndOnlyInTheHeader()
     {
         // Both the notice body and the stale banner used to restate the header's age from the same
         // RetrievedAt, under the same condition, a few pixels below it. A card that has an age says
-        // so exactly once.
+        // so exactly once, whichever of the two forms that line is currently in.
         ProviderCardViewModel card = Card();
-        card.Apply(Snapshot(state: ConnectionState.Unavailable, retrievedAt: Now.AddHours(-2), error: "boom"), Now, Policy);
+        card.Apply(Snapshot(windows: [Window("a", 0, 20)], retrievedAt: Now), Now, Policy);
+        card.Apply(Snapshot(state: ConnectionState.Unavailable, retrievedAt: null, error: "boom"), Now.AddHours(2), Policy);
 
-        Assert.Equal("Updated 2 hours ago", card.UpdatedText);
+        Assert.Equal("Last succeeded 2 hours ago", card.TimestampText);
         Assert.DoesNotContain("2 hours ago", card.Notice!.Body);
         Assert.DoesNotContain("Last successful update", card.Notice.Body);
     }
@@ -260,7 +328,7 @@ public class ProviderCardViewModelTests
         ProviderCardViewModel card = Card();
         card.Apply(Snapshot(state: ConnectionState.Unavailable, retrievedAt: null), Now, Policy);
 
-        Assert.Null(card.UpdatedText);
+        Assert.Null(card.TimestampText);
         Assert.DoesNotContain("ago", card.Notice!.Body);
     }
 

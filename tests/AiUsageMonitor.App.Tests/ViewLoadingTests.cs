@@ -75,9 +75,9 @@ public class ViewLoadingTests(WpfFixture wpf)
     });
 
     [Fact]
-    public void TheUpdatedLineDropsItsSeparatorWhenThereIsNothingToTimestamp() => wpf.Invoke(() =>
+    public void TheTimestampLineDropsItsSeparatorWhenThereIsNothingToTimestamp() => wpf.Invoke(() =>
     {
-        // NotInstalled never has a RetrievedAt, so UpdatedText is null. Rendering the separator
+        // NotInstalled never has a RetrievedAt, so there is no timestamp. Rendering the separator
         // regardless would leave a dangling "Not installed ·" - and on a machine where one of the
         // two providers simply is not present, that is the first thing the user ever sees.
         ProviderCardViewModel card = new(
@@ -88,11 +88,11 @@ public class ViewLoadingTests(WpfFixture wpf)
 
         ProviderCardView view = ControlLoadingTests.Measured(new ProviderCardView { DataContext = card, Width = 340 });
 
-        Assert.Equal(Visibility.Collapsed, ((TextBlock)view.FindName("UpdatedLine")).Visibility);
+        Assert.Equal(Visibility.Collapsed, ((TextBlock)view.FindName("TimestampLine")).Visibility);
     });
 
     [Fact]
-    public void TheUpdatedLineKeepsItsSeparatorWhenThereIsATimestamp() => wpf.Invoke(() =>
+    public void TheTimestampLineKeepsItsSeparatorWhenThereIsATimestamp() => wpf.Invoke(() =>
     {
         ProviderCardViewModel card = new(
             new ProviderDescriptor("Claude Code", "CC", new SilentProbe("Claude Code")),
@@ -102,7 +102,7 @@ public class ViewLoadingTests(WpfFixture wpf)
 
         ProviderCardView view = ControlLoadingTests.Measured(new ProviderCardView { DataContext = card, Width = 340 });
 
-        TextBlock updated = (TextBlock)view.FindName("UpdatedLine");
+        TextBlock updated = (TextBlock)view.FindName("TimestampLine");
         Assert.Equal(Visibility.Visible, updated.Visibility);
         Assert.Equal("· Updated 0s ago", updated.Text);
     });

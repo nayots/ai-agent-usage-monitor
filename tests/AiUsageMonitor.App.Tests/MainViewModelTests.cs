@@ -105,7 +105,7 @@ public class MainViewModelTests
         model.Tick();
 
         Assert.Equal(before, model.Providers[0].Windows[0].CountdownText);
-        Assert.Equal("Updated 0s ago", model.Providers[0].UpdatedText);
+        Assert.Equal("Updated 0s ago", model.Providers[0].TimestampText);
     }
 
     [Fact]
