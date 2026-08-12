@@ -115,8 +115,11 @@ way to be wrong about whether a change had taken.
 | Open diagnostics | **deferred** — there is no diagnostics window to open. The button is omitted, not disabled |
 | Compact or expanded default mode | **deferred** — `AppSettings.Density` exists but nothing renders differently, so the toggle would be dead UI |
 
-Numeric fields commit on lost focus and on Enter, not on every keystroke: a partially typed "3" in
-a field on its way to "300" would otherwise be clamped to 15 and re-rendered under the cursor.
+The two numeric settings are chosen from presets rather than typed. Free text would have to survive
+a partially typed "3" on its way to "300" being clamped to 15 and re-rendered under the cursor, and
+presets honour the clamp ranges by construction. A settings file holding a hand-edited value outside
+the presets keeps that value as an extra choice, so the window never silently rewrites a deliberate
+edit.
 
 ### Accessibility
 
@@ -164,13 +167,23 @@ Left-click opens/focuses. The icon's tooltip is the app name; it does **not** ca
 ### Icon
 
 New `App/Assets/app.ico` at 16/24/32/48/256, also wired as `<ApplicationIcon>` — which retires the
-"no app icon" half of the release gap. The tray glyph is **static**. PRD §16.1 contemplates a tray
-glyph carrying state with a shape overlay rather than colour; that is an icon-design problem and is
-deferred rather than half-done.
+"no app icon" half of the release gap.
+
+The tray glyph is **static** in the increment as approved. That was decided on the grounds that a
+state-carrying glyph needed an icon design, which turned out to be wrong: `docs/design/TrayGlyph.dc.html`
+already specifies it — a stack of 2px bars, one per quota window, filled by the same three bands as
+the quota rows, with the highest percentage as digits above and a cross or triangle overlay for the
+error and alert states. It is therefore reinstated as an **optional last task** in the plan, because
+hiding to tray with a static icon means a hidden widget tells the user nothing, which is most of the
+reason to have a tray icon at all. Dropping that task costs nothing else in the increment.
 
 ## 4. Start with Windows
 
-`Infrastructure/Startup/StartupRegistration.cs`:
+`App/Interop/StartupRegistration.cs` — not Infrastructure, which targets plain `net10.0`, where a
+`Microsoft.Win32.Registry` call raises CA1416 and warnings are errors. Fixing that properly would
+mean retargeting Infrastructure, its tests and the POC to `net10.0-windows` for one registry value.
+`App/Interop` already holds `DwmWindowChrome`, the same kind of Win32 integration, in a project that
+is already `net10.0-windows`.
 
 ```csharp
 public sealed class StartupRegistration
