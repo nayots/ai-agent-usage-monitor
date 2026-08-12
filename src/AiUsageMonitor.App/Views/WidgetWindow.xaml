@@ -4,7 +4,7 @@
         xmlns:views="clr-namespace:AiUsageMonitor.App.Views"
         Title="Quota Monitor"
         Width="360" MaxHeight="520" SizeToContent="Height"
-        WindowStyle="None" ResizeMode="NoResize"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
         Background="{DynamicResource WidgetWindowBackgroundBrush}"
         Foreground="{DynamicResource TextPrimaryBrush}"
         FontFamily="{StaticResource WidgetFontFamily}"
@@ -35,10 +35,8 @@
           <Button Style="{StaticResource TitleBarPinButtonStyle}" Click="Pin_Click" />
           <Button Style="{StaticResource TitleBarIconButtonStyle}" Content="&#xE713;" Click="Settings_Click"
                   ToolTip="Settings" AutomationProperties.Name="Settings" />
-          <Button Width="30" Height="26" Content="&#x2212;" FontSize="12" Click="Minimise_Click"
-                  Style="{StaticResource LinkButtonStyle}"
-                  Foreground="{DynamicResource TextSecondaryBrush}"
-                  AutomationProperties.Name="Minimise" />
+          <!-- No minimise button. With no taskbar button to minimise towards, it could only do what
+               the one beside it already does, under a glyph that promises something else. -->
           <Button Width="30" Height="26" Content="&#x2715;" FontSize="11" Click="Close_Click"
                   Style="{StaticResource LinkButtonStyle}"
                   Foreground="{DynamicResource TextSecondaryBrush}"

@@ -55,6 +55,25 @@ public class WidgetWindowTests(WpfFixture wpf)
         model.Dispose();
     });
 
+    /// <summary>
+    /// The widget lives in the notification area and nowhere else. A taskbar button would be a
+    /// second place to find it and a second thing to close, and the title bar drops its minimise
+    /// button for the same reason - with nothing to minimise towards it could only do what the
+    /// button beside it does.
+    /// </summary>
+    [Fact]
+    public void TheWidgetKeepsNoTaskbarButton() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+
+        Assert.False(window.ShowInTaskbar);
+
+        model.Dispose();
+    });
+
     [Fact]
     public void AFirstRunWithNoSavedPlacementIsCentred() => wpf.Invoke(() =>
     {

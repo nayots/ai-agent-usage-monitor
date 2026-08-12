@@ -232,8 +232,6 @@ public partial class WidgetWindow : Window
         }
     }
 
-    private void Minimise_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-
     private void Settings_Click(object sender, RoutedEventArgs e) => ShowSettings();
 
     /// <summary>
