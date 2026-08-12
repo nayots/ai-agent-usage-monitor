@@ -100,6 +100,27 @@ public class TrayGlyphRendererTests(WpfFixture wpf)
         Assert.True(pair <= 16, $"'99' spanned {pair} columns of a 16 pixel icon");
     });
 
+    /// <summary>
+    /// The band above the bars is eight pixels at this size, and the number has to use it. Setting
+    /// the em equal to the band - which reads as the obvious thing to do - inks only about seven
+    /// tenths of it, so the digits came out at six pixels and the rest of the band was wasted. The
+    /// companion assertion is <see cref="EveryWindowStillGetsItsOwnBarInTheSmallestIconAlongsideDigits"/>:
+    /// together they say the number grew into its own space and not into the bars'.
+    /// </summary>
+    [Fact]
+    public void TheNumberFillsTheBandRatherThanSittingSmallInsideIt() => wpf.Invoke(() =>
+    {
+        Color[,] pixels = Render([], "88", TrayOverlay.None, 16);
+
+        int[] rows = [.. Enumerable.Range(0, 16)
+            .Where(y => Enumerable.Range(0, 16).Any(x => pixels[x, y].A >= 64))];
+
+        Assert.NotEmpty(rows);
+
+        int span = rows.Max() - rows.Min() + 1;
+        Assert.True(span >= 8, $"the digits inked {span} of the 8 rows they were given");
+    });
+
     [Fact]
     public void AStaleReadingIsGreyedRatherThanDrawnInInk() => wpf.Invoke(() =>
     {
@@ -123,6 +144,32 @@ public class TrayGlyphRendererTests(WpfFixture wpf)
         Assert.InRange(alert.X, 6, 10);
         Assert.InRange(alert.Y, 5, 11);
     });
+
+    /// <summary>
+    /// Found on a real taskbar, not in a test: a provider in error contributes no bars, so the
+    /// group shrinks, and while it was bottom-aligned it slid into the very corner the error mark
+    /// claims - which then landed on the second digit. The number is anchored to the top now, so
+    /// the two cannot meet. Asserted as rows rather than as an alignment so it stays true however
+    /// the layout is next expressed.
+    /// </summary>
+    [Fact]
+    public void AFailingProviderWithOneWindowKeepsItsBadgeOffTheNumber() => wpf.Invoke(() =>
+    {
+        Color[,] pixels = Render([new TrayGlyphBar(53d, QuotaBarFill.Accent, false)], "53", TrayOverlay.Error, 16);
+
+        int[] number = RowsWhere(pixels, pixel => pixel.A >= 160 && Same(pixel, Palette.Ink));
+        int[] badge = RowsWhere(pixels, pixel => Same(pixel, Palette.Bad));
+
+        Assert.NotEmpty(number);
+        Assert.NotEmpty(badge);
+        Assert.True(
+            number.Max() < badge.Min(),
+            $"the number reached row {number.Max()} and the badge began at row {badge.Min()}");
+    });
+
+    private static int[] RowsWhere(Color[,] pixels, Func<Color, bool> matches) =>
+        [.. Enumerable.Range(0, pixels.GetLength(1))
+            .Where(y => Enumerable.Range(0, pixels.GetLength(0)).Any(x => matches(pixels[x, y])))];
 
     [Fact]
     public void NothingIsDrawnForAnIconWithNoSize() =>

@@ -164,10 +164,17 @@ public static class TrayGlyphRenderer
         double digitHeight = string.IsNullOrEmpty(digits) ? 0 : Round(8 * scale);
         Layout layout = Layout.Fit(bars, size - digitHeight, scale);
 
-        // Digits sit on top of the bars and the whole group is bottom-aligned; with no digits the
-        // bars are centred instead. Both come straight from the design's flex rules.
+        // Digits take the top band and the bars grow downward from them; with no digits the bars are
+        // centred instead.
+        //
+        // The design bottom-aligns the group, which is the same thing whenever the bars fill the
+        // rest of the square - and self-defeating when they do not. A failing provider contributes
+        // no bars, so the group shrinks and slides down into the bottom-right corner at exactly the
+        // moment the corner is claimed by the error mark, and the mark lands on the second digit.
+        // Anchoring the digits to the top keeps the number and the badge apart in the one case that
+        // puts them together.
         double contentHeight = digitHeight + layout.Height;
-        double y = digitHeight > 0 ? size - contentHeight : Round((size - contentHeight) / 2);
+        double y = digitHeight > 0 ? 0 : Round((size - contentHeight) / 2);
 
         if (digitHeight > 0)
         {
@@ -211,22 +218,18 @@ public static class TrayGlyphRenderer
 
     /// <summary>
     /// The digits are drawn as glyph outlines rather than text so they can be centred on their own
-    /// ink rather than on a line box: at an 8-pixel em the line box is half again as tall as the
+    /// ink rather than on a line box: at these sizes the line box is half again as tall as the
     /// digits, and centring on it puts them visibly off-centre in a 16-pixel square.
+    /// <para>
+    /// The em is derived from <paramref name="height"/> rather than set equal to it. A lining digit
+    /// inks about seven tenths of its em, so the two are not the same number: passing the band
+    /// straight through as the em - which this did - drew 5.8 pixels of digit inside an 8 pixel
+    /// band and left the remaining quarter empty, for no gain anywhere else.
+    /// </para>
     /// </summary>
     private static void DrawDigits(DrawingContext context, string digits, double y, double height, int size, Color ink)
     {
-        FormattedText text = new(
-            digits,
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
-            height,
-            new SolidColorBrush(ink),
-            numberSubstitution: null,
-            TextFormattingMode.Display,
-            pixelsPerDip: 1d);
-
+        FormattedText text = Text(digits, height / DigitInkRatio, ink);
         Geometry geometry = text.BuildGeometry(new Point(0, 0));
         Rect bounds = geometry.Bounds;
 
@@ -248,6 +251,47 @@ public static class TrayGlyphRenderer
         geometry.Transform = transform;
         context.DrawGeometry(new SolidColorBrush(ink), null, geometry);
     }
+
+    private static readonly Typeface DigitFace = new(
+        new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+
+    private static double? _digitInkRatio;
+
+    /// <summary>
+    /// How much of its em a lining digit actually inks, measured from the face rather than assumed.
+    /// Memoised on first use instead of held in a static initialiser: a throwing initialiser in a
+    /// type the window touches during layout is how this application once shipped with no window at
+    /// all, and a font measurement is not worth reintroducing that failure mode for.
+    /// </summary>
+    private static double DigitInkRatio
+    {
+        get
+        {
+            if (_digitInkRatio is double ratio)
+            {
+                return ratio;
+            }
+
+            const double reference = 100d;
+            Rect bounds = Text("0123456789", reference, Colors.Black).BuildGeometry(new Point(0, 0)).Bounds;
+
+            // A face that measures to nothing falls back to the usual seven tenths rather than
+            // dividing by zero and drawing an infinitely large number.
+            _digitInkRatio = bounds.IsEmpty || bounds.Height <= 0 ? 0.7 : bounds.Height / reference;
+            return _digitInkRatio.Value;
+        }
+    }
+
+    private static FormattedText Text(string value, double em, Color ink) => new(
+        value,
+        CultureInfo.InvariantCulture,
+        FlowDirection.LeftToRight,
+        DigitFace,
+        em,
+        new SolidColorBrush(ink),
+        numberSubstitution: null,
+        TextFormattingMode.Display,
+        pixelsPerDip: 1d);
 
     private static void DrawOverlay(DrawingContext context, TrayOverlay overlay, int size, double scale, TrayGlyphPalette palette)
     {
