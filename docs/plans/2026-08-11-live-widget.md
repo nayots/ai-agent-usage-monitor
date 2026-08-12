@@ -1335,6 +1335,7 @@ public sealed class WpfFixture : IDisposable
 {
     private readonly Thread _thread;
     private Dispatcher _dispatcher = null!;
+    private Exception? _startupFailure;
 
     public WpfFixture()
     {
@@ -1342,15 +1343,33 @@ public sealed class WpfFixture : IDisposable
 
         _thread = new Thread(() =>
         {
-            _dispatcher = Dispatcher.CurrentDispatcher;
+            try
+            {
+                _dispatcher = Dispatcher.CurrentDispatcher;
 
-            Application application = new();
-            application.Resources.MergedDictionaries.Add(Load("Themes/Tokens.xaml"));
-            application.Resources.MergedDictionaries.Add(Load("Themes/Controls.xaml"));
-            application.Resources.MergedDictionaries.Add(Load("Themes/Light.xaml"));
+                Application application = new();
+                application.Resources.MergedDictionaries.Add(Load("Themes/Tokens.xaml"));
+                application.Resources.MergedDictionaries.Add(Load("Themes/Controls.xaml"));
+                application.Resources.MergedDictionaries.Add(Load("Themes/Light.xaml"));
+            }
+            catch (Exception ex)
+            {
+                // A malformed dictionary throws HERE, on a thread nobody is awaiting. Uncaught it
+                // would never reach the test run: the wait below would burn its full 30 seconds and
+                // every test in the collection would then fail against a null dispatcher, hiding
+                // the XamlParseException that is the entire reason this project exists. Capture it
+                // and rethrow on the constructing thread instead.
+                _startupFailure = ex;
+            }
+            finally
+            {
+                ready.Set();
+            }
 
-            ready.Set();
-            Dispatcher.Run();
+            if (_startupFailure is null)
+            {
+                Dispatcher.Run();
+            }
         })
         {
             IsBackground = true
@@ -1358,7 +1377,18 @@ public sealed class WpfFixture : IDisposable
 
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
-        ready.Wait(TimeSpan.FromSeconds(30));
+
+        if (!ready.Wait(TimeSpan.FromSeconds(30)))
+        {
+            throw new TimeoutException("The WPF STA thread did not signal readiness within 30 seconds.");
+        }
+
+        if (_startupFailure is not null)
+        {
+            throw new InvalidOperationException(
+                "The shared WPF Application could not be created. The inner exception is the real failure.",
+                _startupFailure);
+        }
     }
 
     /// <summary>Runs <paramref name="action"/> on the STA thread, rethrowing whatever it threw.</summary>
@@ -1366,7 +1396,8 @@ public sealed class WpfFixture : IDisposable
 
     public void Dispose()
     {
-        _dispatcher.InvokeShutdown();
+        // Null when the constructor failed before the dispatcher was captured.
+        _dispatcher?.InvokeShutdown();
         _thread.Join(TimeSpan.FromSeconds(10));
     }
 
@@ -2153,6 +2184,7 @@ public sealed class ProviderCardViewModel : ObservableObject
     private readonly ProviderDescriptor _descriptor;
     private readonly bool _colorBarsByUsage;
     private ProviderSnapshot? _snapshot;
+    private FreshnessPolicy _freshness = FreshnessPolicy.Default;
     private ConnectionState _state = ConnectionState.Discovering;
     private MechanismTier _tier = MechanismTier.Unofficial;
     private string? _versionText;
@@ -2197,9 +2229,8 @@ public sealed class ProviderCardViewModel : ObservableObject
     public void Apply(ProviderSnapshot snapshot, DateTimeOffset now, FreshnessPolicy policy)
     {
         _snapshot = snapshot;
+        _freshness = policy;
 
-        FreshnessState freshness = policy.Evaluate(snapshot.RetrievedAt, now);
-        State = ConnectionStateRules.ApplyFreshness(snapshot.State, freshness);
         Tier = snapshot.Tier;
         VersionText = snapshot.Version is null ? null : "v" + snapshot.Version;
 
@@ -2219,6 +2250,17 @@ public sealed class ProviderCardViewModel : ObservableObject
         {
             return;
         }
+
+        // Freshness comes from the clock, not from the snapshot, so it is recomputed here rather
+        // than once in Apply. A snapshot can cross the threshold with nothing arriving to trigger
+        // Apply: a provider mid-backoff is skipped for up to eight refresh intervals, a resumed
+        // machine has aged arbitrarily, and RefreshIntervalSeconds may legally exceed
+        // StaleAfterSeconds. ApplyFreshness reads snapshot.State rather than the current State, so
+        // this is idempotent and cannot ratchet. State is assigned first because Notice and the
+        // rows' IsStale both derive from it.
+        State = ConnectionStateRules.ApplyFreshness(
+            snapshot.State,
+            _freshness.Evaluate(snapshot.RetrievedAt, now));
 
         TimeSpan? age = snapshot.RetrievedAt is DateTimeOffset at ? now - at : null;
         UpdatedText = RelativeTime.FormatAge(age) is string formatted ? "Updated " + formatted : null;
