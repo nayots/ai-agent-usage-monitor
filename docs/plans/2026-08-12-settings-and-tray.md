@@ -2125,7 +2125,7 @@ git commit -m "feat: keep the widget alive in the notification area"
 - [ ] `✕` hides the window; the balloon appears once and never again.
 - [ ] Left-clicking the tray icon brings it back; right-clicking opens a themed menu that dismisses on an outside click.
 - [ ] Every tray menu entry does what it says. Exit ends the process — confirm in Task Manager.
-- [ ] Launching the exe a second time shows the existing widget instead of starting a second one.
+- [ ] Launching the exe a second time shows the existing widget instead of starting a second one. **Launch the built `.exe` directly — not `dotnet run`.** `dotnet run` builds first, and a running instance holds `bin\...\AiUsageMonitor.App.exe` open, so MSBuild retries the copy ten times at one-second intervals (MSB3026, naming the locking process) and then fails. That looks exactly like the launch hanging until you quit the first instance, and it is the build, not the app. This is true of any Windows app and is not something the single-instance code can fix.
 - [ ] Settings: every toggle takes effect immediately on the widget behind the window. Theme switches all three ways. Colour bars off returns every bar below 100% to the single accent.
 - [ ] Refresh interval and stale threshold take effect without a restart.
 - [ ] Start with Windows: the checkbox writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; unchecking removes it. Verify with `reg query`.
