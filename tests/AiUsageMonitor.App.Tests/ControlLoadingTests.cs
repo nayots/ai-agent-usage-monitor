@@ -100,6 +100,29 @@ public class ControlLoadingTests(WpfFixture wpf)
         Assert.Equal(Transform.Identity, dot.RenderTransform);
     });
 
+    /// <summary>
+    /// Both tiers are one badge wearing a different frame, so the dashed outline has to be drawn
+    /// where the solid border is drawn. Nested inside that border instead, it sat five pixels
+    /// further in, and the triangle it enclosed was pinned against the dashes while the OFFICIAL
+    /// dot stood clear of its own frame. That reads as a badly placed triangle and is not one.
+    /// </summary>
+    [Fact]
+    public void TheDashedOutlineIsDrawnWhereTheSolidBorderIs() => wpf.Invoke(() =>
+    {
+        TierBadge badge = Measured(new TierBadge { Tier = MechanismTier.Unofficial });
+        Rectangle outline = Descendants(badge).OfType<Rectangle>().Single();
+        Border frame = Descendants(badge).OfType<Border>().Single();
+
+        Rect outlined = outline.TransformToAncestor(badge).TransformBounds(new Rect(outline.RenderSize));
+        Rect bordered = frame.TransformToAncestor(badge).TransformBounds(new Rect(frame.RenderSize));
+
+        // A Rectangle's stroke straddles its geometry, so the outline's box is inset half a pixel
+        // to paint the pixel the border paints from the inside.
+        bordered.Inflate(-0.5, -0.5);
+
+        Assert.Equal(bordered, outlined);
+    });
+
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {
         for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
