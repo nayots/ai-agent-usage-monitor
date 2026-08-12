@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -23,6 +25,8 @@ public partial class WidgetWindow : Window
     private SettingsWindow? _settingsWindow;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _poll = new();
+    private TrayIcon? _tray;
+    private bool _shuttingDown;
 
     public WidgetWindow(MainViewModel model, SettingsService settings, ProviderRefreshService? refresh = null, ThemeManager? theme = null)
     {
@@ -52,11 +56,17 @@ public partial class WidgetWindow : Window
         DwmWindowChrome.UseRoundedCorners(handle);
         ApplyTitleBarTheme(handle);
 
+        _tray = new TrayIcon(this, "Quota Monitor");
+        _tray.Activated += (_, _) => ShowFromTray();
+        _tray.ContextMenuRequested += OnTrayContextMenuRequested;
+        _tray.Show();
+
+        HwndSource.FromHwnd(handle)?.AddHook(OnWindowMessage);
+
         if (_theme is not null)
         {
             _theme.Changed += OnThemeChanged;
         }
-
     }
 
     protected override void OnContentRendered(EventArgs e)
@@ -84,6 +94,7 @@ public partial class WidgetWindow : Window
         _settings.Changed -= OnSettingsChanged;
 
         SavePlacement();
+        _tray?.Dispose();
         _model.Dispose();
         base.OnClosed(e);
     }
@@ -169,7 +180,96 @@ public partial class WidgetWindow : Window
 
     private void Minimise_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if ((uint)msg == SingleInstance.ShowMessage)
+        {
+            ShowFromTray();
+            handled = true;
+        }
+
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// A tray menu has no window to be placed relative to, so it is positioned by the mouse and
+    /// given a placement target explicitly. StaysOpen false plus focusing the window first is what
+    /// makes it dismiss on an outside click - a menu opened from a tray icon otherwise stays up.
+    /// </summary>
+    private void OnTrayContextMenuRequested(object? sender, EventArgs e)
+    {
+        if (Resources["TrayMenu"] is not ContextMenu menu)
+        {
+            return;
+        }
+
+        menu.PlacementTarget = this;
+        menu.Placement = PlacementMode.MousePoint;
+        menu.StaysOpen = false;
+        SetForegroundWindow(new WindowInteropHelper(this).Handle);
+        menu.IsOpen = true;
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    /// <summary>
+    /// Hiding, not closing. The process keeps polling, so the tray icon can go on saying something
+    /// true. The first time only, a balloon says where the window went: a widget that vanishes with
+    /// no explanation reads as a crash.
+    /// </summary>
+    public void HideToTray()
+    {
+        Hide();
+
+        if (!_settings.Current.TrayHintShown)
+        {
+            _tray?.ShowHint("Quota Monitor", "Still running in the notification area. Click the icon to bring it back.");
+            _settings.Update(s => s with { TrayHintShown = true });
+        }
+    }
+
+    /// <summary>
+    /// The one path that actually ends the process. Everything OnClosed used to own on a close now
+    /// happens here, because a close no longer means an exit.
+    /// </summary>
+    public void ExitApplication()
+    {
+        _shuttingDown = true;
+        Close();
+        Application.Current.Shutdown();
+    }
+
+    private void TrayOpen_Click(object sender, RoutedEventArgs e) => ShowFromTray();
+
+    private void TrayRefresh_Click(object sender, RoutedEventArgs e) => _ = _model.RefreshAsync(force: true);
+
+    private void TraySettings_Click(object sender, RoutedEventArgs e)
+    {
+        ShowFromTray();
+        ShowSettings();
+    }
+
+    private void TrayExit_Click(object sender, RoutedEventArgs e) => ExitApplication();
+
+    private void Close_Click(object sender, RoutedEventArgs e) => HideToTray();
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        // Alt+F4 and the system menu both reach here. Neither should end a widget that lives in the
+        // tray; only the tray's own Exit does.
+        if (!_shuttingDown)
+        {
+            e.Cancel = true;
+            HideToTray();
+        }
+
+        base.OnClosing(e);
+    }
 
     private void RestorePlacement(AppSettings settings)
     {
@@ -202,4 +302,7 @@ public partial class WidgetWindow : Window
 
     private void SavePlacement() =>
         _settings.Update(s => s with { WindowLeft = Left, WindowTop = Top });
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 }

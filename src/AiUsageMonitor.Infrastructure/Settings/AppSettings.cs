@@ -73,5 +73,12 @@ public sealed record AppSettings
     /// <inheritdoc cref="WindowLeft"/>
     public double? WindowTop { get; init; }
 
+    /// <summary>
+    /// Whether the "the widget is in the notification area" balloon has been shown. Application
+    /// state rather than a preference, and deliberately not offered in the settings window: it
+    /// answers "has this user been told once", which no one needs to configure.
+    /// </summary>
+    public bool TrayHintShown { get; init; }
+
     public static AppSettings Default { get; } = new();
 }

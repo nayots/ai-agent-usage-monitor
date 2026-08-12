@@ -9,6 +9,15 @@
         Foreground="{DynamicResource TextPrimaryBrush}"
         FontFamily="{StaticResource WidgetFontFamily}"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
+  <Window.Resources>
+    <ContextMenu x:Key="TrayMenu">
+      <MenuItem Header="Open" Click="TrayOpen_Click" />
+      <MenuItem Header="Refresh all providers" Click="TrayRefresh_Click" />
+      <MenuItem Header="Settings" Click="TraySettings_Click" />
+      <Separator />
+      <MenuItem Header="Exit" Click="TrayExit_Click" />
+    </ContextMenu>
+  </Window.Resources>
   <Border BorderBrush="{DynamicResource WidgetWindowStrokeBrush}" BorderThickness="1"
           CornerRadius="{DynamicResource RadiusWindow}">
     <DockPanel>
@@ -29,7 +38,8 @@
           <Button Width="30" Height="26" Content="&#x2715;" FontSize="11" Click="Close_Click"
                   Style="{StaticResource LinkButtonStyle}"
                   Foreground="{DynamicResource TextSecondaryBrush}"
-                  AutomationProperties.Name="Close" />
+                  ToolTip="Hide to the notification area"
+                  AutomationProperties.Name="Hide to the notification area" />
         </StackPanel>
       </Grid>
 

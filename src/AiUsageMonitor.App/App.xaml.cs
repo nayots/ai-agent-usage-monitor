@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.App.Theming;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.App.Views;
@@ -16,6 +17,7 @@ public partial class App : Application
 {
     private ServiceProvider? _services;
     private ILogger<App>? _logger;
+    private SingleInstance? _instance;
 
     public IServiceProvider Services => _services
         ?? throw new InvalidOperationException("Services are not available until startup has run.");
@@ -23,6 +25,17 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (!SingleInstance.TryAcquire("AiUsageMonitor.SingleInstance", out _instance))
+        {
+            SingleInstance.BroadcastShow();
+            Shutdown();
+            return;
+        }
+
+        // The widget is hidden, not closed, when the user dismisses it, so WPF must not treat a
+        // window disappearing as the end of the application.
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         AppSettingsStore store = new(AppSettingsStore.DefaultPath);
         SettingsLoadResult loaded = store.Load();
@@ -102,6 +115,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _instance?.Dispose();
         _services?.GetService<ThemeManager>()?.Dispose();
         _services?.Dispose();
         base.OnExit(e);

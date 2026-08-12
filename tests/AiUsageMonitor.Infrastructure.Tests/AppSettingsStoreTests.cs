@@ -44,12 +44,14 @@ public class AppSettingsStoreTests
             StartWithWindows = true,
             Density = WidgetDensity.Compact,
             ShowUnavailableProviders = false,
-            StaleAfterSeconds = 90
+            StaleAfterSeconds = 90,
+            TrayHintShown = true
         };
 
         store.Save(written);
 
         Assert.Equal(written, store.Load().Settings);
+        Assert.True(store.Load().Settings.TrayHintShown);
     }
 
     [Fact]
