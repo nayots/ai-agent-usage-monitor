@@ -28,6 +28,13 @@
   <Thickness x:Key="ProviderCardPaddingCompact">9,6,9,7</Thickness>
   <Thickness x:Key="QuotaRowPadding">0,6,0,5</Thickness>
   <Thickness x:Key="QuotaRowPaddingCompact">0,4,0,4</Thickness>
+  <!-- The body's bottom component is 2 rather than the full body padding in both densities: each
+       card carries the gap below it, and the two add up. 2 + 8 = 10 standard, 2 + 6 = 8 compact,
+       which is what the design specifies for each. -->
+  <Thickness x:Key="WidgetBodyPadding">10,0,10,2</Thickness>
+  <Thickness x:Key="WidgetBodyPaddingCompact">8,0,8,2</Thickness>
+  <Thickness x:Key="ProviderCardGap">0,0,0,8</Thickness>
+  <Thickness x:Key="ProviderCardGapCompact">0,0,0,6</Thickness>
   <CornerRadius x:Key="RadiusWindow">8</CornerRadius>
   <CornerRadius x:Key="RadiusCard">6</CornerRadius>
   <CornerRadius x:Key="RadiusControl">4</CornerRadius>

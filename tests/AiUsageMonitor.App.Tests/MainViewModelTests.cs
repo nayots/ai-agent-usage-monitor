@@ -151,4 +151,47 @@ public class MainViewModelTests
         Assert.Equal("1 provider", model.FooterText);
         Assert.True(model.Providers[1].IsHiddenByFilter);
     }
+
+    [Fact]
+    public void DensityReachesEveryCardFromTheSettingsItWasBuiltWith()
+    {
+        ProviderDescriptor[] providers =
+        [
+            new("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
+            new("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, []))
+        ];
+        ProviderRefreshService service = new(providers, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
+        MainViewModel model = new(
+            service,
+            providers,
+            AppSettings.Default with { Density = WidgetDensity.Compact },
+            () => Now);
+
+        Assert.True(model.IsCompact);
+        Assert.All(model.Providers, card => Assert.True(card.IsCompact));
+
+        model.Dispose();
+    }
+
+    [Fact]
+    public void ADensityChangeMadeLaterReachesEveryCardToo()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+
+        Assert.False(model.IsCompact);
+
+        model.ApplySettings(AppSettings.Default with { Density = WidgetDensity.Compact });
+
+        Assert.True(model.IsCompact);
+        Assert.All(model.Providers, card => Assert.True(card.IsCompact));
+
+        model.ApplySettings(AppSettings.Default with { Density = WidgetDensity.Normal });
+
+        Assert.False(model.IsCompact);
+        Assert.All(model.Providers, card => Assert.False(card.IsCompact));
+
+        model.Dispose();
+    }
 }

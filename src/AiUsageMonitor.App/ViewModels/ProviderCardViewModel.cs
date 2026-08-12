@@ -13,6 +13,7 @@ public sealed class ProviderCardViewModel : ObservableObject
     private readonly ProviderDescriptor _descriptor;
     private bool _colorBarsByUsage;
     private bool _showWhenUnavailable = true;
+    private bool _isCompact;
     private ProviderSnapshot? _snapshot;
     private DateTimeOffset? _lastSuccessAt;
     private FreshnessPolicy _freshness = FreshnessPolicy.Default;
@@ -77,7 +78,44 @@ public sealed class ProviderCardViewModel : ObservableObject
     public bool IsHiddenByFilter =>
         !ShowWhenUnavailable && State is ConnectionState.NotInstalled or ConnectionState.Unsupported;
 
-    public ConnectionState State { get => _state; private set { if (Set(ref _state, value)) { Raise(nameof(StateLabel)); Raise(nameof(IsStale)); Raise(nameof(IsHiddenByFilter)); } } }
+    /// <summary>
+    /// Compact density (PRD §17). Set by <see cref="MainViewModel"/> from the one setting, never
+    /// from the snapshot - density is a property of how the user wants to read the widget, not of
+    /// anything a provider reported.
+    /// </summary>
+    public bool IsCompact
+    {
+        get => _isCompact;
+        set
+        {
+            if (Set(ref _isCompact, value))
+            {
+                Raise(nameof(ShowStatusLine));
+                Raise(nameof(ShowCompactSpacer));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The state chip and the timestamp beside it. Compact drops them, but only from a Connected
+    /// card: silence means connected, and every other state comes straight back.
+    /// <para>
+    /// The design writes this condition as <c>!(dense &amp;&amp; connected &amp;&amp; !stale)</c>,
+    /// because its mockup carries state and staleness as two independent props. Here they are not:
+    /// <see cref="ConnectionState.Stale"/> is a value <see cref="State"/> takes, so Connected and
+    /// Stale are already mutually exclusive and the third term would be dead.
+    /// </para>
+    /// </summary>
+    public bool ShowStatusLine => !IsCompact || State != ConnectionState.Connected;
+
+    /// <summary>
+    /// Replaces the status line's height when it is gone, so the header does not sit directly on
+    /// the column captions. Six pixels against the roughly twenty-five the status line occupied -
+    /// compact keeps the separation and gives up the rest.
+    /// </summary>
+    public bool ShowCompactSpacer => !ShowStatusLine;
+
+    public ConnectionState State { get => _state; private set { if (Set(ref _state, value)) { Raise(nameof(StateLabel)); Raise(nameof(IsStale)); Raise(nameof(IsHiddenByFilter)); Raise(nameof(ShowStatusLine)); Raise(nameof(ShowCompactSpacer)); } } }
 
     public string StateLabel => ConnectionStateText.Label(State);
 

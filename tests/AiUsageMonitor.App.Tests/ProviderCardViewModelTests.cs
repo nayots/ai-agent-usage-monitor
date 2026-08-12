@@ -397,4 +397,54 @@ public class ProviderCardViewModelTests
         card.ShowWhenUnavailable = true;
         Assert.False(card.IsHiddenByFilter);
     }
+
+    [Fact]
+    public void AConnectedCardDropsItsStatusLineOnlyWhenCompact()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(ConnectionState.Connected, retrievedAt: Now), Now, Policy);
+
+        Assert.True(card.ShowStatusLine);
+        Assert.False(card.ShowCompactSpacer);
+
+        card.IsCompact = true;
+
+        Assert.False(card.ShowStatusLine);
+        Assert.True(card.ShowCompactSpacer);
+    }
+
+    [Theory]
+    [InlineData(ConnectionState.Error)]
+    [InlineData(ConnectionState.Stale)]
+    [InlineData(ConnectionState.Waiting)]
+    [InlineData(ConnectionState.Unavailable)]
+    [InlineData(ConnectionState.Unsupported)]
+    [InlineData(ConnectionState.NotInstalled)]
+    [InlineData(ConnectionState.Discovering)]
+    public void ACardThatIsNotConnectedKeepsItsStatusLineEvenWhenCompact(ConnectionState state)
+    {
+        ProviderCardViewModel card = Card();
+        card.IsCompact = true;
+        card.Apply(Snapshot(state, retrievedAt: null), Now, Policy);
+
+        Assert.True(card.ShowStatusLine);
+        Assert.False(card.ShowCompactSpacer);
+    }
+
+    [Fact]
+    public void AStateChangeRepublishesTheStatusLineWithoutADensityChange()
+    {
+        ProviderCardViewModel card = Card();
+        card.IsCompact = true;
+        card.Apply(Snapshot(ConnectionState.Connected, retrievedAt: Now), Now, Policy);
+
+        List<string?> raised = [];
+        card.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        card.Tick(Now.AddHours(1));
+
+        Assert.Equal(ConnectionState.Stale, card.State);
+        Assert.Contains(nameof(ProviderCardViewModel.ShowStatusLine), raised);
+        Assert.True(card.ShowStatusLine);
+    }
 }

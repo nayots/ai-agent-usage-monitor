@@ -20,6 +20,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly Dictionary<ProviderDescriptor, ProviderCardViewModel> _cards = [];
     private readonly CancellationTokenSource _lifetime = new();
     private bool _isRefreshing;
+    private bool _isCompact;
 
     /// <param name="dispatch">
     /// Marshals a snapshot onto the UI thread. Defaults to running inline, which is what tests
@@ -37,12 +38,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _clock = clock;
         _dispatch = dispatch ?? (action => action());
         _freshness = new FreshnessPolicy(settings.StaleAfter);
+        _isCompact = settings.Density == WidgetDensity.Compact;
 
         foreach (ProviderDescriptor provider in providers)
         {
             ProviderCardViewModel card = new(provider, settings.ColorBarsByUsage, RetryOne)
             {
-                ShowWhenUnavailable = settings.ShowUnavailableProviders
+                ShowWhenUnavailable = settings.ShowUnavailableProviders,
+                IsCompact = _isCompact
             };
             _cards[provider] = card;
             Providers.Add(card);
@@ -66,17 +69,27 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Compact density (PRD §17), for the window chrome. The cards carry their own copy rather than
+    /// binding up to this one, because a card is also rendered outside this window - in tests and in
+    /// the render harness - and a binding that resolves to nothing there would silently read as
+    /// standard.
+    /// </summary>
+    public bool IsCompact { get => _isCompact; private set => Set(ref _isCompact, value); }
+
+    /// <summary>
     /// Re-applies everything a settings change can reach. Costs no provider call: freshness, bar
     /// colour and the visibility filter are all derived from data already held.
     /// </summary>
     public void ApplySettings(AppSettings settings)
     {
         _freshness = new FreshnessPolicy(settings.StaleAfter);
+        IsCompact = settings.Density == WidgetDensity.Compact;
 
         foreach (ProviderCardViewModel card in Providers)
         {
             card.ColorBarsByUsage = settings.ColorBarsByUsage;
             card.ShowWhenUnavailable = settings.ShowUnavailableProviders;
+            card.IsCompact = IsCompact;
         }
 
         Tick();
