@@ -52,5 +52,26 @@ public sealed record AppSettings
     [JsonIgnore]
     public TimeSpan StaleAfter => TimeSpan.FromSeconds(Math.Clamp(StaleAfterSeconds, 30, 3600));
 
+    /// <summary>Persisted as a plain number so the settings file stays readable and hand-editable.</summary>
+    public int RefreshIntervalSeconds { get; init; } = 60;
+
+    /// <summary>
+    /// <see cref="RefreshIntervalSeconds"/> clamped for the same reason as <see cref="StaleAfter"/>:
+    /// a hand-edited settings file must never stop the application starting, and a zero-second
+    /// interval would poll a provider in a tight loop.
+    /// </summary>
+    [JsonIgnore]
+    public TimeSpan RefreshInterval => TimeSpan.FromSeconds(Math.Clamp(RefreshIntervalSeconds, 15, 3600));
+
+    /// <summary>
+    /// Last known window position, or null on a first run. Null rather than 0: a widget that has
+    /// never been placed must be centred, and 0,0 is a real position a user could have chosen
+    /// (PRD §17).
+    /// </summary>
+    public double? WindowLeft { get; init; }
+
+    /// <inheritdoc cref="WindowLeft"/>
+    public double? WindowTop { get; init; }
+
     public static AppSettings Default { get; } = new();
 }

@@ -128,4 +128,45 @@ public class AppSettingsStoreTests
         Assert.StartsWith(expectedRoot, AppSettingsStore.DefaultPath);
         Assert.EndsWith("settings.json", AppSettingsStore.DefaultPath);
     }
+
+    [Fact]
+    public void RefreshIntervalDefaultsToOneMinute() =>
+        Assert.Equal(TimeSpan.FromMinutes(1), AppSettings.Default.RefreshInterval);
+
+    [Theory]
+    [InlineData(0, 15)]
+    [InlineData(-5, 15)]
+    [InlineData(14, 15)]
+    [InlineData(15, 15)]
+    [InlineData(90, 90)]
+    [InlineData(3600, 3600)]
+    [InlineData(99999, 3600)]
+    public void RefreshIntervalIsClampedRatherThanRejected(int configured, int expectedSeconds)
+    {
+        // A hand-edited settings file must never stop the application starting, and a zero-second
+        // interval would poll a provider in a tight loop.
+        AppSettings settings = AppSettings.Default with { RefreshIntervalSeconds = configured };
+
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), settings.RefreshInterval);
+    }
+
+    [Fact]
+    public void WindowPlacementDefaultsToAbsentSoTheFirstRunIsCentred()
+    {
+        Assert.Null(AppSettings.Default.WindowLeft);
+        Assert.Null(AppSettings.Default.WindowTop);
+    }
+
+    [Fact]
+    public void WindowPlacementRoundTripsThroughTheStore()
+    {
+        using TempDirectory directory = new();
+        AppSettingsStore store = new(Path.Combine(directory.Path, "settings.json"));
+
+        store.Save(AppSettings.Default with { WindowLeft = 1234.5, WindowTop = -20 });
+
+        AppSettings loaded = store.Load().Settings;
+        Assert.Equal(1234.5, loaded.WindowLeft);
+        Assert.Equal(-20, loaded.WindowTop);
+    }
 }

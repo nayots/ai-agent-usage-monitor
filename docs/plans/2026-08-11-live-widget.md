@@ -1002,7 +1002,31 @@ public sealed class ProviderRefreshService
 
         try
         {
-            snapshot = await provider.Probe.ProbeAsync(linked.Token).ConfigureAwait(false);
+            // Raced against the token rather than simply awaited. CancelAfter only *signals*
+            // cancellation; a probe that never observes its token would leave a bare await pending
+            // forever, making the timeout cooperative rather than real. PRD §24 asks for a bound
+            // that holds regardless of how well-behaved the probe is, and this is the isolation
+            // boundary for probes that do not exist yet.
+            Task<ProviderSnapshot> probing = provider.Probe.ProbeAsync(linked.Token);
+            Task settled = await Task
+                .WhenAny(probing, Task.Delay(Timeout.InfiniteTimeSpan, linked.Token))
+                .ConfigureAwait(false);
+
+            if (!ReferenceEquals(settled, probing))
+            {
+                Observe(probing, provider);
+
+                if (ct.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                snapshot = Failed(provider, $"Timed out after {_timeout.TotalSeconds:0}s.");
+            }
+            else
+            {
+                snapshot = await probing.ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1030,8 +1054,41 @@ public sealed class ProviderRefreshService
         }
 
         Record(provider, snapshot, now);
-        Refreshed?.Invoke(this, new ProviderRefreshed(provider, snapshot));
+        RaiseRefreshed(provider, snapshot);
     }
+
+    /// <summary>
+    /// Subscribers run synchronously on the thread the probe finished on, so a subscriber that
+    /// throws would propagate out through <see cref="RefreshAllAsync"/> - which documents itself as
+    /// never throwing - and abort the whole cycle, taking every other provider's refresh with it.
+    /// That is exactly the coupling this service exists to prevent, so a bad subscriber is
+    /// contained the same way a bad probe is.
+    /// </summary>
+    private void RaiseRefreshed(ProviderDescriptor provider, ProviderSnapshot snapshot)
+    {
+        try
+        {
+            Refreshed?.Invoke(this, new ProviderRefreshed(provider, snapshot));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "A subscriber threw while handling the refresh of {Provider}.", provider.DisplayName);
+        }
+    }
+
+    /// <summary>
+    /// Keeps an abandoned probe's eventual failure from surfacing as an unobserved task exception.
+    /// The task is deliberately not awaited: it is abandoned precisely because it outran its bound.
+    /// </summary>
+    private void Observe(Task<ProviderSnapshot> abandoned, ProviderDescriptor provider) =>
+        _ = abandoned.ContinueWith(
+            faulted => _logger.LogWarning(
+                faulted.Exception,
+                "The probe for {Provider} failed after it had already been abandoned for exceeding its timeout.",
+                provider.DisplayName),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
     private ProviderSnapshot Failed(ProviderDescriptor provider, string error) => new(
         ProviderName: provider.DisplayName,
