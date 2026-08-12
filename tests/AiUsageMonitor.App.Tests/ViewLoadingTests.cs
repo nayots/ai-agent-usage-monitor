@@ -294,4 +294,44 @@ public class ViewLoadingTests(WpfFixture wpf)
         Assert.Equal(Visibility.Visible, ((FrameworkElement)view.FindName("ColumnCaptions")).Visibility);
         Assert.Contains("USED", Texts(view));
     });
+
+    [Fact]
+    public void RowsInsideACompactCardTakeTheTighterPadding() => wpf.Invoke(() =>
+    {
+        Thickness standard = FirstRowPadding(Rendered(Card(ConnectionState.Connected, compact: false)));
+        Thickness compact = FirstRowPadding(Rendered(Card(ConnectionState.Connected, compact: true)));
+
+        Assert.Equal(new Thickness(0, 6, 0, 5), standard);
+        Assert.Equal(new Thickness(0, 4, 0, 4), compact);
+    });
+
+    [Fact]
+    public void ARowWithNoCardAboveItFallsBackToStandardPadding() => wpf.Invoke(() =>
+    {
+        QuotaRowViewModel row = new(Window(47d, false, true), colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.Equal(new Thickness(0, 6, 0, 5), ((Border)view.FindName("RowFrame")).Padding);
+    });
+
+    private static Thickness FirstRowPadding(ProviderCardView card) =>
+        Descendants(card).OfType<QuotaRowView>()
+            .Select(row => ((Border)row.FindName("RowFrame")).Padding)
+            .First();
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(root, index);
+            yield return child;
+
+            foreach (DependencyObject descendant in Descendants(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
 }
