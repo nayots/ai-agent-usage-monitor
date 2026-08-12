@@ -64,8 +64,15 @@
       </Border>
 
       <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <!-- Cards carry an 8px bottom margin each, so the list's own bottom margin is 2 rather
-             than 10 - together they make the 10px body padding the design specifies. -->
+        <!-- Cards carry the gap below them, so the list's own bottom margin is 2 rather than the
+             full body padding - together they make the body padding the design specifies for each
+             density. 2 + 8 = 10 standard, 2 + 6 = 8 compact.
+
+             Margin is a Style setter rather than an attribute here, and in the title bar and footer
+             above: WPF ranks a local value above a style trigger, so an attribute would beat the
+             compact trigger silently - no warning, no exception, just chrome that never gets
+             tighter. The container's trigger binds IsCompact directly because a container's
+             DataContext is the card it presents, not this window's view model. -->
         <ItemsControl x:Name="ProviderList" ItemsSource="{Binding Providers}" Focusable="False">
           <ItemsControl.Style><Style TargetType="ItemsControl"><Setter Property="Margin" Value="{DynamicResource WidgetBodyPadding}" /><Style.Triggers><DataTrigger Binding="{Binding IsCompact}" Value="True"><Setter Property="Margin" Value="{DynamicResource WidgetBodyPaddingCompact}" /></DataTrigger></Style.Triggers></Style></ItemsControl.Style>
           <ItemsControl.ItemContainerStyle>

@@ -19,6 +19,11 @@
     <Style x:Key="ExhaustedTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodySmallTextStyle}"><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{DynamicResource StateBadBrush}" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
   </UserControl.Resources>
   <Border x:Name="RowFrame" BorderBrush="{DynamicResource WidgetRowDividerBrush}" BorderThickness="0,1,0,0">
+    <!-- Density comes from the card above rather than from this row's own view model, which is a
+         pure projection of one QuotaWindow and is deliberately kept free of observable state. A row
+         rendered with no card above it - which is how the row tests build one - resolves this to
+         nothing and keeps the standard padding, which is the right fallback. Padding is a Style
+         setter for the usual reason: WPF ranks a local value above a style trigger. -->
     <Border.Style><Style TargetType="Border"><Setter Property="Padding" Value="{DynamicResource QuotaRowPadding}" /><Style.Triggers><DataTrigger Binding="{Binding DataContext.IsCompact, RelativeSource={RelativeSource AncestorType=views:ProviderCardView}}" Value="True"><Setter Property="Padding" Value="{DynamicResource QuotaRowPaddingCompact}" /></DataTrigger></Style.Triggers></Style></Border.Style>
     <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="42" /><ColumnDefinition Width="8" /><ColumnDefinition Width="62" /></Grid.ColumnDefinitions>
