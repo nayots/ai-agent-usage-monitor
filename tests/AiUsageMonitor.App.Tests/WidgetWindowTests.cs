@@ -177,6 +177,22 @@ public class WidgetWindowTests(WpfFixture wpf)
     });
 
     [Fact]
+    public void TheChromeKeepsItsFullSizeAtStandardDensity() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+        Content(window);
+
+        Assert.Equal(32d, ((FrameworkElement)window.FindName("TitleBar")).Height);
+        Assert.Equal(26d, ((FrameworkElement)window.FindName("Footer")).Height);
+        Assert.Equal(new Thickness(10, 0, 10, 2), ((FrameworkElement)window.FindName("ProviderList")).Margin);
+
+        model.Dispose();
+    });
+
+    [Fact]
     public void TheWholeWidgetIsShorterAtCompactDensity() => wpf.Invoke(() =>
     {
         IReadOnlyList<ProviderDescriptor> standardProviders = Providers();
