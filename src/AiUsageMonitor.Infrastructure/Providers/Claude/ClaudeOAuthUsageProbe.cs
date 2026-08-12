@@ -36,6 +36,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private const string Mechanism = "Anthropic OAuth usage endpoint (UNOFFICIAL/undocumented)";
     private const string UpdateModel = "pull (poll)";
 
+    private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
+
     // Message text is mandated verbatim by the task's hard constraints - do not alter.
     private const string TokenRejectedMessage =
         "OAuth token rejected or expired — run any Claude Code session to refresh it";
@@ -60,6 +62,27 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     {
         var notes = new List<string>();
 
+        string? exePath = ClaudeExecutableLocator.Locate();
+        if (exePath is null)
+        {
+            notes.Add("No local claude executable found (checked %USERPROFILE%\\.local\\bin, the npm global shim, and PATH).");
+            return new ProviderSnapshot(
+                ProviderName: Name,
+                Installed: false,
+                Version: null,
+                ExecutablePath: null,
+                State: ConnectionState.NotInstalled,
+                Mechanism: "no local claude executable found",
+                Tier: MechanismTier.Unofficial,
+                UpdateModel: "unavailable",
+                Windows: [],
+                RetrievedAt: null,
+                Error: null,
+                Notes: notes);
+        }
+
+        string? version = await TryGetVersionAsync(exePath, ct, notes).ConfigureAwait(false);
+
         string credentialsPath = GetCredentialsPath();
         bool credentialsFileExists = File.Exists(credentialsPath);
 
@@ -70,7 +93,15 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         if (token is null)
         {
             // Missing file / missing claudeAiOauth.accessToken -> Unavailable, never an exception.
-            return Snapshot(credentialsFileExists, ConnectionState.Unavailable, [], null, null, notes);
+            return Snapshot(
+                installed: true,
+                version,
+                exePath,
+                ConnectionState.Unavailable,
+                [],
+                null,
+                "Claude Code is installed but has not stored a sign-in on this machine.",
+                notes);
         }
 
         try
@@ -86,7 +117,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
                 notes.Add($"HTTP {(int)response.StatusCode} ({response.StatusCode}) received from the usage endpoint.");
-                return Snapshot(true, ConnectionState.Error, [], null, TokenRejectedMessage, notes);
+                return Snapshot(true, version, exePath, ConnectionState.Error, [], null, TokenRejectedMessage, notes);
             }
 
             if (!response.IsSuccessStatusCode)
@@ -98,7 +129,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
                     : "Response body was not a JSON object (or was empty) - no keys to report.");
 
                 string error = $"Unexpected HTTP {(int)response.StatusCode} ({response.StatusCode}) from the usage endpoint.";
-                return Snapshot(true, ConnectionState.Error, [], null, error, notes);
+                return Snapshot(true, version, exePath, ConnectionState.Error, [], null, error, notes);
             }
 
             using JsonDocument doc = JsonDocument.Parse(body);
@@ -118,11 +149,11 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
                 ? $"Window key(s) the extractor could not humanise into a friendly \"N unit\" label: {string.Join(", ", unhumanized)}."
                 : "Every discovered window key humanised cleanly into a friendly \"N unit\" label.");
 
-            return Snapshot(true, ConnectionState.Connected, windows, DateTimeOffset.UtcNow, null, notes);
+            return Snapshot(true, version, exePath, ConnectionState.Connected, windows, DateTimeOffset.UtcNow, null, notes);
         }
         catch (JsonException)
         {
-            return Snapshot(true, ConnectionState.Error, [], null, "Response body was not valid JSON.", notes);
+            return Snapshot(true, version, exePath, ConnectionState.Error, [], null, "Response body was not valid JSON.", notes);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -130,6 +161,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             // Timeout, not caller-requested cancellation (which is left to propagate normally).
             return Snapshot(
                 true,
+                version,
+                exePath,
                 ConnectionState.Error,
                 [],
                 null,
@@ -140,12 +173,34 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         {
             // HttpRequestException messages describe connection/TLS/DNS failures only - they never
             // echo request headers, so the token cannot leak through this path.
-            return Snapshot(true, ConnectionState.Error, [], null, $"HTTP request failed: {ex.Message}", notes);
+            return Snapshot(true, version, exePath, ConnectionState.Error, [], null, $"HTTP request failed: {ex.Message}", notes);
+        }
+    }
+
+    private static async Task<string?> TryGetVersionAsync(string exePath, CancellationToken ct, List<string> notes)
+    {
+        try
+        {
+            (int exitCode, string stdOut, _) =
+                await ProcessRunner.RunCapturedAsync(exePath, "--version", VersionTimeout, ct).ConfigureAwait(false);
+
+            string? version = exitCode == 0 ? ClaudeExecutableLocator.ParseVersion(stdOut) : null;
+            notes.Add(version is null
+                ? $"claude --version exited {exitCode} without a parseable version."
+                : $"Version reported by the official `claude --version` command: {version}.");
+            return version;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            notes.Add($"claude --version failed: {ex.Message}");
+            return null;
         }
     }
 
     private ProviderSnapshot Snapshot(
         bool installed,
+        string? version,
+        string? executablePath,
         ConnectionState state,
         IReadOnlyList<QuotaWindow> windows,
         DateTimeOffset? retrievedAt,
@@ -154,8 +209,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         new(
             ProviderName: Name,
             Installed: installed,
-            Version: null,
-            ExecutablePath: null,
+            Version: version,
+            ExecutablePath: executablePath,
             State: state,
             Mechanism: Mechanism,
             Tier: MechanismTier.Unofficial,
