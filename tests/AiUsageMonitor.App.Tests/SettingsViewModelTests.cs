@@ -1,0 +1,121 @@
+using System.IO;
+using AiUsageMonitor.App.Interop;
+using AiUsageMonitor.App.ViewModels;
+using AiUsageMonitor.Infrastructure.Settings;
+
+namespace AiUsageMonitor.App.Tests;
+
+public class SettingsViewModelTests
+{
+    private const string ScratchKey = @"Software\AiUsageMonitor\tests\SettingsVm";
+
+    private static SettingsViewModel Model(out SettingsService service, AppSettings? initial = null)
+    {
+        string path = Path.Combine(Path.GetTempPath(), "aium-vm-" + Guid.NewGuid().ToString("N"), "settings.json");
+        service = new SettingsService(new AppSettingsStore(path), initial ?? AppSettings.Default);
+        return new SettingsViewModel(
+            service,
+            new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null),
+            resetPosition: () => { },
+            recheckProviders: () => { },
+            openLogs: () => { });
+    }
+
+    [Fact]
+    public void ATogglePersistsThroughTheService()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        model.AlwaysOnTop = true;
+
+        Assert.True(service.Current.AlwaysOnTop);
+    }
+
+    [Fact]
+    public void AChangeMadeElsewhereIsReflectedBack()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        service.Update(s => s with { ColorBarsByUsage = false });
+
+        Assert.False(model.ColorBarsByUsage);
+    }
+
+    [Fact]
+    public void SelectingARefreshIntervalWritesItsValue()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        ChoiceViewModel choice = model.RefreshIntervals.Single(c => c.Value == 300);
+        choice.IsSelected = true;
+
+        Assert.Equal(300, service.Current.RefreshIntervalSeconds);
+        Assert.True(model.RefreshIntervals.Single(c => c.Value == 300).IsSelected);
+    }
+
+    [Fact]
+    public void DeselectingAChoiceChangesNothing()
+    {
+        // Radio buttons report both sides of a move. Acting on the deselection would write the
+        // outgoing value back over the incoming one, and which one won would depend on event order.
+        SettingsViewModel model = Model(out SettingsService service);
+        int before = service.Current.RefreshIntervalSeconds;
+
+        model.RefreshIntervals.Single(c => c.Value == before).IsSelected = false;
+
+        Assert.Equal(before, service.Current.RefreshIntervalSeconds);
+    }
+
+    [Fact]
+    public void AHandEditedValueOutsideThePresetsSurvivesAsItsOwnChoice()
+    {
+        SettingsViewModel model = Model(out _, AppSettings.Default with { RefreshIntervalSeconds = 45 });
+
+        ChoiceViewModel selected = model.RefreshIntervals.Single(c => c.IsSelected);
+
+        Assert.Equal(45, selected.Value);
+    }
+
+    [Fact]
+    public void EveryThemeIsOfferedAndTheCurrentOneIsSelected()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        Assert.Equal(3, model.Themes.Count);
+        model.Themes.Single(c => c.Value == (int)ThemePreference.Dark).IsSelected = true;
+
+        Assert.Equal(ThemePreference.Dark, service.Current.Theme);
+    }
+
+    [Fact]
+    public void WithoutAKnownExecutableStartWithWindowsIsOfferedButDisabled()
+    {
+        SettingsViewModel model = Model(out _);
+
+        Assert.False(model.CanStartWithWindows);
+        Assert.False(model.StartWithWindows);
+        Assert.False(string.IsNullOrWhiteSpace(model.StartWithWindowsUnavailableReason));
+    }
+
+    [Fact]
+    public void TheActionsCallWhatTheyClaimTo()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "aium-vm-" + Guid.NewGuid().ToString("N"), "settings.json");
+        SettingsService service = new(new AppSettingsStore(path), AppSettings.Default);
+        int reset = 0, recheck = 0, logs = 0;
+        SettingsViewModel model = new(
+            service,
+            new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null),
+            resetPosition: () => reset++,
+            recheckProviders: () => recheck++,
+            openLogs: () => logs++);
+
+        model.ResetPositionCommand.Execute(null);
+        model.RecheckProvidersCommand.Execute(null);
+        model.OpenLogsCommand.Execute(null);
+
+        Assert.Equal(1, reset);
+        Assert.Equal(1, recheck);
+        Assert.Equal(1, logs);
+    }
+}
