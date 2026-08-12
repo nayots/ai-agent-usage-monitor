@@ -43,7 +43,7 @@ Version 1 does not include:
 - Website scraping, browser automation, or cookie and browser-profile inspection.
 - Circumventing, estimating, or attempting to bypass provider limits.
 - Displaying historical usage charts or long-term trends.
-- Notifications for quota thresholds, except where later explicitly added.
+- Notifications beyond the quota events named in §16.2. Scheduled digests, per-window thresholds the user configures, and notifications carrying anything other than a window's own label and reading remain out of scope.
 - Support for macOS, Linux, mobile platforms, or web browsers.
 - Support for providers other than Claude Code and Codex.
 - A desktop pet or gamified visual layer.
@@ -499,6 +499,22 @@ This is the single accepted departure from the design brief's one-accent-hue res
 
 The application's own spelling is en-US throughout, so the setting is named `ColorBarsByUsage` and labelled "Color bars by usage". The approved design render spells the label "Colour bars by usage"; this one-word difference is deliberate and is the only permitted copy divergence from that render.
 
+#### 16.2 Quota event notifications
+
+A widget that spends most of its life in the notification area cannot report anything by being looked at, so it may raise a notification-area balloon on a change worth interrupting for. This is controlled by the **Notify on quota milestones and resets** setting defined in §19, which is on by default. It is bounded by all of the following:
+
+- **A fixed ladder, applied to every reported window.** The rungs are 10 through 80 in tens, then 85, 90, 95 and 100. They are thresholds on the reported percentage alone and are not derived from a window's duration, its countdown, or any provider signal. The ladder is applied to whatever windows a provider reports, in the provider's own order, and asserts nothing about how long any of them lasts — §7.3 forbids assuming a window's period, and a notification is not an exemption.
+- **Edge-triggered, once per crossing.** A rung already crossed is never announced again until the reading falls back below it. The first reading observed for a window sets its rung silently, so opening the application does not announce where usage already stood.
+- **Four quota events.** A rung crossed upward; the limit reached at 100%; a window that had reached 80% or more falling back below it; and a provider that had been answering ceasing to answer, or resuming. Nothing else notifies.
+- **Only fresh data notifies.** A card that is not connected is not evaluated, so a stale reading never raises a notification and never advances a rung.
+- **Missing data raises nothing.** A window reporting no percentage produces no notification, per §4.3 — never a 0% one.
+- **A failure notification carries no reason.** It states that a provider stopped reporting and directs the user to the widget. No error text, response body, header, path or credential may appear in a notification, per §4.1.1 — a card is read deliberately, whereas a notification appears unbidden over whatever the user was doing.
+- **Silent except at the limit.** Only the 100% notification uses the shell's default alert sound. §4.6 requires calm desktop behavior, and a sound every ten percent is the opposite of it; the moment work actually stops is the exception worth hearing.
+- **The label is the provider's own.** A window whose name did not resolve is announced under its raw provider token, per §7.2 item 10, never under an invented name.
+- **The setting gates delivery, not observation.** Rungs continue to advance while notifications are off, so switching them back on releases no backlog of crossings that have already happened.
+
+Delivery uses the notification-area balloon the application's existing tray icon already owns. The Windows toast API is not used: it requires a Start-menu shortcut carrying a registered AppUserModelID, which the single self-contained executable required by §23 cannot install.
+
 ### 17. Widget Modes and Window Behavior
 
 The application must provide:
@@ -551,6 +567,7 @@ The settings experience must support:
 - Compact or expanded default mode.
 - Light, dark, or system theme.
 - Color bars by usage, on by default, bounded by §16.1.
+- Notify on quota milestones and resets, on by default, bounded by §16.2.
 - Refresh behavior where provider integration permits configuration.
 - Stale-data threshold display and behavior.
 - Whether unavailable providers remain visible.
@@ -785,7 +802,7 @@ Version 1 is complete only when:
 Future releases may consider:
 
 - Historical quota trends and local usage charts.
-- Configurable quota threshold notifications.
+- User-configurable notification thresholds, replacing the fixed ladder in §16.2.
 - Per-provider refresh preferences.
 - Provider ordering and visibility preferences.
 - Exportable, redacted diagnostic bundles.

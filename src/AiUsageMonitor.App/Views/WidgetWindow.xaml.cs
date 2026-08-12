@@ -109,12 +109,31 @@ public partial class WidgetWindow : Window
         _model.Tick();
         UpdateTrayGlyph();
 
-        foreach (UsageAlert alert in _alerts.Observe(_model.Providers))
+        DeliverAlerts();
+    }
+
+    /// <summary>
+    /// Observed unconditionally, delivered conditionally - and the order matters. The watcher has
+    /// to keep advancing its state while notifications are switched off, because its alerts are
+    /// edge-triggered: skipping the observation would leave every rung where it stood, and turning
+    /// notifications back on would then release a burst of crossings the user already lived through.
+    /// <para>
+    /// The setting is read here rather than cached, so switching it off silences the next alert
+    /// rather than the next restart.
+    /// </para>
+    /// </summary>
+    private void DeliverAlerts()
+    {
+        IReadOnlyList<UsageAlert> alerts = _alerts.Observe(_model.Providers);
+
+        if (!_settings.Current.NotifyOnQuotaEvents)
         {
-            if (_settings.Current.NotifyOnQuotaEvents)
-            {
-                _tray?.Notify(alert.Title, alert.Text, alert.IsSilent);
-            }
+            return;
+        }
+
+        foreach (UsageAlert alert in alerts)
+        {
+            _tray?.Notify(alert.Title, alert.Text, alert.IsSilent);
         }
     }
 

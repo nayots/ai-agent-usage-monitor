@@ -31,6 +31,15 @@ public sealed record AppSettings
     /// </summary>
     public bool ColorBarsByUsage { get; init; } = true;
 
+    /// <summary>
+    /// Notification-area balloons when a quota window crosses a milestone, reaches its limit, comes
+    /// back, or a provider stops reporting. On by default: a widget that is hidden most of the time
+    /// cannot tell anyone anything, and the milestones are the one thing worth interrupting for.
+    /// <para>
+    /// This gates delivery only. Off does not stop the alerts being computed - see
+    /// <c>WidgetWindow.DeliverAlerts</c> for why that distinction is load-bearing.
+    /// </para>
+    /// </summary>
     public bool NotifyOnQuotaEvents { get; init; } = true;
 
     public bool AlwaysOnTop { get; init; }
