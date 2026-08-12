@@ -70,7 +70,7 @@ public sealed class ProviderCardViewModel : ObservableObject
         _freshness = policy;
 
         Tier = snapshot.Tier;
-        VersionText = snapshot.Version is null ? null : "v" + snapshot.Version;
+        VersionText = FormatVersion(snapshot.Version);
 
         Windows.Clear();
         foreach (QuotaWindow window in QuotaOrdering.InProviderOrder(snapshot.Windows))
@@ -81,6 +81,24 @@ public sealed class ProviderCardViewModel : ObservableObject
         Raise(nameof(HasWindows));
 
         Tick(now);
+    }
+
+    /// <summary>
+    /// Providers do not agree on what their --version prints, and the card must not assume one
+    /// provider's shape. Claude Code returns a bare "2.1.228", which wants a "v"; codex-cli returns
+    /// "codex-cli 0.144.6", which already names itself and rendered as "vcodex-cli 0.144.6". Prefix
+    /// only a version that starts with a digit, and otherwise pass the provider's own string
+    /// through untouched rather than trying to parse a product name out of it.
+    /// </summary>
+    private static string? FormatVersion(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return null;
+        }
+
+        string trimmed = version.Trim();
+        return char.IsDigit(trimmed[0]) ? "v" + trimmed : trimmed;
     }
 
     /// <summary>Recomputes everything derived from the local clock. Costs no provider call (PRD §14).</summary>

@@ -63,6 +63,24 @@ public class ProviderCardViewModelTests
         Assert.Null(card.VersionText);
     }
 
+    [Theory]
+    // Claude Code's --version is a bare number and wants the v. codex-cli prints its own name and
+    // rendered live as "vcodex-cli 0.144.6" until this was fixed - the card must not assume one
+    // provider's shape.
+    [InlineData("2.1.228", "v2.1.228")]
+    [InlineData("0.144.6", "v0.144.6")]
+    [InlineData("codex-cli 0.144.6", "codex-cli 0.144.6")]
+    [InlineData("  2.1.228  ", "v2.1.228")]
+    [InlineData("   ", null)]
+    public void AVersionIsPrefixedOnlyWhenItIsBareEnoughToNeedIt(string version, string? expected)
+    {
+        ProviderCardViewModel card = Card();
+
+        card.Apply(Snapshot(version: version, retrievedAt: Now), Now, Policy);
+
+        Assert.Equal(expected, card.VersionText);
+    }
+
     [Fact]
     public void TheTierIsAlwaysCarriedThroughFromTheSnapshot()
     {
