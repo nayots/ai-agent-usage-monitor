@@ -1102,11 +1102,17 @@ Append to `tests/AiUsageMonitor.App.Tests/ViewLoadingTests.cs`:
                 openLogs: () => { });
 
             SettingsWindow window = new(model);
-            window.Measure(new Size(420, 640));
-            window.Arrange(new Rect(0, 0, 420, 640));
-            window.UpdateLayout();
 
-            Assert.True(window.DesiredSize.Height > 0);
+            // Measured on the window's content, not the window. A WPF Window's own DesiredSize
+            // stays zero until it has an HWND, so measuring the Window asserts nothing. Measuring
+            // its content still forces every template to expand and every DynamicResource in this
+            // palette to resolve, which is the whole point of the test.
+            FrameworkElement content = (FrameworkElement)window.Content;
+            content.Measure(new Size(380, 640));
+            content.Arrange(new Rect(0, 0, 380, 640));
+            content.UpdateLayout();
+
+            Assert.True(content.DesiredSize.Height > 0);
         }
         finally
         {
