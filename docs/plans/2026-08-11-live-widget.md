@@ -1017,10 +1017,16 @@ public sealed class ProviderRefreshService
         catch (Exception ex)
         {
             // A probe is expected to return a state rather than throw. If one throws anyway, the
-            // failure stays inside its own card. The message only, never ToString(): a stack trace
-            // is diagnostics, not card copy.
+            // failure stays inside its own card.
+            //
+            // The split here is deliberate. The local log gets the whole exception, because that is
+            // what makes a failing provider diagnosable. The card gets the type name ALONE - never
+            // ex.Message - because this catch is the generic backstop for any IProviderProbe,
+            // including ones not written yet, and an arbitrary message is exactly the sort of
+            // string that can carry something it should not. The same rule already governs the
+            // generic catch in ClaudeOAuthUsageProbe.ReadAccessToken; follow it here.
             _logger.LogWarning(ex, "The probe for {Provider} threw instead of returning a state.", provider.DisplayName);
-            snapshot = Failed(provider, $"{ex.GetType().Name}: {ex.Message}");
+            snapshot = Failed(provider, $"The provider probe failed unexpectedly ({ex.GetType().Name}).");
         }
 
         Record(provider, snapshot, now);
