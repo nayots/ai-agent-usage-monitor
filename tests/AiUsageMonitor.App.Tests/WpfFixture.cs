@@ -12,6 +12,7 @@ public sealed class WpfFixture : IDisposable
 {
     private readonly Thread _thread;
     private Dispatcher _dispatcher = null!;
+    private Exception? _startupFailure;
 
     public WpfFixture()
     {
@@ -19,15 +20,33 @@ public sealed class WpfFixture : IDisposable
 
         _thread = new Thread(() =>
         {
-            _dispatcher = Dispatcher.CurrentDispatcher;
+            try
+            {
+                _dispatcher = Dispatcher.CurrentDispatcher;
 
-            Application application = new();
-            application.Resources.MergedDictionaries.Add(Load("Themes/Tokens.xaml"));
-            application.Resources.MergedDictionaries.Add(Load("Themes/Controls.xaml"));
-            application.Resources.MergedDictionaries.Add(Load("Themes/Light.xaml"));
+                Application application = new();
+                application.Resources.MergedDictionaries.Add(Load("Themes/Tokens.xaml"));
+                application.Resources.MergedDictionaries.Add(Load("Themes/Controls.xaml"));
+                application.Resources.MergedDictionaries.Add(Load("Themes/Light.xaml"));
+            }
+            catch (Exception ex)
+            {
+                // A malformed dictionary throws HERE, on a thread nobody is awaiting. Uncaught it
+                // would never reach the test run: the wait below would burn its full 30 seconds and
+                // every test in the collection would then fail against a null dispatcher, hiding
+                // the XamlParseException that is the entire reason this project exists. Capture it
+                // and rethrow on the constructing thread instead.
+                _startupFailure = ex;
+            }
+            finally
+            {
+                ready.Set();
+            }
 
-            ready.Set();
-            Dispatcher.Run();
+            if (_startupFailure is null)
+            {
+                Dispatcher.Run();
+            }
         })
         {
             IsBackground = true
@@ -35,7 +54,18 @@ public sealed class WpfFixture : IDisposable
 
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
-        ready.Wait(TimeSpan.FromSeconds(30));
+
+        if (!ready.Wait(TimeSpan.FromSeconds(30)))
+        {
+            throw new TimeoutException("The WPF STA thread did not signal readiness within 30 seconds.");
+        }
+
+        if (_startupFailure is not null)
+        {
+            throw new InvalidOperationException(
+                "The shared WPF Application could not be created. The inner exception is the real failure.",
+                _startupFailure);
+        }
     }
 
     /// <summary>Runs <paramref name="action"/> on the STA thread, rethrowing whatever it threw.</summary>
@@ -43,7 +73,8 @@ public sealed class WpfFixture : IDisposable
 
     public void Dispose()
     {
-        _dispatcher.InvokeShutdown();
+        // Null when the constructor failed before the dispatcher was captured.
+        _dispatcher?.InvokeShutdown();
         _thread.Join(TimeSpan.FromSeconds(10));
     }
 
