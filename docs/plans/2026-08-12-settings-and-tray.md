@@ -22,7 +22,8 @@
 - No administrator privileges. Registry writes are `HKCU` only.
 - User- and machine-agnostic: no hardcoded user paths. Resolve per-user locations with `Environment.GetFolderPath` / `Environment.ProcessPath`.
 - Copy is en-US: "Color bars by usage", not "Colour".
-- Windows-only. PowerShell 5.1 is the shell: no `&&`, no ternary.
+- Windows-only. PowerShell 5.1 is the shell: no `&&`, no ternary. Run `dotnet build` and `dotnet test` as two separate commands, never chained.
+- Test files already have their own helpers, and their signatures differ between files. Each task that appends tests states the exact signatures to call. Use them as given; never assume a helper exists because the prose implies one, and never invent one to make a call site compile.
 
 ---
 
@@ -440,20 +441,20 @@ git commit -m "feat: register the widget to start with Windows, per user"
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `tests/AiUsageMonitor.App.Tests/ProviderCardViewModelTests.cs` (inside the existing class; reuse its existing `Snapshot`/`Window` helpers and its `Card()` construction pattern):
+Append to `tests/AiUsageMonitor.App.Tests/ProviderCardViewModelTests.cs`, inside the existing class. Its helpers are `Card()`, `Snapshot(ConnectionState state = Connected, string? version = "2.1.227", IReadOnlyList<QuotaWindow>? windows = null, DateTimeOffset? retrievedAt = null, string? error = null)`, `Window(string id, int order, double used)` and the `Policy` field — call them exactly as written below, with the named arguments shown:
 
 ```csharp
     [Fact]
     public void TurningColourBandsOffRebuildsTheRowsThatRenderThem()
     {
         ProviderCardViewModel card = Card();
-        card.Apply(Snapshot(ConnectionState.Connected, Now, [Window("five_hour", "5 hour", 0, 82)]), Now, FreshnessPolicy.Default);
+        card.Apply(Snapshot(windows: [Window("five_hour", 0, 82)], retrievedAt: Now), Now, Policy);
 
         card.ColorBarsByUsage = false;
 
         Assert.Single(card.Windows);
         Assert.False(card.Windows[0].ColorBarsByUsage);
-        Assert.Equal("5 hour", card.Windows[0].Label);
+        Assert.Equal(82, card.Windows[0].UsedPercent);
     }
 
     [Fact]
@@ -464,10 +465,10 @@ Append to `tests/AiUsageMonitor.App.Tests/ProviderCardViewModelTests.cs` (inside
         ProviderCardViewModel card = Card();
         card.ShowWhenUnavailable = false;
 
-        card.Apply(Snapshot(ConnectionState.Error, null, []), Now, FreshnessPolicy.Default);
+        card.Apply(Snapshot(ConnectionState.Error, error: "boom"), Now, Policy);
         Assert.False(card.IsHiddenByFilter);
 
-        card.Apply(Snapshot(ConnectionState.NotInstalled, null, []), Now, FreshnessPolicy.Default);
+        card.Apply(Snapshot(ConnectionState.NotInstalled), Now, Policy);
         Assert.True(card.IsHiddenByFilter);
 
         card.ShowWhenUnavailable = true;
@@ -475,28 +476,38 @@ Append to `tests/AiUsageMonitor.App.Tests/ProviderCardViewModelTests.cs` (inside
     }
 ```
 
-Append to `tests/AiUsageMonitor.App.Tests/MainViewModelTests.cs` (inside the existing class, using its existing construction helpers):
+Append to `tests/AiUsageMonitor.App.Tests/MainViewModelTests.cs`, inside the existing class. Its helpers are `Build(params ProviderDescriptor[] providers)` returning `(MainViewModel Model, IReadOnlyList<ProviderDescriptor> Providers)`, `StubProbe(string name, ConnectionState state, IReadOnlyList<QuotaWindow> windows)` and `Window()` taking no arguments. There is no `Model(AppSettings)` helper — do not invent one:
 
 ```csharp
     [Fact]
-    public void ANewStaleThresholdTakesEffectWithoutWaitingForASnapshot()
+    public async Task ASettingsChangeReachesTheRowsThatRenderIt()
     {
-        MainViewModel model = Model(AppSettings.Default);
-        model.ApplySettings(AppSettings.Default with { StaleAfterSeconds = 30 });
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [Window()])));
+        await model.RefreshAsync(force: true);
 
-        Assert.All(model.Providers, card => Assert.False(card.IsStale));
+        Assert.True(model.Providers[0].Windows[0].ColorBarsByUsage);
+
+        model.ApplySettings(AppSettings.Default with { ColorBarsByUsage = false });
+
+        Assert.False(model.Providers[0].Windows[0].ColorBarsByUsage);
+        Assert.Equal(47, model.Providers[0].Windows[0].UsedPercent);
     }
 
     [Fact]
-    public void TheFooterCountsCardsTheUserCanSee()
+    public async Task HidingUnavailableProvidersDropsThemFromTheFooterCount()
     {
-        MainViewModel model = Model(AppSettings.Default);
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
+        await model.RefreshAsync(force: true);
+
+        Assert.Equal("2 providers", model.FooterText);
+
         model.ApplySettings(AppSettings.Default with { ShowUnavailableProviders = false });
 
-        foreach (ProviderCardViewModel card in model.Providers)
-        {
-            Assert.False(card.ShowWhenUnavailable);
-        }
+        Assert.Equal("1 provider", model.FooterText);
+        Assert.True(model.Providers[1].IsHiddenByFilter);
     }
 ```
 
