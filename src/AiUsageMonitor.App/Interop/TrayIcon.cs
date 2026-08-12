@@ -23,6 +23,7 @@ public sealed class TrayIcon : IDisposable
 {
     private const int WM_TRAYICON = 0x0400 + 1024;   // WM_APP + 1024
     private const int WM_LBUTTONUP = 0x0202;
+    private const int WM_LBUTTONDBLCLK = 0x0203;
     private const int WM_RBUTTONUP = 0x0205;
 
     private const int NIM_ADD = 0x0;
@@ -52,6 +53,9 @@ public sealed class TrayIcon : IDisposable
 
     /// <summary>Raised on left click: the user wants the widget.</summary>
     public event EventHandler? Activated;
+
+    /// <summary>Raised on left double-click: the user wants to hide the widget.</summary>
+    public event EventHandler? DoubleClicked;
 
     /// <summary>Raised on right click, on the UI thread, for the caller to open its own menu.</summary>
     public event EventHandler? ContextMenuRequested;
@@ -183,6 +187,12 @@ public sealed class TrayIcon : IDisposable
         {
             case WM_LBUTTONUP:
                 Activated?.Invoke(this, EventArgs.Empty);
+                handled = true;
+                break;
+            case WM_LBUTTONDBLCLK:
+                // Do not defer the preceding single click: ordinary clicks open the widget far
+                // more often, and delaying every one by GetDoubleClickTime would make that action lag.
+                DoubleClicked?.Invoke(this, EventArgs.Empty);
                 handled = true;
                 break;
             case WM_RBUTTONUP:

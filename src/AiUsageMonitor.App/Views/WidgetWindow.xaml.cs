@@ -62,6 +62,7 @@ public partial class WidgetWindow : Window
 
         _tray = new TrayIcon(this, "Quota Monitor");
         _tray.Activated += (_, _) => ShowFromTray();
+        _tray.DoubleClicked += (_, _) => HideToTray();
         _tray.ContextMenuRequested += OnTrayContextMenuRequested;
         _tray.Show();
 
