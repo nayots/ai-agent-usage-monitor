@@ -9,11 +9,16 @@
     <AssemblyName>AiUsageMonitor.App</AssemblyName>
     <DebugType>embedded</DebugType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AiUsageMonitor.Domain\AiUsageMonitor.Domain.csproj" />
     <ProjectReference Include="..\AiUsageMonitor.Infrastructure\AiUsageMonitor.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
   <ItemGroup>
