@@ -366,4 +366,35 @@ public class ProviderCardViewModelTests
 
         Assert.Equal(["Claude Code"], retried);
     }
+
+    [Fact]
+    public void TurningColourBandsOffRebuildsTheRowsThatRenderThem()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("five_hour", 0, 82)], retrievedAt: Now), Now, Policy);
+
+        card.ColorBarsByUsage = false;
+
+        Assert.Single(card.Windows);
+        Assert.False(card.Windows[0].ColorBarsByUsage);
+        Assert.Equal(82, card.Windows[0].UsedPercent);
+    }
+
+    [Fact]
+    public void AHiddenProviderIsOnlyHiddenWhenItIsActuallyAbsent()
+    {
+        // NotInstalled and Unsupported are facts about the machine. An Error is a provider that is
+        // present and broken, and hiding it would hide the one card the user needs to see.
+        ProviderCardViewModel card = Card();
+        card.ShowWhenUnavailable = false;
+
+        card.Apply(Snapshot(ConnectionState.Error, error: "boom"), Now, Policy);
+        Assert.False(card.IsHiddenByFilter);
+
+        card.Apply(Snapshot(ConnectionState.NotInstalled), Now, Policy);
+        Assert.True(card.IsHiddenByFilter);
+
+        card.ShowWhenUnavailable = true;
+        Assert.False(card.IsHiddenByFilter);
+    }
 }

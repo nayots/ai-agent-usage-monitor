@@ -120,4 +120,35 @@ public class MainViewModelTests
 
         Assert.Empty(model.Providers[0].Windows);
     }
+
+    [Fact]
+    public async Task ASettingsChangeReachesTheRowsThatRenderIt()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [Window()])));
+        await model.RefreshAsync(force: true);
+
+        Assert.True(model.Providers[0].Windows[0].ColorBarsByUsage);
+
+        model.ApplySettings(AppSettings.Default with { ColorBarsByUsage = false });
+
+        Assert.False(model.Providers[0].Windows[0].ColorBarsByUsage);
+        Assert.Equal(47, model.Providers[0].Windows[0].UsedPercent);
+    }
+
+    [Fact]
+    public async Task HidingUnavailableProvidersDropsThemFromTheFooterCount()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
+        await model.RefreshAsync(force: true);
+
+        Assert.Equal("2 providers", model.FooterText);
+
+        model.ApplySettings(AppSettings.Default with { ShowUnavailableProviders = false });
+
+        Assert.Equal("1 provider", model.FooterText);
+        Assert.True(model.Providers[1].IsHiddenByFilter);
+    }
 }

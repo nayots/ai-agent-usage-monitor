@@ -11,7 +11,8 @@ namespace AiUsageMonitor.App.ViewModels;
 public sealed class ProviderCardViewModel : ObservableObject
 {
     private readonly ProviderDescriptor _descriptor;
-    private readonly bool _colorBarsByUsage;
+    private bool _colorBarsByUsage;
+    private bool _showWhenUnavailable = true;
     private ProviderSnapshot? _snapshot;
     private DateTimeOffset? _lastSuccessAt;
     private FreshnessPolicy _freshness = FreshnessPolicy.Default;
@@ -38,7 +39,45 @@ public sealed class ProviderCardViewModel : ObservableObject
 
     public bool HasWindows => Windows.Count > 0;
 
-    public ConnectionState State { get => _state; private set { if (Set(ref _state, value)) { Raise(nameof(StateLabel)); Raise(nameof(IsStale)); } } }
+    /// <summary>
+    /// Setting this rebuilds the rows rather than mutating them. A <see cref="QuotaRowViewModel"/>
+    /// is a pure projection of one <see cref="QuotaWindow"/>, and the rows are rebuilt on every
+    /// snapshot anyway; making the row's own flag mutable would add observable state to the one
+    /// class that has none. The caller ticks afterwards to refill the countdowns the rebuild cleared.
+    /// </summary>
+    public bool ColorBarsByUsage
+    {
+        get => _colorBarsByUsage;
+        set
+        {
+            if (Set(ref _colorBarsByUsage, value) && _snapshot is ProviderSnapshot snapshot)
+            {
+                RebuildWindows(snapshot);
+            }
+        }
+    }
+
+    /// <summary>PRD §15: an unavailable provider keeps its card unless the user hides it.</summary>
+    public bool ShowWhenUnavailable
+    {
+        get => _showWhenUnavailable;
+        set
+        {
+            if (Set(ref _showWhenUnavailable, value))
+            {
+                Raise(nameof(IsHiddenByFilter));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Only a provider that is absent from the machine can be hidden. An Error or Unavailable
+    /// provider is installed and not working, which is exactly the card the user needs to see.
+    /// </summary>
+    public bool IsHiddenByFilter =>
+        !ShowWhenUnavailable && State is ConnectionState.NotInstalled or ConnectionState.Unsupported;
+
+    public ConnectionState State { get => _state; private set { if (Set(ref _state, value)) { Raise(nameof(StateLabel)); Raise(nameof(IsStale)); Raise(nameof(IsHiddenByFilter)); } } }
 
     public string StateLabel => ConnectionStateText.Label(State);
 
@@ -98,15 +137,21 @@ public sealed class ProviderCardViewModel : ObservableObject
         Tier = snapshot.Tier;
         VersionText = FormatVersion(snapshot.Version);
 
+        RebuildWindows(snapshot);
+
+        Tick(now);
+    }
+
+    private void RebuildWindows(ProviderSnapshot snapshot)
+    {
         Windows.Clear();
+
         foreach (QuotaWindow window in QuotaOrdering.InProviderOrder(snapshot.Windows))
         {
-            Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage));
+            Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage) { IsStale = IsStale });
         }
 
         Raise(nameof(HasWindows));
-
-        Tick(now);
     }
 
     /// <summary>

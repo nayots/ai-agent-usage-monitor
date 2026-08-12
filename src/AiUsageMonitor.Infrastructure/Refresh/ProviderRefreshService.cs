@@ -18,7 +18,6 @@ public sealed class ProviderRefreshService
 {
     private readonly IReadOnlyList<ProviderDescriptor> _providers;
     private readonly TimeSpan _timeout;
-    private readonly TimeSpan _baseInterval;
     private readonly ILogger _logger;
     private readonly Dictionary<ProviderDescriptor, Backoff> _backoff = [];
     private readonly Lock _gate = new();
@@ -31,7 +30,7 @@ public sealed class ProviderRefreshService
     {
         _providers = providers;
         _timeout = timeout;
-        _baseInterval = baseInterval;
+        BaseInterval = baseInterval;
         _logger = logger ?? NullLogger<ProviderRefreshService>.Instance;
     }
 
@@ -40,6 +39,13 @@ public sealed class ProviderRefreshService
     /// marshal - this service knows nothing about a dispatcher.
     /// </summary>
     public event EventHandler<ProviderRefreshed>? Refreshed;
+
+    /// <summary>
+    /// The polling cadence backoff is measured against. Settable because the user can change the
+    /// refresh interval while the process runs; a provider already in backoff simply measures its
+    /// next attempt against the new value.
+    /// </summary>
+    public TimeSpan BaseInterval { get; set; }
 
     /// <summary>
     /// Delay before a provider that has failed <paramref name="consecutiveFailures"/> times in a
@@ -207,7 +213,7 @@ public sealed class ProviderRefreshService
             }
 
             state.ConsecutiveFailures = failed ? state.ConsecutiveFailures + 1 : 0;
-            state.NextAttempt = now + BackoffFor(state.ConsecutiveFailures, _baseInterval);
+            state.NextAttempt = now + BackoffFor(state.ConsecutiveFailures, BaseInterval);
         }
     }
 

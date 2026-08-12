@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
@@ -15,7 +16,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly ProviderRefreshService _refresh;
     private readonly Func<DateTimeOffset> _clock;
     private readonly Action<Action> _dispatch;
-    private readonly FreshnessPolicy _freshness;
+    private FreshnessPolicy _freshness;
     private readonly Dictionary<ProviderDescriptor, ProviderCardViewModel> _cards = [];
     private readonly CancellationTokenSource _lifetime = new();
     private bool _isRefreshing;
@@ -39,7 +40,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         foreach (ProviderDescriptor provider in providers)
         {
-            ProviderCardViewModel card = new(provider, settings.ColorBarsByUsage, RetryOne);
+            ProviderCardViewModel card = new(provider, settings.ColorBarsByUsage, RetryOne)
+            {
+                ShowWhenUnavailable = settings.ShowUnavailableProviders
+            };
             _cards[provider] = card;
             Providers.Add(card);
         }
@@ -52,7 +56,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand RefreshCommand { get; }
 
-    public string FooterText => Providers.Count == 1 ? "1 provider" : $"{Providers.Count} providers";
+    public string FooterText
+    {
+        get
+        {
+            int visible = Providers.Count(card => !card.IsHiddenByFilter);
+            return visible == 1 ? "1 provider" : $"{visible} providers";
+        }
+    }
+
+    /// <summary>
+    /// Re-applies everything a settings change can reach. Costs no provider call: freshness, bar
+    /// colour and the visibility filter are all derived from data already held.
+    /// </summary>
+    public void ApplySettings(AppSettings settings)
+    {
+        _freshness = new FreshnessPolicy(settings.StaleAfter);
+
+        foreach (ProviderCardViewModel card in Providers)
+        {
+            card.ColorBarsByUsage = settings.ColorBarsByUsage;
+            card.ShowWhenUnavailable = settings.ShowUnavailableProviders;
+        }
+
+        Tick();
+        Raise(nameof(FooterText));
+    }
 
     public bool IsRefreshing
     {
@@ -118,6 +147,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _dispatch(() => card.Apply(e.Snapshot, _clock(), _freshness));
+        _dispatch(() =>
+        {
+            card.Apply(e.Snapshot, _clock(), _freshness);
+            Raise(nameof(FooterText));
+        });
     }
 }
