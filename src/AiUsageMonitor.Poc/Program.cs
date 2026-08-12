@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text;
 using AiUsageMonitor.Domain;
-using AiUsageMonitor.Poc.Providers.Claude;
-using AiUsageMonitor.Poc.Providers.Codex;
+using AiUsageMonitor.Infrastructure.Providers.Claude;
+using AiUsageMonitor.Infrastructure.Providers.Codex;
 
 Console.OutputEncoding = Encoding.UTF8;
 

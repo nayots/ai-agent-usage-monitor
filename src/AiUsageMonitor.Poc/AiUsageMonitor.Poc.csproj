@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AiUsageMonitor.Domain\AiUsageMonitor.Domain.csproj" />
+    <ProjectReference Include="..\AiUsageMonitor.Infrastructure\AiUsageMonitor.Infrastructure.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

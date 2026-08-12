@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using AiUsageMonitor.Domain;
 
-namespace AiUsageMonitor.Poc.Providers.Codex;
+namespace AiUsageMonitor.Infrastructure.Providers.Codex;
 
 /// <summary>
 /// Codex provider probe. Fully proven mechanism: discovers the local codex.exe, reads its version,

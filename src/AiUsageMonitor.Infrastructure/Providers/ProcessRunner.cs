@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace AiUsageMonitor.Poc.Providers;
+namespace AiUsageMonitor.Infrastructure.Providers;
 
 /// <summary>
 /// Small helper for launching provider executables directly - never through a shell, never through

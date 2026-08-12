@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using AiUsageMonitor.Domain;
 
-namespace AiUsageMonitor.Poc.Providers.Claude;
+namespace AiUsageMonitor.Infrastructure.Providers.Claude;
 
 /// <summary>
 /// Claude Code provider probe using the ONLY verified mechanism authorised by PRD ss4.1.1
@@ -25,7 +25,7 @@ namespace AiUsageMonitor.Poc.Providers.Claude;
 /// </summary>
 public sealed class ClaudeOAuthUsageProbe : IProviderProbe
 {
-    public string Name => "Claude Code (OAuth usage endpoint)";
+    public string Name => "Claude Code";
 
     // Hard constraint: this is the ONLY network destination this probe (or the whole program) may
     // reach. It is hardcoded, never derived from configuration, a redirect, or provider input.
