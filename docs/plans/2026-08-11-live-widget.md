@@ -2820,8 +2820,13 @@ Create `src/AiUsageMonitor.App/Views/ProviderCardView.xaml`:
 
       <StackPanel Orientation="Horizontal" Margin="0,4,0,7">
         <controls:StateChip State="{Binding State}" Label="{Binding StateLabel}" VerticalAlignment="Center" />
-        <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Style="{StaticResource CaptionTextStyle}"
-                   Foreground="{DynamicResource TextTertiaryBrush}">
+        <!-- The whole line is hidden when there is no timestamp, rather than rendering its
+             separator against an absent value. Binding StringFormat here does NOT work: WPF
+             applies the format to a null value too, producing a dangling "· ". -->
+        <TextBlock x:Name="UpdatedLine" Margin="6,0,0,0" VerticalAlignment="Center"
+                   Style="{StaticResource CaptionTextStyle}"
+                   Foreground="{DynamicResource TextTertiaryBrush}"
+                   Visibility="{Binding HasUpdatedText, Converter={StaticResource BooleanToVisibility}}">
           <Run Text="&#x00B7;" /><Run Text=" " /><Run Text="{Binding UpdatedText, Mode=OneWay}" />
         </TextBlock>
       </StackPanel>
@@ -2939,18 +2944,31 @@ public partial class ProviderCardView : UserControl
 }
 ```
 
-- [ ] **Step 4: Add `HasWindows` to the card view model**
+- [ ] **Step 4: Add `HasWindows` and `HasUpdatedText` to the card view model**
 
-`ProviderCardView` binds `HasWindows`. Add it to `ProviderCardViewModel`:
+`ProviderCardView` binds both. Add them to `ProviderCardViewModel`:
 
 ```csharp
     public bool HasWindows => Windows.Count > 0;
+
+    /// <summary>
+    /// False whenever nothing has been retrieved yet, which is every NotInstalled, Discovering and
+    /// Waiting card. The view hides the whole line rather than rendering its separator against an
+    /// absent value - missing data is absent, never a placeholder that reads like one.
+    /// </summary>
+    public bool HasUpdatedText => UpdatedText is not null;
 ```
 
-and raise it at the end of the rebuild loop in `Apply`:
+raise `HasWindows` at the end of the rebuild loop in `Apply`:
 
 ```csharp
         Raise(nameof(HasWindows));
+```
+
+and raise `HasUpdatedText` whenever `UpdatedText` changes, since `Tick` drives it:
+
+```csharp
+    public string? UpdatedText { get => _updatedText; private set { if (Set(ref _updatedText, value)) { Raise(nameof(HasUpdatedText)); } } }
 ```
 
 - [ ] **Step 5: Write the view-loading tests**
@@ -3258,7 +3276,7 @@ public partial class WidgetWindow : Window
 
         if (_theme is not null)
         {
-            _theme.Changed += (_, _) => ApplyTitleBarTheme(new WindowInteropHelper(this).Handle);
+            _theme.Changed += OnThemeChanged;
         }
     }
 
@@ -3275,10 +3293,22 @@ public partial class WidgetWindow : Window
     {
         _tick.Stop();
         _poll.Stop();
+
+        // Named rather than a lambda so it can actually be detached. ThemeManager outlives this
+        // window - it is a singleton owned by the application - so a subscription left behind
+        // would keep calling back into a closed window for the rest of the process's life.
+        if (_theme is not null)
+        {
+            _theme.Changed -= OnThemeChanged;
+        }
+
         SavePlacement();
         _model.Dispose();
         base.OnClosed(e);
     }
+
+    private void OnThemeChanged(object? sender, EventArgs e) =>
+        ApplyTitleBarTheme(new WindowInteropHelper(this).Handle);
 
     private void ApplyTitleBarTheme(IntPtr handle) =>
         DwmWindowChrome.UseDarkTitleBar(handle, _theme?.Current == ThemeVariant.Dark);
