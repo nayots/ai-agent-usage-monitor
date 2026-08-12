@@ -111,7 +111,18 @@
                        Stroked it was a chevron riding above the capitals: a 1px pen straddles the
                        path, so the base fell on a half-pixel and faded to nothing, while the miter
                        join at the apex spiked a whole pixel above the 7x6 box it was allotted. -->
-                  <Polygon x:Name="Triangle" Points="0,6 3.5,0 7,6" Fill="{DynamicResource TextTertiaryBrush}" />
+                  <Polygon x:Name="Triangle" Points="0,6 3.5,0 7,6" Fill="{DynamicResource TextTertiaryBrush}">
+                    <!-- Lifted a pixel, because centring the box does not centre the shape: a solid
+                         up-pointing triangle carries its weight at the base, so its centroid lies a
+                         third of its height - 1px of 6 - below the middle of its box. Measured
+                         against the ink of the capitals beside it, box-centred put the triangle
+                         1.2px low; lifted it sits 0.2px low, which is where the OFFICIAL dot lands
+                         on its own. A disc needs no such correction, so the lift belongs on the
+                         triangle and not on the Grid the two shapes share. -->
+                    <Polygon.RenderTransform>
+                      <TranslateTransform Y="-1" />
+                    </Polygon.RenderTransform>
+                  </Polygon>
                   <Ellipse x:Name="Dot" Width="6" Height="6" Fill="{DynamicResource TextSecondaryBrush}" Visibility="Collapsed" />
                 </Grid>
                 <TextBlock x:Name="Label" Margin="4,0,0,0" Text="UNOFFICIAL" Style="{StaticResource CaptionMicroTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />

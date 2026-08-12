@@ -57,11 +57,11 @@ public class ControlLoadingTests(WpfFixture wpf)
     /// The unofficial mark is a filled triangle, per the design's CSS border triangle. Stroking it
     /// instead is what made it read as a chevron riding above the capitals: a 1px pen straddles the
     /// path, so the base landed on a half-pixel and faded out while the miter join at the apex
-    /// spiked a pixel above the box. Both symptoms follow from the ink leaving its 7x6 allotment,
-    /// so that is what this asserts.
+    /// spiked a pixel above the box. Both symptoms follow from the shape outgrowing its 7x6
+    /// allotment, so that is what this asserts.
     /// </summary>
     [Fact]
-    public void TheUnofficialMarkIsFilledAndStaysInsideItsBox() => wpf.Invoke(() =>
+    public void TheUnofficialMarkIsFilledAndKeepsItsSevenBySixShape() => wpf.Invoke(() =>
     {
         TierBadge badge = Measured(new TierBadge { Tier = MechanismTier.Unofficial });
         Polygon triangle = Descendants(badge).OfType<Polygon>().Single();
@@ -69,6 +69,35 @@ public class ControlLoadingTests(WpfFixture wpf)
         Assert.NotNull(triangle.Fill);
         Assert.Null(triangle.Stroke);
         Assert.Equal(new Size(7, 6), triangle.DesiredSize);
+    });
+
+    /// <summary>
+    /// The triangle is drawn a pixel above where layout puts it. Centring a box centres a disc but
+    /// not a triangle: the mass of an up-pointing one is at its base, and its centroid is a third of
+    /// its height below the box's middle. Measured against the ink of the capitals beside it, the
+    /// box-centred triangle sat 1.2px low - visible at this size - and the lift brings it to 0.2px,
+    /// matching the OFFICIAL dot. Asserted because a deleted transform changes nothing that builds,
+    /// throws, or measures differently; it only looks wrong.
+    /// </summary>
+    [Fact]
+    public void TheUnofficialMarkIsLiftedOffTheCentreOfItsBox() => wpf.Invoke(() =>
+    {
+        TierBadge badge = Measured(new TierBadge { Tier = MechanismTier.Unofficial });
+        Polygon triangle = Descendants(badge).OfType<Polygon>().Single();
+        TranslateTransform lift = Assert.IsType<TranslateTransform>(triangle.RenderTransform);
+
+        Assert.Equal(-1, lift.Y);
+        Assert.Equal(0, lift.X);
+    });
+
+    /// <summary>The disc is symmetric about its centre, so it takes no optical correction.</summary>
+    [Fact]
+    public void TheOfficialMarkIsNotLifted() => wpf.Invoke(() =>
+    {
+        TierBadge badge = Measured(new TierBadge { Tier = MechanismTier.Official });
+        Ellipse dot = Descendants(badge).OfType<Ellipse>().Single();
+
+        Assert.Equal(Transform.Identity, dot.RenderTransform);
     });
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
