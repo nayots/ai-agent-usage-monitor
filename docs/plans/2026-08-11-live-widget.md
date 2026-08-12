@@ -472,8 +472,20 @@ private static async Task<string?> TryGetVersionAsync(string exePath, Cancellati
             : $"Version reported by the official `claude --version` command: {version}.");
         return version;
     }
+    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+    {
+        // ProcessRunner signals its OWN timeout as OperationCanceledException - it links the
+        // caller's token to a CancelAfter(VersionTimeout) source. A slow or hung executable is
+        // not a shutdown: the version is simply unknown, and the quota read below must still
+        // happen. Letting this escape would throw the whole probe out, which breaks the
+        // timeout-bounded and one-provider-cannot-affect-the-other constraints (PRD §24).
+        notes.Add($"claude --version did not complete within {VersionTimeout.TotalSeconds:0}s.");
+        return null;
+    }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {
+        // Caller-requested cancellation is deliberately NOT caught here: it propagates so the
+        // refresh service can tell shutdown apart from a provider failure.
         notes.Add($"claude --version failed: {ex.Message}");
         return null;
     }
