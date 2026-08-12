@@ -1231,7 +1231,9 @@ Create `src/AiUsageMonitor.App/Views/SettingsWindow.xaml`:
       <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Always on top" IsChecked="{Binding AlwaysOnTop, Mode=TwoWay}" AutomationProperties.Name="Always on top" />
       <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Show providers that are not installed" IsChecked="{Binding ShowUnavailableProviders, Mode=TwoWay}" AutomationProperties.Name="Show providers that are not installed" />
       <CheckBox x:Name="StartWithWindowsBox" Style="{StaticResource SettingsCheckBoxStyle}" Content="Start with Windows" IsChecked="{Binding StartWithWindows, Mode=TwoWay}" IsEnabled="{Binding CanStartWithWindows}" AutomationProperties.Name="Start with Windows" />
-      <TextBlock Text="{Binding StartWithWindowsUnavailableReason}" TextWrapping="Wrap" Margin="0,0,0,4" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}">
+      <!-- Style is set only as a property element here. Setting the Style attribute as well and
+           then nesting TextBlock.Style is MC3024 - the property can be set once. -->
+      <TextBlock Text="{Binding StartWithWindowsUnavailableReason}" TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource TextTertiaryBrush}">
         <TextBlock.Style>
           <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
             <Setter Property="Visibility" Value="Visible" />
@@ -1710,6 +1712,11 @@ public sealed class TrayIcon : IDisposable
         Shell_NotifyIcon(message, ref data);
     }
 
+    /// <summary>
+    /// Every field is assigned, including the ones this app never varies. An interop struct field
+    /// that is never written raises CS0649, and warnings are errors here — so the padding fields
+    /// are set explicitly rather than left to their defaults.
+    /// </summary>
     private NOTIFYICONDATA Data(int flags) => new()
     {
         cbSize = Marshal.SizeOf<NOTIFYICONDATA>(),
@@ -1719,8 +1726,12 @@ public sealed class TrayIcon : IDisposable
         uCallbackMessage = WM_TRAYICON,
         hIcon = _icon,
         szTip = _tooltip,
+        dwState = 0,
+        dwStateMask = 0,
         szInfo = string.Empty,
-        szInfoTitle = string.Empty
+        uVersion = 0,
+        szInfoTitle = string.Empty,
+        dwInfoFlags = 0
     };
 
     /// <summary>
@@ -1729,8 +1740,16 @@ public sealed class TrayIcon : IDisposable
     /// </summary>
     private static IntPtr LoadIcon()
     {
-        StreamResourceInfo info = Application.GetResourceStream(
+        // Nullable: GetResourceStream is annotated to return null, and an unguarded dereference is
+        // CS8602, which is an error here. A missing icon must not take the process down either -
+        // a zero handle renders as the shell's default icon, which is worse than ours but visible.
+        StreamResourceInfo? info = Application.GetResourceStream(
             new Uri("pack://application:,,,/AiUsageMonitor.App;component/Assets/app.ico", UriKind.Absolute));
+
+        if (info?.Stream is null)
+        {
+            return IntPtr.Zero;
+        }
 
         using MemoryStream buffer = new();
         info.Stream.CopyTo(buffer);
