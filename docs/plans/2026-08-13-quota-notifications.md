@@ -138,7 +138,7 @@ Provider name and window label are `ProviderCardViewModel.DisplayName` and `Quot
 ### Task 4: The setting
 
 **Files:**
-- Modify: `src/AiUsageMonitor.Infrastructure/Settings/AppSettings.cs`, `src/AiUsageMonitor.App/ViewModels/SettingsViewModel.cs`, `src/AiUsageMonitor.App/Views/SettingsWindow.xaml`
+- Modify: `src/AiUsageMonitor.Infrastructure/Settings/AppSettings.cs`, `src/AiUsageMonitor.App/ViewModels/SettingsViewModel.cs`, `src/AiUsageMonitor.App/Views/SettingsWindow.xaml`, `src/AiUsageMonitor.App/Views/WidgetWindow.xaml.cs`
 - Test: `tests/AiUsageMonitor.App.Tests/SettingsViewModelTests.cs`
 
 `public bool NotifyOnQuotaEvents { get; init; } = true;` — on by default. A new NOTIFICATIONS section in the settings window with one checkbox, "Notify on quota milestones and resets", and a caption naming what that means. The gate lives in `WidgetWindow`, read at the moment an alert would be shown, so switching it off silences the next alert rather than the next restart.
