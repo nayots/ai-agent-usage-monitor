@@ -234,6 +234,17 @@ public partial class WidgetWindow : Window
 
     private void Minimise_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
+    private void Settings_Click(object sender, RoutedEventArgs e) => ShowSettings();
+
+    /// <summary>
+    /// Written through the settings service rather than by assigning <see cref="Window.Topmost"/>
+    /// directly, so the choice persists and the settings window's own checkbox follows it. The
+    /// window's Topmost is then set by <see cref="OnSettingsChanged"/>, on the one path that
+    /// already owns it.
+    /// </summary>
+    private void Pin_Click(object sender, RoutedEventArgs e) =>
+        _settings.Update(s => s with { AlwaysOnTop = !s.AlwaysOnTop });
+
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if ((uint)msg == SingleInstance.ShowMessage)

@@ -36,6 +36,9 @@
   <FontFamily x:Key="WidgetFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
   <FontFamily x:Key="WidgetDisplayFontFamily">Segoe UI Variable Display, Segoe UI</FontFamily>
   <FontFamily x:Key="WidgetMonoFontFamily">Cascadia Mono, Consolas</FontFamily>
+  <!-- Fluent ships with Windows 11 and MDL2 with 10; the codepoints used here exist in both, so
+       the fallback keeps the title bar drawn on a machine that has only the older font. -->
+  <FontFamily x:Key="WidgetIconFontFamily">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
   <Style x:Key="BaseTextStyle" TargetType="TextBlock">
     <Setter Property="FontFamily" Value="{StaticResource WidgetFontFamily}" />
     <Setter Property="Typography.NumeralStyle" Value="Lining" />

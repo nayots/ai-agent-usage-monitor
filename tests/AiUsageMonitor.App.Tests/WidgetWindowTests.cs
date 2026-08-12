@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.App.Views;
 using AiUsageMonitor.Domain;
@@ -81,6 +83,64 @@ public class WidgetWindowTests(WpfFixture wpf)
 
         model.Dispose();
     });
+
+    /// <summary>
+    /// The title bar's pin writes the setting and reads the window's Topmost back, so this covers
+    /// both halves at once: the settings window and the tray can move it too, and the pin has to
+    /// follow whichever of them did.
+    /// </summary>
+    [Fact]
+    public void ChangingAlwaysOnTopMovesTheWindowWhicheverSurfaceChangedIt() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+
+        WidgetWindow window = new(model, settings);
+
+        Assert.False(window.Topmost);
+
+        settings.Update(s => s with { AlwaysOnTop = true });
+        Assert.True(window.Topmost);
+
+        settings.Update(s => s with { AlwaysOnTop = false });
+        Assert.False(window.Topmost);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// The pin's two states differ by shape, not only by colour: an accent-tinted outline and an
+    /// accent-tinted solid are the same mark to anyone under high contrast.
+    /// </summary>
+    [Fact]
+    public void ThePinShowsAnOutlineWhenLooseAndASolidWhenKeptOnTop() => wpf.Invoke(() =>
+    {
+        Style style = (Style)Application.Current.Resources["TitleBarPinButtonStyle"];
+
+        Assert.Equal("", Content(style.Setters));
+
+        // XAML leaves a DataTrigger's Value a string - it cannot know the bound property's type at
+        // parse time - so the comparison is against its text, not against a boolean.
+        DataTrigger pinned = style.Triggers.OfType<DataTrigger>().Single();
+
+        Assert.Equal("True", pinned.Value.ToString());
+        Assert.Equal("", Content(pinned.Setters));
+    });
+
+    [Fact]
+    public void TheTitleBarIconsUseAFontThatFallsBackOnOlderWindows() => wpf.Invoke(() =>
+    {
+        FontFamily font = (FontFamily)Application.Current.Resources["WidgetIconFontFamily"];
+
+        Assert.Equal("Segoe Fluent Icons, Segoe MDL2 Assets", font.Source);
+    });
+
+    private static string? Content(IEnumerable<SetterBase> setters) => setters
+        .OfType<Setter>()
+        .Where(setter => setter.Property == ContentControl.ContentProperty)
+        .Select(setter => setter.Value as string)
+        .SingleOrDefault();
 
     [Fact]
     public void TheFooterCountsTheProvidersItWasGiven() => wpf.Invoke(() =>

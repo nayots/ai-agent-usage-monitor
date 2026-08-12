@@ -31,6 +31,9 @@
         <TextBlock Grid.Column="0" Margin="11,0,0,0" VerticalAlignment="Center" Text="Quota Monitor"
                    FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" />
         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,4,0">
+          <Button Style="{StaticResource TitleBarPinButtonStyle}" Click="Pin_Click" />
+          <Button Style="{StaticResource TitleBarIconButtonStyle}" Content="&#xE713;" Click="Settings_Click"
+                  ToolTip="Settings" AutomationProperties.Name="Settings" />
           <Button Width="30" Height="26" Content="&#x2212;" FontSize="12" Click="Minimise_Click"
                   Style="{StaticResource LinkButtonStyle}"
                   Foreground="{DynamicResource TextSecondaryBrush}"

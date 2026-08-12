@@ -25,6 +25,39 @@
     </Style.Triggers>
   </Style>
 
+  <!-- The title bar's icon buttons. Same 30x26 hit area as the minimise and close glyphs beside
+       them, so the row reads as one set rather than as two kinds of control. -->
+  <Style x:Key="TitleBarIconButtonStyle" TargetType="Button" BasedOn="{StaticResource LinkButtonStyle}">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="FontFamily" Value="{StaticResource WidgetIconFontFamily}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+
+  <!--
+    The pin reads its state from the window rather than from a view model: Window.Topmost is
+    already the one thing OnSettingsChanged keeps true, so binding to it means the button cannot
+    disagree with the window it sits on, whichever surface made the change.
+
+    Outline for off and solid for on - the state is never carried by the accent colour alone,
+    which would be invisible under high contrast and to anyone who cannot separate the two.
+  -->
+  <Style x:Key="TitleBarPinButtonStyle" TargetType="Button" BasedOn="{StaticResource TitleBarIconButtonStyle}">
+    <Setter Property="Content" Value="&#xE718;" />
+    <Setter Property="ToolTip" Value="Keep above other windows" />
+    <Setter Property="AutomationProperties.Name" Value="Keep above other windows" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding Topmost, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+        <Setter Property="Content" Value="&#xE841;" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+        <Setter Property="ToolTip" Value="Kept above other windows" />
+        <Setter Property="AutomationProperties.Name" Value="Kept above other windows" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
   <Style TargetType="{x:Type controls:QuotaBar}">
     <Setter Property="TrackBrush" Value="{DynamicResource QuotaBarTrackBrush}" />
     <Setter Property="AccentFillBrush" Value="{DynamicResource QuotaBarFillBrush}" />
