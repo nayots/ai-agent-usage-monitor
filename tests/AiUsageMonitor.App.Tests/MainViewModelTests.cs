@@ -1,0 +1,123 @@
+using AiUsageMonitor.App.ViewModels;
+using AiUsageMonitor.Domain;
+using AiUsageMonitor.Infrastructure.Providers;
+using AiUsageMonitor.Infrastructure.Refresh;
+using AiUsageMonitor.Infrastructure.Settings;
+
+namespace AiUsageMonitor.App.Tests;
+
+public class MainViewModelTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
+
+    private sealed class StubProbe(string name, ConnectionState state, IReadOnlyList<QuotaWindow> windows) : IProviderProbe
+    {
+        public string Name => name;
+
+        public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => Task.FromResult(new ProviderSnapshot(
+            ProviderName: name,
+            Installed: true,
+            Version: "1.0.0",
+            ExecutablePath: null,
+            State: state,
+            Mechanism: "stub",
+            Tier: MechanismTier.Official,
+            UpdateModel: "pull (poll)",
+            Windows: windows,
+            RetrievedAt: state == ConnectionState.Connected ? Now : null,
+            Error: null,
+            Notes: []));
+    }
+
+    private static QuotaWindow Window() => new(
+        Id: "five_hour", Label: "5-hour window", UsedPercent: 47,
+        ResetsAt: Now.AddMinutes(295), WindowDuration: TimeSpan.FromHours(5),
+        Order: 0, IsPartial: false, Extra: new Dictionary<string, string>(), LabelIsProviderToken: false);
+
+    private static (MainViewModel Model, IReadOnlyList<ProviderDescriptor> Providers) Build(params ProviderDescriptor[] providers)
+    {
+        ProviderRefreshService service = new(providers, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
+        MainViewModel model = new(service, providers, AppSettings.Default, () => Now);
+        return (model, providers);
+    }
+
+    [Fact]
+    public void ACardExistsForEveryProviderBeforeAnythingHasBeenProbed()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+
+        Assert.Equal(["Claude Code", "Codex"], model.Providers.Select(p => p.DisplayName));
+    }
+
+    [Fact]
+    public void TheFooterCountsProvidersAndAgreesWithItself()
+    {
+        (MainViewModel one, _) = Build(new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+        Assert.Equal("1 provider", one.FooterText);
+
+        (MainViewModel two, _) = Build(
+            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+        Assert.Equal("2 providers", two.FooterText);
+    }
+
+    [Fact]
+    public async Task ARefreshRoutesEachSnapshotToItsOwnCard()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
+
+        await model.RefreshAsync(force: true);
+
+        Assert.Single(model.Providers[0].Windows);
+        Assert.Equal(ConnectionState.Connected, model.Providers[0].State);
+        Assert.Empty(model.Providers[1].Windows);
+        Assert.Equal(ConnectionState.NotInstalled, model.Providers[1].State);
+    }
+
+    [Fact]
+    public async Task RefreshIsNotReentrant()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+
+        Assert.True(model.RefreshCommand.CanExecute(null));
+
+        Task refresh = model.RefreshAsync(force: true);
+        await refresh;
+
+        Assert.True(model.RefreshCommand.CanExecute(null));
+        Assert.False(model.IsRefreshing);
+    }
+
+    [Fact]
+    public async Task TickAdvancesEveryCardWithoutProbingAgain()
+    {
+        StubProbe probe = new("Codex", ConnectionState.Connected, [Window()]);
+        (MainViewModel model, _) = Build(new ProviderDescriptor("Codex", "CX", probe));
+
+        await model.RefreshAsync(force: true);
+        string? before = model.Providers[0].Windows[0].CountdownText;
+
+        model.Tick();
+
+        Assert.Equal(before, model.Providers[0].Windows[0].CountdownText);
+        Assert.Equal("Updated 0s ago", model.Providers[0].UpdatedText);
+    }
+
+    [Fact]
+    public async Task DisposingCancelsInFlightWorkAndStopsRoutingSnapshots()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [Window()])));
+
+        model.Dispose();
+
+        await model.RefreshAsync(force: true);
+
+        Assert.Empty(model.Providers[0].Windows);
+    }
+}
