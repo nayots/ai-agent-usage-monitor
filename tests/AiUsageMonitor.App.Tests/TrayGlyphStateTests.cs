@@ -55,12 +55,40 @@ public class TrayGlyphStateTests
     }
 
     [Fact]
-    public void TheDigitsAreTheWorstPercentageAcrossEveryProvider()
+    public void TheDigitsAreTheWorstPrimaryWindowAcrossEveryProvider()
     {
         TrayGlyphState state = TrayGlyphState.From([Connected("Claude Code", 31), Connected("Codex", 82, 4)]);
 
         Assert.Equal("82", state.Digits);
         Assert.False(state.DigitsAreStale);
+    }
+
+    /// <summary>
+    /// Claude Code reports its five-hour window first and its weekly one second, and the weekly is
+    /// usually further along. One number on a sixteen-pixel icon should be the limit that governs
+    /// what you can do next, so it comes from the window the provider put first and not from the
+    /// largest figure on the card.
+    /// </summary>
+    [Fact]
+    public void TheDigitsComeFromThePrimaryWindowEvenWhenALaterOneIsWorse()
+    {
+        TrayGlyphState state = TrayGlyphState.From([Connected("Claude Code", 51, 64)]);
+
+        Assert.Equal("51", state.Digits);
+        Assert.Equal(2, state.Bars.Count);
+    }
+
+    /// <summary>
+    /// Deferring to the next window down is precisely how the weekly reading reached the icon, so a
+    /// primary window that reports nothing yields no digits at all.
+    /// </summary>
+    [Fact]
+    public void APrimaryWindowWithNoReadingDoesNotDeferToTheNextOne()
+    {
+        TrayGlyphState state = TrayGlyphState.From([Connected("Claude Code", null, 64)]);
+
+        Assert.Null(state.Digits);
+        Assert.Equal(2, state.Bars.Count);
     }
 
     [Fact]

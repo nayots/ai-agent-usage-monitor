@@ -27,7 +27,10 @@ public sealed class TrayGlyphState
     /// <summary>One bar per quota window, in card order, across every card the user can see.</summary>
     public IReadOnlyList<TrayGlyphBar> Bars { get; }
 
-    /// <summary>The worst percentage, or null when there is nothing truthful to put there.</summary>
+    /// <summary>
+    /// The worst reading among the providers' primary windows, or null when there is nothing
+    /// truthful to put there. Primary, not worst overall: see <see cref="From"/>.
+    /// </summary>
     public string? Digits { get; }
 
     /// <summary>True when the window that produced <see cref="Digits"/> is showing stale data.</summary>
@@ -53,6 +56,16 @@ public sealed class TrayGlyphState
     /// tone follows the same selector the widget's own bars use, and a stale card's bars go grey
     /// here exactly as they do on screen - the glyph is the widget in sixteen pixels, not a second
     /// opinion about the same data.
+    /// <para>
+    /// Every window gets a bar, but only a provider's <em>primary</em> window - the first it
+    /// reports - can supply the digits. There is one number and it should track the limit that
+    /// governs what you can do next, which for Claude Code is the five-hour window and not the
+    /// weekly one sitting further up the card. Nothing here decides which window that is: windows
+    /// arrive in the provider's own order and are never re-sorted (<see cref="QuotaOrdering"/>), so
+    /// "first" is the provider's answer, not an assumption about plan periods. A primary window
+    /// that reports no percentage contributes no digits rather than deferring to the window below
+    /// it - falling through is how the weekly figure got there in the first place.
+    /// </para>
     /// </summary>
     public static TrayGlyphState From(IEnumerable<ProviderCardViewModel> cards)
     {
@@ -71,6 +84,7 @@ public sealed class TrayGlyphState
 
             failing |= card.State is ConnectionState.Error or ConnectionState.Unavailable;
             bool startsGroup = bars.Count > 0;
+            bool isPrimary = true;
 
             foreach (QuotaRowViewModel row in card.Windows)
             {
@@ -82,11 +96,13 @@ public sealed class TrayGlyphState
                 startsGroup = false;
                 exhausted |= row.IsExhausted;
 
-                if (row.UsedPercent is double used && (highest is not double best || used > best))
+                if (isPrimary && row.UsedPercent is double used && (highest is not double best || used > best))
                 {
                     highest = used;
                     highestIsStale = row.IsStale;
                 }
+
+                isPrimary = false;
             }
         }
 
