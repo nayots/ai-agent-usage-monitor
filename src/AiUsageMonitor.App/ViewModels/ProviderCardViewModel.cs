@@ -36,6 +36,8 @@ public sealed class ProviderCardViewModel : ObservableObject
 
     public ObservableCollection<QuotaRowViewModel> Windows { get; } = [];
 
+    public bool HasWindows => Windows.Count > 0;
+
     public ConnectionState State { get => _state; private set { if (Set(ref _state, value)) { Raise(nameof(StateLabel)); Raise(nameof(IsStale)); } } }
 
     public string StateLabel => ConnectionStateText.Label(State);
@@ -46,7 +48,14 @@ public sealed class ProviderCardViewModel : ObservableObject
 
     public string? VersionText { get => _versionText; private set => Set(ref _versionText, value); }
 
-    public string? UpdatedText { get => _updatedText; private set => Set(ref _updatedText, value); }
+    public string? UpdatedText { get => _updatedText; private set { if (Set(ref _updatedText, value)) { Raise(nameof(HasUpdatedText)); } } }
+
+    /// <summary>
+    /// False whenever nothing has been retrieved yet, which is every NotInstalled, Discovering and
+    /// Waiting card. The view hides the whole line rather than rendering its separator against an
+    /// absent value - missing data is absent, never a placeholder that reads like one.
+    /// </summary>
+    public bool HasUpdatedText => UpdatedText is not null;
 
     public string? StaleAgeText { get => _staleAgeText; private set => Set(ref _staleAgeText, value); }
 
@@ -68,6 +77,8 @@ public sealed class ProviderCardViewModel : ObservableObject
         {
             Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage));
         }
+
+        Raise(nameof(HasWindows));
 
         Tick(now);
     }

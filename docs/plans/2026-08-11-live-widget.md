@@ -2996,9 +2996,13 @@ public class ViewLoadingTests(WpfFixture wpf)
         Error: null, Notes: []);
 
     [Theory]
-    [InlineData(47, false, true)]
-    [InlineData(100, false, true)]
-    [InlineData(34, true, false)]
+    // The d suffixes are load-bearing. xUnit boxes an InlineData literal at its written type and
+    // hands it to the reflection binder, which does no numeric widening: a bare 47 arrives as an
+    // Int32 and fails to bind to double? at run time, not compile time. Only the null case would
+    // survive.
+    [InlineData(47d, false, true)]
+    [InlineData(100d, false, true)]
+    [InlineData(34d, true, false)]
     [InlineData(null, false, false)]
     public void EveryRowFormRendersWithoutThrowing(double? used, bool token, bool withReset) => wpf.Invoke(() =>
     {
