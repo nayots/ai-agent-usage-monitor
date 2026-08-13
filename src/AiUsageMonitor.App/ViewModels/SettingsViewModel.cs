@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Settings;
@@ -14,6 +15,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 {
     private static readonly int[] RefreshPresets = [15, 30, 60, 120, 300, 600];
     private static readonly int[] StalePresets = [60, 120, 300, 600, 1800, 3600];
+
+    // Evening and morning, an hour apart. Deliberately not the full 24: a schedule offering 03:00
+    // as a start is offering a shape nobody wants, and a hand-edited file can hold anything anyway.
+    private static readonly int[] QuietStartPresets = [1080, 1140, 1200, 1260, 1320, 1380];
+    private static readonly int[] QuietEndPresets = [300, 360, 420, 480, 540, 600];
 
     private readonly SettingsService _settings;
     private readonly StartupRegistration _startup;
@@ -62,6 +68,14 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             seconds => _settings.Update(s => s with { StaleAfterSeconds = seconds }),
             () => _settings.Current.StaleAfterSeconds);
 
+        AlertThresholdChoices = BuildAlertThresholdChoices();
+        QuietHoursStarts = QuietTimes("quiet-start", QuietStartPresets, settings.Current.QuietHoursStartMinutes,
+            minutes => _settings.Update(s => s with { QuietHoursStartMinutes = minutes }),
+            () => _settings.Current.QuietHoursStartMinutes);
+        QuietHoursEnds = QuietTimes("quiet-end", QuietEndPresets, settings.Current.QuietHoursEndMinutes,
+            minutes => _settings.Update(s => s with { QuietHoursEndMinutes = minutes }),
+            () => _settings.Current.QuietHoursEndMinutes);
+
         foreach (ProviderDescriptor provider in ProviderOrdering.Apply(_providers, settings.Current.ProviderOrder))
         {
             ProviderPreferences.Add(new ProviderPreferenceViewModel(provider, _settings, MoveProvider));
@@ -92,6 +106,18 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         get => _settings.Current.NotifyOnQuotaEvents;
         set => _settings.Update(s => s with { NotifyOnQuotaEvents = value });
     }
+
+    public bool QuietHoursEnabled
+    {
+        get => _settings.Current.QuietHoursEnabled;
+        set => _settings.Update(s => s with { QuietHoursEnabled = value });
+    }
+
+    public string AlertThresholdHintText => "100% always notifies, and is the only alert that makes a sound.";
+
+    public string QuietHoursSummaryText =>
+        $"Milestone alerts are held back between {TimeLabel(_settings.Current.QuietHoursStartMinutes)} "
+        + $"and {TimeLabel(_settings.Current.QuietHoursEndMinutes)}. Reaching 100% still notifies.";
 
     public bool GlobalHotkeyEnabled
     {
@@ -159,6 +185,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ChoiceViewModel> StaleThresholds { get; }
 
+    public ObservableCollection<ChoiceViewModel> AlertThresholdChoices { get; }
+
+    public ObservableCollection<ChoiceViewModel> QuietHoursStarts { get; }
+
+    public ObservableCollection<ChoiceViewModel> QuietHoursEnds { get; }
+
     public ObservableCollection<ProviderPreferenceViewModel> ProviderPreferences { get; } = [];
 
     public string ProviderPreferencesHintText => "Hidden providers are not polled, and do not appear in the notification-area icon.";
@@ -219,6 +251,84 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         : seconds % 60 == 0 ? seconds / 60 + "m" : seconds / 60 + "m " + seconds % 60 + "s";
 
     /// <summary>
+    /// The clock presets, plus <paramref name="current"/> when a hand-edited file holds something
+    /// else - the same rule as <see cref="Durations"/>, for the same reason.
+    /// </summary>
+    private static ObservableCollection<ChoiceViewModel> QuietTimes(
+        string groupName,
+        IReadOnlyList<int> presets,
+        int current,
+        Action<int> write,
+        Func<int> read)
+    {
+        List<int> values = [.. presets];
+
+        if (!values.Contains(current))
+        {
+            values.Add(current);
+            values.Sort();
+        }
+
+        return [.. values.Select(minutes => new ChoiceViewModel(TimeLabel(minutes), minutes, groupName, read, write))];
+    }
+
+    /// <summary>
+    /// Rendered through the current culture, so a 12-hour locale reads 10 PM rather than 22:00.
+    /// Folded into the day first, because the value can come from a hand-edited file.
+    /// </summary>
+    private static string TimeLabel(int minutes) =>
+        TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(((minutes % 1440) + 1440) % 1440))
+            .ToString("t", CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// The presets, plus the user's own ladder when it matches none of them. A list typed into the
+    /// settings file by hand is a deliberate choice, and a window that silently reselected the
+    /// nearest preset would change how often someone is told without telling them.
+    /// </summary>
+    private ObservableCollection<ChoiceViewModel> BuildAlertThresholdChoices()
+    {
+        ObservableCollection<ChoiceViewModel> choices =
+        [
+            .. AlertThresholdPresets.All.Select(preset => new ChoiceViewModel(
+                preset.Label,
+                preset.Id,
+                "thresholds",
+                () => AlertThresholdPresets.IdFor(_settings.Current.EffectiveAlertThresholds),
+                _ => _settings.Update(s => s with { AlertThresholds = preset.Thresholds })))
+        ];
+
+        IReadOnlyList<int> current = _settings.Current.EffectiveAlertThresholds;
+        if (AlertThresholdPresets.IdFor(current) < 0)
+        {
+            // Read-only by construction: selecting it would write back what is already there, and
+            // it disappears on the next rebuild once a real preset is chosen.
+            choices.Add(new ChoiceViewModel(
+                AlertThresholdPresets.CustomLabel(current),
+                -1,
+                "thresholds",
+                () => AlertThresholdPresets.IdFor(_settings.Current.EffectiveAlertThresholds),
+                _ => { }));
+        }
+
+        return choices;
+    }
+
+    /// <summary>
+    /// The custom entry has to appear and disappear as the ladder changes, which no amount of
+    /// refreshing an existing list can do. The other collections are refreshed rather than rebuilt
+    /// because their contents are fixed.
+    /// </summary>
+    private void RebuildAlertThresholdChoices()
+    {
+        AlertThresholdChoices.Clear();
+
+        foreach (ChoiceViewModel choice in BuildAlertThresholdChoices())
+        {
+            AlertThresholdChoices.Add(choice);
+        }
+    }
+
+    /// <summary>
     /// A null property name tells WPF every binding on this object is out of date, which is exactly
     /// true: a settings change can come from anywhere, and every property here is a projection of
     /// the same record. The choice lists are separate objects and are refreshed by hand.
@@ -227,7 +337,14 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         Raise(null);
 
-        foreach (ChoiceViewModel choice in Themes.Concat(Densities).Concat(RefreshIntervals).Concat(StaleThresholds))
+        RebuildAlertThresholdChoices();
+
+        foreach (ChoiceViewModel choice in Themes
+            .Concat(Densities)
+            .Concat(RefreshIntervals)
+            .Concat(StaleThresholds)
+            .Concat(QuietHoursStarts)
+            .Concat(QuietHoursEnds))
         {
             choice.Refresh();
         }

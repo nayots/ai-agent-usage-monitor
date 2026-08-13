@@ -333,6 +333,51 @@ public class ViewLoadingTests(WpfFixture wpf)
     });
 
     [Fact]
+    public void TheSettingsWindowLoadsTheNotificationControls() => wpf.Invoke(() =>
+    {
+        FrameworkElement content = SettingsContent();
+
+        Assert.Contains("Tell me when a window passes", Texts(content));
+        Assert.Contains(
+            Descendants(content).OfType<RadioButton>(),
+            button => AutomationProperties.GetName(button) == "100% only");
+        Assert.Contains(
+            Descendants(content).OfType<CheckBox>(),
+            box => AutomationProperties.GetName(box) == "Quiet hours");
+        Assert.Contains("100% always notifies, and is the only alert that makes a sound.", Texts(content));
+    });
+
+    /// <summary>
+    /// A schedule for notifications that are switched off entirely is a control that does nothing,
+    /// and the quiet-hours times are a schedule for a schedule. Both follow the switch above them,
+    /// which is only true if the enabling chain actually resolves at run time.
+    /// </summary>
+    [Fact]
+    public void TheQuietHoursTimesFollowTheirOwnCheckboxAndTheNotificationsSwitch() => wpf.Invoke(() =>
+    {
+        SettingsViewModel model = SettingsModel();
+        SettingsWindow window = new(model);
+        FrameworkElement content = (FrameworkElement)window.Content;
+        content.Measure(new Size(380, 640));
+        content.UpdateLayout();
+
+        RadioButton start = Descendants(content).OfType<RadioButton>()
+            .First(button => button.GroupName == "quiet-start");
+
+        Assert.False(start.IsEnabled);
+
+        model.QuietHoursEnabled = true;
+        content.UpdateLayout();
+        Assert.True(start.IsEnabled);
+
+        model.NotifyOnQuotaEvents = false;
+        content.UpdateLayout();
+        Assert.False(start.IsEnabled);
+
+        model.Dispose();
+    });
+
+    [Fact]
     public void TheSettingsWindowLoadsProviderPreferences() => wpf.Invoke(() =>
     {
         FrameworkElement content = SettingsContent();

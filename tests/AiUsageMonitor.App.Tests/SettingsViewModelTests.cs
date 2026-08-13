@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.App.ViewModels;
@@ -263,6 +264,158 @@ public class SettingsViewModelTests
         Assert.Equal("Changes apply to this session only — the settings file could not be saved.", model.PersistenceWarningText);
         Assert.DoesNotContain(path, model.PersistenceWarningText);
         Assert.DoesNotContain("IOException", model.PersistenceWarningText);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void TheFullLadderIsSelectedByDefault()
+    {
+        SettingsViewModel model = Model(out _);
+
+        ChoiceViewModel selected = model.AlertThresholdChoices.Single(choice => choice.IsSelected);
+
+        Assert.Equal("Every milestone", selected.Label);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void SelectingAPresetWritesItsThresholds()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        model.AlertThresholdChoices.Single(choice => choice.Label == "100% only").IsSelected = true;
+
+        Assert.Equal([100], service.Current.AlertThresholds);
+        model.Dispose();
+    }
+
+    /// <summary>
+    /// A ladder typed into the settings file is a deliberate choice. It is shown by name and stays
+    /// selected, rather than being silently snapped to whichever preset looks closest.
+    /// </summary>
+    [Fact]
+    public void AHandEditedLadderIsShownAsItsOwnChoiceAndStaysSelected()
+    {
+        SettingsViewModel model = Model(out _, AppSettings.Default with { AlertThresholds = [75, 90, 100] });
+
+        ChoiceViewModel selected = model.AlertThresholdChoices.Single(choice => choice.IsSelected);
+
+        Assert.Equal("Custom (75, 90, 100%)", selected.Label);
+        model.Dispose();
+    }
+
+    /// <summary>
+    /// And it goes away once a real preset is chosen - it exists to represent a value, not to be a
+    /// permanent fifth option.
+    /// </summary>
+    [Fact]
+    public void TheCustomChoiceDisappearsOnceAPresetIsChosen()
+    {
+        SettingsViewModel model = Model(out _, AppSettings.Default with { AlertThresholds = [75, 90, 100] });
+
+        model.AlertThresholdChoices.Single(choice => choice.Label == "90 and 100%").IsSelected = true;
+
+        Assert.DoesNotContain(model.AlertThresholdChoices, choice => choice.Label.StartsWith("Custom"));
+        Assert.Equal("90 and 100%", model.AlertThresholdChoices.Single(choice => choice.IsSelected).Label);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void TheThresholdHintNamesTheOneAlertThatAlwaysSpeaks()
+    {
+        SettingsViewModel model = Model(out _);
+
+        Assert.Equal("100% always notifies, and is the only alert that makes a sound.", model.AlertThresholdHintText);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void QuietHoursAreOffUntilAskedFor()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        Assert.False(model.QuietHoursEnabled);
+
+        model.QuietHoursEnabled = true;
+
+        Assert.True(service.Current.QuietHoursEnabled);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void SelectingAStartWritesItsMinutes()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        model.QuietHoursStarts.Single(choice => choice.Value == 1380).IsSelected = true;
+
+        Assert.Equal(1380, service.Current.QuietHoursStartMinutes);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void SelectingAnEndWritesItsMinutes()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        model.QuietHoursEnds.Single(choice => choice.Value == 540).IsSelected = true;
+
+        Assert.Equal(540, service.Current.QuietHoursEndMinutes);
+        model.Dispose();
+    }
+
+    /// <summary>
+    /// The same rule the duration lists follow: a value from a hand-edited file appears in its
+    /// sorted place rather than vanishing because this window offers a shorter list.
+    /// </summary>
+    [Fact]
+    public void AHandEditedStartTimeAppearsInItsSortedPlace()
+    {
+        SettingsViewModel model = Model(out _, AppSettings.Default with { QuietHoursStartMinutes = 1290 });
+
+        Assert.Equal(7, model.QuietHoursStarts.Count);
+        Assert.Equal(1290, model.QuietHoursStarts[4].Value);
+        Assert.True(model.QuietHoursStarts[4].IsSelected);
+        model.Dispose();
+    }
+
+    /// <summary>
+    /// The two groups must not share a name. WPF scopes radio buttons by GroupName rather than by
+    /// container, so one name would make choosing a start deselect the end.
+    /// </summary>
+    [Fact]
+    public void EveryRadioGroupInThisWindowHasItsOwnName()
+    {
+        SettingsViewModel model = Model(out _);
+
+        string[] groups =
+        [
+            model.RefreshIntervals[0].GroupName,
+            model.StaleThresholds[0].GroupName,
+            model.AlertThresholdChoices[0].GroupName,
+            model.QuietHoursStarts[0].GroupName,
+            model.QuietHoursEnds[0].GroupName
+        ];
+
+        Assert.Equal(groups.Length, groups.Distinct().Count());
+        model.Dispose();
+    }
+
+    [Fact]
+    public void TheQuietHoursSummaryNamesBothEndsAndTheExceptionToTheRule()
+    {
+        SettingsViewModel model = Model(out _, AppSettings.Default with
+        {
+            QuietHoursEnabled = true,
+            QuietHoursStartMinutes = 1320,
+            QuietHoursEndMinutes = 420
+        });
+
+        string summary = model.QuietHoursSummaryText;
+
+        Assert.Contains(new TimeOnly(22, 0).ToString("t", CultureInfo.CurrentCulture), summary);
+        Assert.Contains(new TimeOnly(7, 0).ToString("t", CultureInfo.CurrentCulture), summary);
+        Assert.Contains("Reaching 100% still notifies.", summary);
         model.Dispose();
     }
 }

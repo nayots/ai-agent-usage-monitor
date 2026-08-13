@@ -127,6 +127,51 @@
       <TextBlock Text="NOTIFICATIONS" Style="{StaticResource SettingsSectionTextStyle}" />
       <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Notify on quota milestones and resets" IsChecked="{Binding NotifyOnQuotaEvents, Mode=TwoWay}" AutomationProperties.Name="Notify on quota milestones and resets" />
 
+      <!-- A schedule for notifications that are switched off entirely is a control that does
+           nothing, so the whole block follows the switch above it. -->
+      <StackPanel IsEnabled="{Binding NotifyOnQuotaEvents}">
+        <TextBlock Text="Tell me when a window passes" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <ItemsControl ItemsSource="{Binding AlertThresholdChoices}" Margin="0,5,0,0" Focusable="False">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="{Binding AlertThresholdHintText}" TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
+
+        <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Quiet hours" IsChecked="{Binding QuietHoursEnabled, Mode=TwoWay}" AutomationProperties.Name="Quiet hours" />
+        <StackPanel IsEnabled="{Binding QuietHoursEnabled}">
+          <TextBlock Text="From" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
+          <ItemsControl ItemsSource="{Binding QuietHoursStarts}" Margin="0,5,0,0" Focusable="False">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="To" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
+          <ItemsControl ItemsSource="{Binding QuietHoursEnds}" Margin="0,5,0,0" Focusable="False">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding QuietHoursSummaryText}" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource TextTertiaryBrush}">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers><DataTrigger Binding="{Binding QuietHoursEnabled}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </StackPanel>
+      </StackPanel>
+
       <TextBlock Text="REFRESH" Style="{StaticResource SettingsSectionTextStyle}" />
       <TextBlock Text="Check providers every" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
       <ItemsControl ItemsSource="{Binding RefreshIntervals}" Margin="0,5,0,0" Focusable="False">
