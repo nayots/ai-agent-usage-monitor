@@ -104,6 +104,22 @@ public sealed record AppSettings
     [JsonIgnore]
     public IReadOnlyList<int> EffectiveAlertThresholds => QuotaMilestones.Sanitize(AlertThresholds);
 
+    /// <summary>
+    /// Whether milestone balloons are held back overnight. Off by default: a widget that goes quiet
+    /// without being asked to is a widget that looks broken.
+    /// </summary>
+    public bool QuietHoursEnabled { get; init; }
+
+    /// <summary>Minutes from local midnight, stored plainly so the file stays hand-editable. 22:00.</summary>
+    public int QuietHoursStartMinutes { get; init; } = 1320;
+
+    /// <inheritdoc cref="QuietHoursStartMinutes"/>
+    public int QuietHoursEndMinutes { get; init; } = 420;
+
+    /// <summary>The three fields above as the value that knows how to answer questions about them.</summary>
+    [JsonIgnore]
+    public QuietHours QuietHours => new(QuietHoursEnabled, QuietHoursStartMinutes, QuietHoursEndMinutes);
+
     public IReadOnlyList<string> ProviderOrder { get; init; } = [];
 
     public IReadOnlyList<string> HiddenProviders { get; init; } = [];

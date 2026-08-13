@@ -314,6 +314,31 @@ public class AppSettingsStoreTests
     }
 
     [Fact]
+    public void QuietHoursAreOffByDefaultAndRunOvernightWhenSwitchedOn()
+    {
+        Assert.False(AppSettings.Default.QuietHoursEnabled);
+        Assert.Equal(QuietHours.Off, AppSettings.Default.QuietHours);
+    }
+
+    [Fact]
+    public void QuietHoursRoundTripThroughTheStore()
+    {
+        using TempDirectory dir = new();
+        AppSettingsStore store = new(dir.File("settings.json"));
+
+        store.Save(AppSettings.Default with
+        {
+            QuietHoursEnabled = true,
+            QuietHoursStartMinutes = 1260,
+            QuietHoursEndMinutes = 480
+        });
+
+        AppSettings loaded = store.Load().Settings;
+        Assert.Equal(new QuietHours(true, 1260, 480), loaded.QuietHours);
+        Assert.DoesNotContain("\"QuietHours\":", File.ReadAllText(dir.File("settings.json")));
+    }
+
+    [Fact]
     public void WindowPlacementDefaultsToAbsentSoTheFirstRunIsCentred()
     {
         Assert.Null(AppSettings.Default.WindowLeft);
