@@ -43,17 +43,22 @@
 
     Outline for off and solid for on - the state is never carried by the accent colour alone,
     which would be invisible under high contrast and to anyone who cannot separate the two.
+
+    The copy names both halves of what the pin now does. Staying above other windows and surviving
+    a click on one of them are the same intent, so they are the same control - but a user who only
+    read "keep above other windows" would have no way to know which button stops the widget
+    disappearing when they click away.
   -->
   <Style x:Key="TitleBarPinButtonStyle" TargetType="Button" BasedOn="{StaticResource TitleBarIconButtonStyle}">
     <Setter Property="Content" Value="&#xE718;" />
-    <Setter Property="ToolTip" Value="Keep above other windows" />
-    <Setter Property="AutomationProperties.Name" Value="Keep above other windows" />
+    <Setter Property="ToolTip" Value="Keep above other windows, and open when you click one" />
+    <Setter Property="AutomationProperties.Name" Value="Keep above other windows, and open when you click one" />
     <Style.Triggers>
       <DataTrigger Binding="{Binding Topmost, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
         <Setter Property="Content" Value="&#xE841;" />
         <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
-        <Setter Property="ToolTip" Value="Kept above other windows" />
-        <Setter Property="AutomationProperties.Name" Value="Kept above other windows" />
+        <Setter Property="ToolTip" Value="Kept above other windows, and open when you click one" />
+        <Setter Property="AutomationProperties.Name" Value="Kept above other windows, and open when you click one" />
       </DataTrigger>
     </Style.Triggers>
   </Style>

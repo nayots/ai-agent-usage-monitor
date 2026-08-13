@@ -26,6 +26,16 @@ public partial class WidgetWindow : Window
     private SettingsWindow? _settingsWindow;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _poll = new();
+
+    /// <summary>
+    /// Answers a lost focus on a short delay rather than at once, because the focus can land back
+    /// inside this application a moment after it leaves. Clicking the notification-area icon gives
+    /// the foreground to the shell first and only then reaches the widget as a click; moving from
+    /// the widget to its settings window deactivates one before it activates the other. Both would
+    /// read as an outside click if answered immediately.
+    /// </summary>
+    private readonly DispatcherTimer _dismiss = new() { Interval = TimeSpan.FromMilliseconds(150) };
+
     private readonly UsageAlertWatcher _alerts = new();
     private TrayIcon? _tray;
     private TrayGlyphState _glyph = TrayGlyphState.Empty;
@@ -48,6 +58,7 @@ public partial class WidgetWindow : Window
         _tick.Tick += OnTick;
         _poll.Interval = settings.Current.RefreshInterval;
         _poll.Tick += (_, _) => _ = _model.RefreshAsync(force: false);
+        _dismiss.Tick += OnDismissTick;
 
         _settings.Changed += OnSettingsChanged;
     }
@@ -62,7 +73,6 @@ public partial class WidgetWindow : Window
 
         _tray = new TrayIcon(this, "Quota Monitor");
         _tray.Activated += (_, _) => ShowFromTray();
-        _tray.DoubleClicked += (_, _) => HideToTray();
         _tray.ContextMenuRequested += OnTrayContextMenuRequested;
         _tray.Show();
 
@@ -87,6 +97,7 @@ public partial class WidgetWindow : Window
     {
         _tick.Stop();
         _poll.Stop();
+        _dismiss.Stop();
 
         // Named rather than a lambda so it can actually be detached. ThemeManager outlives this
         // window - it is a singleton owned by the application - so a subscription left behind
@@ -224,6 +235,14 @@ public partial class WidgetWindow : Window
 
         _settingsWindow = new SettingsWindow(model) { Owner = this };
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+
+        // The settings window feeds the same dismissal timer, so an outside click takes the pair
+        // down whichever of them held the focus. Without this, focus leaving from the settings
+        // window would never reach the widget's own OnDeactivated: the widget was deactivated when
+        // the settings window opened, and a window that is already inactive is not deactivated again.
+        _settingsWindow.Deactivated += (_, _) => _dismiss.Start();
+        _settingsWindow.Activated += (_, _) => _dismiss.Stop();
+
         _settingsWindow.Show();
     }
 
@@ -303,8 +322,90 @@ public partial class WidgetWindow : Window
         menu.IsOpen = true;
     }
 
+    /// <summary>
+    /// The widget is a glance, not a workspace: once the focus leaves this application entirely,
+    /// its windows go the same way the close button sends them - the settings window closed, the
+    /// widget hidden to the notification area, the process still polling behind the icon.
+    /// <para>
+    /// The pin is the exemption, and the reason it is the right one: a widget kept above other
+    /// windows is being watched while something else is worked in, which is exactly the situation
+    /// this rule would otherwise make impossible.
+    /// </para>
+    /// </summary>
+    protected override void OnDeactivated(EventArgs e)
+    {
+        base.OnDeactivated(e);
+        _dismiss.Start();
+    }
+
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        _dismiss.Stop();
+    }
+
+    private void OnDismissTick(object? sender, EventArgs e) =>
+        DismissIfFocusLeftTheApplication(ForegroundBelongsToThisApplication());
+
+    /// <summary>
+    /// The dismissal itself, given the one fact it cannot establish without a shell to ask: whether
+    /// the focus is still somewhere in this application. Split there so the rule can be exercised
+    /// without arranging a real foreground window.
+    /// <para>
+    /// The visibility test is against Hidden rather than for Visible, because what it rules out is
+    /// dismissing what is already dismissed: hiding the widget deactivates it, which brings the
+    /// question back a moment later, and answering yes twice would hide what is hidden and, on a
+    /// first run, say where it went in a second balloon. Hidden is the state that hiding produces.
+    /// A window that has never been shown is Collapsed instead, which passes - reachable in a test,
+    /// never in use, since a window that was never activated is never deactivated either.
+    /// </para>
+    /// </summary>
+    public void DismissIfFocusLeftTheApplication(bool focusStayedInTheApplication)
+    {
+        _dismiss.Stop();
+
+        if (_shuttingDown
+            || focusStayedInTheApplication
+            || Visibility == Visibility.Hidden
+            || _settings.Current.AlwaysOnTop)
+        {
+            return;
+        }
+
+        // The settings window first: it is owned by the widget, and hiding an owner leaves an owned
+        // window on screen as the only thing left of an application that has just gone away.
+        _settingsWindow?.Close();
+        HideToTray();
+    }
+
+    /// <summary>
+    /// Whether the window now holding the foreground belongs to this application. Asked by process
+    /// rather than by comparing against the windows this class knows about, because not every
+    /// window that can take the focus is one of them: a context menu and a tooltip are each their
+    /// own top-level window, and the tray menu is opened by this widget on purpose.
+    /// </summary>
+    private static bool ForegroundBelongsToThisApplication()
+    {
+        IntPtr foreground = GetForegroundWindow();
+
+        if (foreground == IntPtr.Zero)
+        {
+            // Nothing holds the foreground at all - true mid-switch, and while the session is
+            // locked. Read as ours, so the widget is never dismissed by an absence of focus rather
+            // than by a click that landed somewhere else.
+            return true;
+        }
+
+        _ = GetWindowThreadProcessId(foreground, out uint process);
+        return process == (uint)Environment.ProcessId;
+    }
+
     private void ShowFromTray()
     {
+        // The click that reached the icon gave the foreground to the shell, which deactivated the
+        // widget - so there may be a dismissal pending against the very action asking for it.
+        _dismiss.Stop();
+
         Show();
         WindowState = WindowState.Normal;
         Activate();
@@ -398,4 +499,10 @@ public partial class WidgetWindow : Window
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 }

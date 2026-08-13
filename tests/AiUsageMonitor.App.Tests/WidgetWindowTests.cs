@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using System.Reflection;
 using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.App.Notifications;
@@ -173,6 +174,122 @@ public class WidgetWindowTests(WpfFixture wpf)
         Assert.Equal("True", pinned.Value.ToString());
         Assert.Equal("", Content(pinned.Setters));
     });
+
+    /// <summary>
+    /// The widget is dismissed by the focus leaving the application, not by it leaving the widget:
+    /// its own settings window, its tray menu and its tooltips are all places the focus is allowed
+    /// to go.
+    /// </summary>
+    [Fact]
+    public void FocusLandingOutsideTheApplicationDismissesTheWidget() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+        window.DismissIfFocusLeftTheApplication(focusStayedInTheApplication: false);
+
+        Assert.Equal(Visibility.Hidden, window.Visibility);
+
+        model.Dispose();
+    });
+
+    [Fact]
+    public void FocusMovingBetweenTheApplicationsOwnWindowsLeavesTheWidgetAlone() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+        window.DismissIfFocusLeftTheApplication(focusStayedInTheApplication: true);
+
+        Assert.NotEqual(Visibility.Hidden, window.Visibility);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// The pin's second job, and the one the dismissal would otherwise make impossible: a widget
+    /// kept above other windows is being watched while another window is worked in.
+    /// </summary>
+    [Fact]
+    public void APinnedWidgetStaysWhereItIsWhenTheFocusLeaves() => wpf.Invoke(() =>
+    {
+        AppSettings pinned = AppSettings.Default with { AlwaysOnTop = true };
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, pinned);
+        SettingsService settings = Settings(pinned);
+
+        WidgetWindow window = new(model, settings);
+        window.DismissIfFocusLeftTheApplication(focusStayedInTheApplication: false);
+
+        Assert.NotEqual(Visibility.Hidden, window.Visibility);
+
+        // Unpinning is enough to make it dismissable again - the rule reads the setting each time
+        // rather than caching what it was when the window was built.
+        settings.Update(s => s with { AlwaysOnTop = false });
+        window.DismissIfFocusLeftTheApplication(focusStayedInTheApplication: false);
+
+        Assert.Equal(Visibility.Hidden, window.Visibility);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// Hiding the widget deactivates it, which brings the question back a moment later. Answering
+    /// it twice would, on a first run, say where the widget went in a second balloon - so the
+    /// evidence here is the flag that records the balloon, not the visibility that both share.
+    /// </summary>
+    [Fact]
+    public void AWidgetAlreadyHiddenIsNotDismissedTwice() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+
+        WidgetWindow window = new(model, settings) { Visibility = Visibility.Hidden };
+        window.DismissIfFocusLeftTheApplication(focusStayedInTheApplication: false);
+
+        Assert.False(settings.Current.TrayHintShown);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// The wiring between losing the focus and answering for it. The delay is the point: the focus
+    /// can come back to this application a moment after it leaves - a click on the notification
+    /// area icon reaches the shell before it reaches the widget - so an activation that arrives
+    /// while the timer is running has to call the whole thing off.
+    /// </summary>
+    [Fact]
+    public void LosingTheFocusArmsTheDismissalAndRegainingItCallsItOff() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+        DispatcherTimer dismiss = (DispatcherTimer)typeof(WidgetWindow)
+            .GetField("_dismiss", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(window)!;
+
+        Assert.False(dismiss.IsEnabled);
+
+        Raise(window, "OnDeactivated");
+        Assert.True(dismiss.IsEnabled);
+
+        Raise(window, "OnActivated");
+        Assert.False(dismiss.IsEnabled);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// Window raises activation through protected virtual methods rather than through anything a
+    /// caller can invoke, so this is how a test reaches the override under test.
+    /// </summary>
+    private static void Raise(Window window, string method) => typeof(Window)
+        .GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic, [typeof(EventArgs)])!
+        .Invoke(window, [EventArgs.Empty]);
 
     [Fact]
     public void TheTitleBarIconsUseAFontThatFallsBackOnOlderWindows() => wpf.Invoke(() =>
