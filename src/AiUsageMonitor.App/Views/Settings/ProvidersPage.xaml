@@ -18,8 +18,10 @@
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
                 <CheckBox Grid.Column="1" Style="{StaticResource SettingsCheckBoxStyle}" Content="Show" IsChecked="{Binding IsVisible, Mode=TwoWay}" AutomationProperties.Name="{Binding DisplayName, StringFormat=Show {0}}" />
-                <Button Grid.Column="2" Style="{StaticResource SettingsActionButtonStyle}" Content="Move up" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" AutomationProperties.Name="{Binding DisplayName, StringFormat=Move {0} up}" />
-                <Button Grid.Column="3" Style="{StaticResource SettingsActionButtonStyle}" Content="Move down" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" AutomationProperties.Name="{Binding DisplayName, StringFormat=Move {0} down}" />
+                <!-- The two reorder buttons are link-styled, so nothing but this margin separates
+                     them: without it they render as one run of text reading "Move upMove down". -->
+                <Button Grid.Column="2" Margin="16,0,0,0" Style="{StaticResource SettingsActionButtonStyle}" Content="Move up" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" AutomationProperties.Name="{Binding DisplayName, StringFormat=Move {0} up}" />
+                <Button Grid.Column="3" Margin="16,0,0,0" Style="{StaticResource SettingsActionButtonStyle}" Content="Move down" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" AutomationProperties.Name="{Binding DisplayName, StringFormat=Move {0} down}" />
               </Grid>
               <TextBlock Text="Check this provider every" Foreground="{DynamicResource TextTertiaryBrush}">
                 <TextBlock.Style>
