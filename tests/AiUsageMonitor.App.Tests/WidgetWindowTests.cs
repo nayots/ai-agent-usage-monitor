@@ -465,4 +465,130 @@ public class WidgetWindowTests(WpfFixture wpf)
 
         model.Dispose();
     });
+
+    private static DispatcherTimer TickTimer(WidgetWindow window) =>
+        (DispatcherTimer)typeof(WidgetWindow)
+            .GetField("_tick", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(window)!;
+
+    private static object? MiniField(WidgetWindow window) =>
+        typeof(WidgetWindow)
+            .GetField("_mini", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(window);
+
+    [Fact]
+    public void EnteringMiniModeReplacesTheWidgetRatherThanJoiningIt() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        WidgetWindow window = new(model, settings);
+
+        window.EnterMiniMode();
+
+        Assert.True(settings.Current.MiniMode);
+        Assert.NotEqual(Visibility.Visible, window.Visibility);
+        Assert.NotNull(MiniField(window));
+
+        window.LeaveMiniMode();
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// The strip is the always-visible window, so the tick that drives countdowns and the tray
+    /// glyph has to run at the visible rate while it is up - even though the widget is hidden.
+    /// </summary>
+    [Fact]
+    public void TheTickStaysAtTheVisibleRateWhileTheStripIsUp() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+
+        window.EnterMiniMode();
+
+        Assert.Equal(TickCadence.Visible, TickTimer(window).Interval);
+
+        window.LeaveMiniMode();
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// LeaveMiniMode is called by ShowFromTray, which every entry point funnels through. Nulling
+    /// the field before closing the strip is what stops that from recursing.
+    /// </summary>
+    [Fact]
+    public void ShowingTheWidgetLeavesMiniModeWithoutRecursing() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        WidgetWindow window = new(model, settings);
+        window.EnterMiniMode();
+
+        settings.Update(s => s with { MiniMode = false });
+
+        Assert.Null(MiniField(window));
+        Assert.False(settings.Current.MiniMode);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// The balloon exists to explain a window that vanished. Nothing vanishes on the way into mini
+    /// mode, and the hint is shown once ever - too scarce to spend on a visible window.
+    /// </summary>
+    [Fact]
+    public void EnteringMiniModeDoesNotSpendTheTrayHint() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        WidgetWindow window = new(model, settings);
+
+        window.EnterMiniMode();
+        window.HideToTray();
+
+        Assert.False(settings.Current.TrayHintShown);
+
+        window.LeaveMiniMode();
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// Toggling the setting alone must move the mode, because that is the only path the settings
+    /// window's checkbox has.
+    /// </summary>
+    [Fact]
+    public void TheSettingAloneEntersAndLeavesTheMode() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        WidgetWindow window = new(model, settings);
+
+        settings.Update(s => s with { MiniMode = true });
+        Assert.NotNull(MiniField(window));
+
+        settings.Update(s => s with { MiniMode = false });
+        Assert.Null(MiniField(window));
+
+        model.Dispose();
+    });
+
+    [Fact]
+    public void TheTrayMenuOffersMiniModeBetweenSettingsAndDiagnostics() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+
+        ContextMenu menu = Assert.IsType<ContextMenu>(window.Resources["TrayMenu"]);
+        string[] headers = [.. menu.Items.OfType<MenuItem>().Select(item => (string)item.Header)];
+
+        Assert.Equal(["Open", "Refresh all providers", "Settings", "Mini mode", "Diagnostics", "Exit"], headers);
+        Assert.True(menu.Items.OfType<MenuItem>().Single(item => (string)item.Header == "Mini mode").IsCheckable);
+
+        model.Dispose();
+    });
 }

@@ -32,6 +32,7 @@ public partial class WidgetWindow : Window
     private readonly StartupReport _startup;
     private SettingsWindow? _settingsWindow;
     private DiagnosticsWindow? _diagnosticsWindow;
+    private MiniWindow? _mini;
     private readonly DispatcherTimer _tick = new() { Interval = TickCadence.Visible };
     private readonly DispatcherTimer _poll = new();
 
@@ -142,6 +143,13 @@ public partial class WidgetWindow : Window
         _tick.Start();
         _poll.Start();
         _ = _model.RefreshAsync(force: true);
+
+        // Last, so the widget is fully constructed before it is hidden again. Restoring mini mode
+        // must not leave the widget on screen beside the strip.
+        if (_settings.Current.MiniMode)
+        {
+            EnterMiniMode();
+        }
     }
 
     protected override void OnClosed(EventArgs e)
@@ -149,6 +157,12 @@ public partial class WidgetWindow : Window
         _tick.Stop();
         _poll.Stop();
         _dismiss.Stop();
+
+        // Before the tray icon goes, and before anything else can fail: the strip is a separate
+        // top-level window, so one left behind would outlive the application that owns it.
+        MiniWindow? strip = _mini;
+        _mini = null;
+        strip?.Close();
 
         if (_foregroundHookHandle != IntPtr.Zero)
         {
@@ -305,6 +319,17 @@ public partial class WidgetWindow : Window
     {
         Topmost = settings.AlwaysOnTop;
         ApplyCadence(settings);
+
+        // Reconciled from the setting rather than driven from the control that changed it, so the
+        // settings window's checkbox and the tray menu item need no code path of their own.
+        if (settings.MiniMode && _mini is null)
+        {
+            EnterMiniMode();
+        }
+        else if (!settings.MiniMode && _mini is not null)
+        {
+            ShowFromTray();
+        }
 
         _theme?.Apply(settings.Theme);
         _model.ApplySettings(settings);
@@ -515,12 +540,23 @@ public partial class WidgetWindow : Window
             return;
         }
 
+        // Set as the menu opens rather than kept in step from elsewhere: the mode can change from
+        // the settings window or from a click on the strip, and a tick that lied about which mode
+        // you were in would be worse than no tick at all.
+        if (MiniModeMenuItem(menu) is MenuItem item)
+        {
+            item.IsChecked = _settings.Current.MiniMode;
+        }
+
         menu.PlacementTarget = this;
         menu.Placement = PlacementMode.MousePoint;
         menu.StaysOpen = false;
         SetForegroundWindow(new WindowInteropHelper(this).Handle);
         menu.IsOpen = true;
     }
+
+    private static MenuItem? MiniModeMenuItem(ContextMenu menu) =>
+        menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsCheckable);
 
     /// <summary>
     /// The widget is a glance, not a workspace: once the focus leaves this application entirely,
@@ -642,6 +678,11 @@ public partial class WidgetWindow : Window
 
     private void ShowFromTray()
     {
+        // The strip and the widget are never on screen together, and this is the one line that
+        // makes that true everywhere: the tray's Open and Settings, the global hotkey and the
+        // single-instance broadcast all arrive here.
+        LeaveMiniMode();
+
         // The click that reached the icon gave the foreground to the shell, which deactivated the
         // widget - so there may be a dismissal pending against the very action asking for it.
         _dismiss.Stop();
@@ -653,9 +694,63 @@ public partial class WidgetWindow : Window
 
         // Hidden-to-tray is the primary operating mode: provider polling continues at full rate so
         // the glyph and quota notifications remain current. Only unseen presentation work slows.
-        _tick.Interval = TickCadence.For(isVisible: true);
+        UpdateTickCadence();
         OnTick(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Replaces the widget with the edge-docked strip. The pair is mutually exclusive, so nothing
+    /// here has to decide which window owns the placement, the dismissal timer or the cadence.
+    /// </summary>
+    public void EnterMiniMode()
+    {
+        if (_mini is not null)
+        {
+            return;
+        }
+
+        _settings.Update(s => s with { MiniMode = true });
+
+        // Hide(), not HideToTray(): the balloon exists to explain a window that vanished, and this
+        // one has not vanished - it is on the screen edge, which is where the user just sent it.
+        Hide();
+        _dismiss.Stop();
+
+        _mini = new MiniWindow(_model, _settings);
+        _mini.ExpandRequested += (_, _) => ShowFromTray();
+        _mini.ContextMenuRequested += OnTrayContextMenuRequested;
+        _mini.Show();
+
+        UpdateTickCadence();
+    }
+
+    /// <summary>
+    /// Closes the strip. Deliberately does not show the widget: <see cref="ShowFromTray"/> calls
+    /// this, so doing so here would recurse. The field is nulled before the close so a Closed
+    /// handler cannot find a strip that is on its way out.
+    /// </summary>
+    public void LeaveMiniMode()
+    {
+        if (_mini is null)
+        {
+            return;
+        }
+
+        MiniWindow strip = _mini;
+        _mini = null;
+        strip.Close();
+
+        _settings.Update(s => s with { MiniMode = false });
+        UpdateTickCadence();
+    }
+
+    /// <summary>
+    /// The tick drives countdown strings and the tray glyph, so it runs at the visible rate when
+    /// <em>either</em> window is on screen. A strip re-reading its countdowns once every five
+    /// seconds is visibly wrong, and the strip is the window that is always visible.
+    /// </summary>
+    private void UpdateTickCadence() =>
+        _tick.Interval = TickCadence.For(Visibility == Visibility.Visible || _mini is not null);
 
     /// <summary>
     /// Hiding, not closing. The process keeps polling, so the tray icon can go on saying something
@@ -668,9 +763,11 @@ public partial class WidgetWindow : Window
 
         // The tray glyph and quota notifications are fed by polling, so their cadence is untouched;
         // a five-second lag on countdown strings nobody can see costs nothing.
-        _tick.Interval = TickCadence.For(isVisible: false);
+        UpdateTickCadence();
 
-        if (!_settings.Current.TrayHintShown)
+        // Nothing has gone missing while the strip is up, so nothing needs explaining - and the
+        // hint is shown once ever, which is too scarce to spend on a window that is still visible.
+        if (_mini is null && !_settings.Current.TrayHintShown)
         {
             _tray?.Notify("Quota Monitor", "Still running in the notification area. Click the icon to bring it back.", silent: true);
             _settings.Update(s => s with { TrayHintShown = true });
@@ -702,6 +799,26 @@ public partial class WidgetWindow : Window
     {
         ShowFromTray();
         ShowDiagnostics();
+    }
+
+    /// <summary>
+    /// Reads the item's own new state rather than negating the setting, so the tick the user just
+    /// saw and the mode they end up in are the same answer.
+    /// </summary>
+    private void TrayMini_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem item)
+        {
+            return;
+        }
+
+        if (item.IsChecked)
+        {
+            EnterMiniMode();
+            return;
+        }
+
+        ShowFromTray();
     }
 
     private void TrayExit_Click(object sender, RoutedEventArgs e) => ExitApplication();

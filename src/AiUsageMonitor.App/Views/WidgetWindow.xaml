@@ -15,6 +15,9 @@
       <MenuItem Header="Open" Click="TrayOpen_Click" />
       <MenuItem Header="Refresh all providers" Click="TrayRefresh_Click" />
       <MenuItem Header="Settings" Click="TraySettings_Click" />
+      <!-- The only checkable item, which is how the code-behind finds it: x:Name inside a resource
+           dictionary generates no field to reach it by. -->
+      <MenuItem Header="Mini mode" IsCheckable="True" Click="TrayMini_Click" />
       <MenuItem Header="Diagnostics" Click="TrayDiagnostics_Click" />
       <Separator />
       <MenuItem Header="Exit" Click="TrayExit_Click" />
