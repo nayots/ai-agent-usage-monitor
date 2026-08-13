@@ -117,9 +117,9 @@ public sealed class TrayGlyphState
 
     /// <summary>
     /// Rounded exactly as the card rounds it, so the glyph and the row never disagree by a point.
-    /// Three characters do not fit in sixteen pixels and are dropped rather than abbreviated: at
-    /// 100 the bar is already full and the alert triangle is already up, and below that - a 99.6
-    /// that rounds to 100 - no number at all beats one that claims a limit the user has not hit.
+    /// A reading at or beyond the limit says 100: the renderer compresses its three digits to fit,
+    /// and the glyph should distinguish exhausted from missing data. A reading below 100 that
+    /// rounds to 100 instead says 99, so it never claims a limit the user has not hit.
     /// </summary>
     private static string? DigitsFor(double? highest)
     {
@@ -128,7 +128,12 @@ public sealed class TrayGlyphState
             return null;
         }
 
+        if (top >= 100)
+        {
+            return "100";
+        }
+
         string rounded = Math.Round(top, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture);
-        return rounded.Length <= 2 ? rounded : null;
+        return rounded == "100" ? "99" : rounded.Length <= 2 ? rounded : null;
     }
 }

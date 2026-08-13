@@ -112,14 +112,25 @@ public class TrayGlyphStateTests
     }
 
     [Fact]
-    public void AThreeCharacterReadingIsDroppedRatherThanSquashedIntoSixteenPixels()
+    public void AReadingAtTheLimitShowsOneHundredAndKeepsTheAlertOverlay()
     {
         TrayGlyphState state = TrayGlyphState.From([Connected("Claude Code", 100, 12)]);
 
-        Assert.Null(state.Digits);
+        Assert.Equal("100", state.Digits);
         Assert.Equal(TrayOverlay.Alert, state.Overlay);
         Assert.Equal(QuotaBarFill.Exhausted, state.Bars[0].Fill);
     }
+
+    [Theory]
+    [InlineData(0, "0")]
+    [InlineData(7.4, "7")]
+    [InlineData(83.5, "84")]
+    [InlineData(100.0001, "100")]
+    [InlineData(120, "100")]
+    [InlineData(99.6, "99")]
+    [InlineData(99.4, "99")]
+    public void GlyphDigitsAreHonestAtTheLimit(double used, string expected) =>
+        Assert.Equal(expected, TrayGlyphState.From([Connected("Claude Code", used)]).Digits);
 
     [Fact]
     public void AFailingProviderOutranksAnExhaustedWindow()

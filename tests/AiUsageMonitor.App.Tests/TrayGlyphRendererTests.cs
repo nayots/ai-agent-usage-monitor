@@ -100,6 +100,10 @@ public class TrayGlyphRendererTests(WpfFixture wpf)
         Assert.True(pair <= 16, $"'99' spanned {pair} columns of a 16 pixel icon");
     });
 
+    [Fact]
+    public void ThreeDigitLimitReadingRendersAtSixteenPixels() => wpf.Invoke(() =>
+        Assert.NotNull(TrayGlyphRenderer.RenderBitmap([], "100", false, TrayOverlay.Alert, 16, Palette)));
+
     /// <summary>
     /// The band above the bars is eight pixels at this size, and the number has to use it. Setting
     /// the em equal to the band - which reads as the obvious thing to do - inks only about seven
