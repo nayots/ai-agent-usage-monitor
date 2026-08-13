@@ -521,7 +521,7 @@ The application must provide:
 
 - **Expanded mode**, showing all available provider metadata and quota windows.
 - **Compact mode**, showing provider state, the most important visible quotas, remaining capacity, and reset countdowns.
-- **Settings window**, for configuration and diagnostics access.
+- **Settings window**, for configuration, and for diagnostics presented as categories within it.
 - **System tray integration**, allowing the widget to remain available without occupying taskbar space.
 
 The widget must support:
@@ -540,7 +540,7 @@ The system tray menu must provide:
 - Open or focus widget.
 - Refresh all providers.
 - Open settings.
-- Open diagnostics.
+- Open diagnostics. Both entries open the same settings window and differ only in the category it opens on.
 - Exit application.
 
 ### 18. Stale Data Presentation
@@ -574,12 +574,12 @@ The settings experience must support:
 - Whether unavailable providers remain visible.
 - Window position and size reset.
 - Re-run provider discovery.
-- Open diagnostics.
+- Reach diagnostics, as categories within the settings window rather than as a separate window.
 - Open local logs.
 - Restore backed-up provider configuration when the application has made an approved change.
 - Reset application settings without modifying provider configuration.
 
-The settings window must be tall enough to show every setting it offers at once, on any screen with the room for it. It sizes itself to its content, capped by the work area of the screen it opens on and kept inside that screen; scrolling is the fallback for a screen too short to hold the content, not the normal case.
+The settings window must present its settings as categories, each reachable in one click from a sidebar that is always visible, with one category on screen at a time. It opens at a deliberate default size rather than sizing itself to its content, is resizable, remembers the size the user chose, and is capped by and kept inside the work area of the screen it opens on. Only the pane showing the selected category scrolls.
 
 Settings must clearly distinguish application-owned settings from provider-owned settings.
 
@@ -606,6 +606,8 @@ For each provider, diagnostics must show:
 - Whether a first-party network call was made to obtain the current data, where applicable.
 - The most recent safe error code or error message.
 - A copyable diagnostic summary with secrets removed.
+
+Diagnostics must be presented one provider per category, alongside a category for the application itself, within the settings window. The copyable summary remains whole-application and remains redacted regardless of which category is on screen.
 
 Application diagnostics must show:
 

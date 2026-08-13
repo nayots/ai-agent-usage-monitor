@@ -1037,27 +1037,40 @@ and change the final `model.Dispose();` to `shell.Dispose();`. For quiet hours, 
     /// <summary>
     /// The copy button is the shell's, not the page's, so that it can be offered on every
     /// diagnostics page while the logs folder stays on the one page it belongs to.
+    /// <para>
+    /// Asserted on <c>Visibility</c>, not on presence in the visual tree: the footer is always in
+    /// the tree and collapses, so a <c>DoesNotContain</c> over descendants can never fail however
+    /// wrong the markup is. Not on <c>IsVisible</c> either - that is false for every element in a
+    /// tree which has only been measured and arranged and never shown, so it would pass for the
+    /// wrong reason. The <c>Visibility</c> property is what the DataTriggers actually set.
+    /// </para>
     /// </summary>
     [Fact]
     public void TheLogsFolderIsOfferedOnTheApplicationPageAndNoOther() => wpf.Invoke(() =>
     {
         FrameworkElement provider = SettingsContent("Claude Code");
-        Assert.Contains(Descendants(provider).OfType<Button>(), button => AutomationProperties.GetName(button) == "Copy all diagnostics");
-        Assert.DoesNotContain(Descendants(provider).OfType<Button>(), button => AutomationProperties.GetName(button) == "Open logs folder");
+        Assert.Equal(Visibility.Visible, DiagnosticsActions(provider).Visibility);
+        Assert.Equal(Visibility.Visible, ActionButton(provider, "Copy all diagnostics").Visibility);
+        Assert.Equal(Visibility.Collapsed, ActionButton(provider, "Open logs folder").Visibility);
 
         FrameworkElement application = SettingsContent("Application");
-        Assert.Contains(Descendants(application).OfType<Button>(), button => AutomationProperties.GetName(button) == "Copy all diagnostics");
-        Assert.Contains(Descendants(application).OfType<Button>(), button => AutomationProperties.GetName(button) == "Open logs folder");
+        Assert.Equal(Visibility.Visible, DiagnosticsActions(application).Visibility);
+        Assert.Equal(Visibility.Visible, ActionButton(application, "Copy all diagnostics").Visibility);
+        Assert.Equal(Visibility.Visible, ActionButton(application, "Open logs folder").Visibility);
     });
 
     [Fact]
     public void ASettingsPageOffersNeitherOfTheDiagnosticsActions() => wpf.Invoke(() =>
     {
-        FrameworkElement content = SettingsContent();
-
-        Assert.DoesNotContain(Descendants(content).OfType<Button>(), button => AutomationProperties.GetName(button) == "Copy all diagnostics");
-        Assert.DoesNotContain(Descendants(content).OfType<Button>(), button => AutomationProperties.GetName(button) == "Open logs folder");
+        Assert.Equal(Visibility.Collapsed, DiagnosticsActions(SettingsContent()).Visibility);
     });
+
+    /// <summary>The shell's diagnostics footer, which is present on every page and collapses.</summary>
+    private static FrameworkElement DiagnosticsActions(FrameworkElement content) =>
+        Descendants(content).OfType<FrameworkElement>().First(element => element.Name == "DiagnosticsActions");
+
+    private static Button ActionButton(FrameworkElement content, string automationName) =>
+        Descendants(content).OfType<Button>().First(button => AutomationProperties.GetName(button) == automationName);
 
     [Fact]
     public void ARememberedSizeTooBigForTheScreenIsCutDownToIt() => wpf.Invoke(() =>
