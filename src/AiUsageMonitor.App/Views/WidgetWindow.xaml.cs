@@ -173,7 +173,7 @@ public partial class WidgetWindow : Window
             return;
         }
 
-        foreach (UsageAlert alert in alerts)
+        foreach (UsageAlert alert in AlertBatch.Coalesce(alerts))
         {
             _tray?.Notify(alert.Title, alert.Text, alert.IsSilent);
         }
