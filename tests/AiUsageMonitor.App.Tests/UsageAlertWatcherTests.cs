@@ -128,6 +128,22 @@ public class UsageAlertWatcherTests
         Assert.Equal(new UsageAlert(UsageAlertKind.ProviderRecovered, "Claude Code is reporting usage again", "The numbers on the card are current."), Assert.Single(watcher.Observe([card])));
     }
 
+    [Fact]
+    public void AUserHiddenProviderDoesNotRaiseHealthOrQuotaAlerts()
+    {
+        UsageAlertWatcher watcher = new();
+        ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 79));
+        watcher.Observe([card]);
+        card.IsHiddenByUser = true;
+        card.Apply(Snapshot(ConnectionState.Error), Now, Policy);
+
+        Assert.Empty(watcher.Observe([card]));
+
+        card.Apply(Connected("five-hour", "5-hour", 81), Now, Policy);
+
+        Assert.Empty(watcher.Observe([card]));
+    }
+
     [Theory]
     [InlineData(ConnectionState.Discovering)]
     [InlineData(ConnectionState.Waiting)]

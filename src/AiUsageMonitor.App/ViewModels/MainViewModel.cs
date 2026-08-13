@@ -16,6 +16,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly ProviderRefreshService _refresh;
     private readonly Func<DateTimeOffset> _clock;
     private readonly Action<Action> _dispatch;
+    private readonly IReadOnlyList<ProviderDescriptor> _providers;
     private FreshnessPolicy _freshness;
     private readonly Dictionary<ProviderDescriptor, ProviderCardViewModel> _cards = [];
     private readonly CancellationTokenSource _lifetime = new();
@@ -35,16 +36,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Action<Action>? dispatch = null)
     {
         _refresh = refresh;
+        _providers = providers;
         _clock = clock;
         _dispatch = dispatch ?? (action => action());
         _freshness = new FreshnessPolicy(settings.StaleAfter);
         _isCompact = settings.Density == WidgetDensity.Compact;
 
-        foreach (ProviderDescriptor provider in providers)
+        foreach (ProviderDescriptor provider in ProviderOrdering.Apply(_providers, settings.ProviderOrder))
         {
             ProviderCardViewModel card = new(provider, settings.ColorBarsByUsage, RetryOne)
             {
                 ShowWhenUnavailable = settings.ShowUnavailableProviders,
+                IsHiddenByUser = settings.IsProviderHidden(provider.Key),
                 IsCompact = _isCompact
             };
             _cards[provider] = card;
@@ -90,6 +93,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             card.ColorBarsByUsage = settings.ColorBarsByUsage;
             card.ShowWhenUnavailable = settings.ShowUnavailableProviders;
             card.IsCompact = IsCompact;
+        }
+
+        foreach (ProviderDescriptor provider in _cards.Keys)
+        {
+            _cards[provider].IsHiddenByUser = settings.IsProviderHidden(provider.Key);
+        }
+
+        IReadOnlyList<ProviderDescriptor> orderedProviders = ProviderOrdering.Apply(_providers, settings.ProviderOrder);
+        for (int targetIndex = 0; targetIndex < orderedProviders.Count; targetIndex++)
+        {
+            ProviderCardViewModel card = _cards[orderedProviders[targetIndex]];
+            int currentIndex = Providers.IndexOf(card);
+            if (currentIndex != targetIndex)
+            {
+                Providers.Move(currentIndex, targetIndex);
+            }
         }
 
         Tick();

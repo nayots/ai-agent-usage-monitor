@@ -104,6 +104,19 @@ public class DiagnosticsViewModelTests
         Assert.Equal("Unavailable", Value(viewModel.Sections[0], "Last error"));
     }
 
+    [Fact]
+    public void AUserHiddenProviderExplainsThatItsNextAttemptIsNotScheduled()
+    {
+        TestProbe probe = new("Provider", MechanismTier.Official);
+        ProviderDescriptor descriptor = new("provider", "Provider", "P", probe);
+        ProviderCardViewModel card = Card(descriptor);
+        card.IsHiddenByUser = true;
+
+        DiagnosticSection section = ViewModel([card], [descriptor]).Sections[0];
+
+        Assert.Equal("Not scheduled — hidden by the user", Value(section, "Next attempt"));
+    }
+
     private static DiagnosticsViewModel ViewModel(
         IReadOnlyList<ProviderCardViewModel> cards,
         IReadOnlyList<ProviderDescriptor> providers,

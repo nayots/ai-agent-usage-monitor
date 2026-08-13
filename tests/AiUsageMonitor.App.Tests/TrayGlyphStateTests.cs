@@ -157,6 +157,18 @@ public class TrayGlyphStateTests
     }
 
     [Fact]
+    public void AProviderHiddenByTheUserContributesNoBarsOrDigitsToTheGlyph()
+    {
+        ProviderCardViewModel hidden = Connected("Codex", 55);
+        hidden.IsHiddenByUser = true;
+
+        TrayGlyphState state = TrayGlyphState.From([hidden]);
+
+        Assert.Empty(state.Bars);
+        Assert.Null(state.Digits);
+    }
+
+    [Fact]
     public void TheFirstBarOfEachLaterProviderStartsAGroupAndTheVeryFirstDoesNot()
     {
         TrayGlyphState state = TrayGlyphState.From([Connected("Claude Code", 10, 20), Connected("Codex", 30, 40)]);

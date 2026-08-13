@@ -135,7 +135,7 @@ public sealed class DiagnosticsViewModel : ObservableObject
             new("Capabilities", Capabilities(snapshot)),
             new("Last discovery", InstantAndAge(activity.LastAttemptStartedAt, now) ?? EmptyValue),
             new("Last successful refresh", InstantAndAge(activity.LastSuccessAt, now) ?? "Never"),
-            new("Next attempt", card?.IsHiddenByFilter == true
+            new("Next attempt", card?.IsHiddenByUser == true
                 ? "Not scheduled — hidden by the user"
                 : NextAttempt(activity.NextAttemptAt, now)),
             new("Consecutive failures", activity.ConsecutiveFailures.ToString(CultureInfo.InvariantCulture)),

@@ -13,6 +13,7 @@ public sealed class ProviderCardViewModel : ObservableObject
     private readonly ProviderDescriptor _descriptor;
     private bool _colorBarsByUsage;
     private bool _showWhenUnavailable = true;
+    private bool _isHiddenByUser;
     private bool _isCompact;
     private ProviderSnapshot? _snapshot;
     private IReadOnlyList<QuotaWindow> _rows = [];
@@ -83,11 +84,28 @@ public sealed class ProviderCardViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Only a provider that is absent from the machine can be hidden. An Error or Unavailable
-    /// provider is installed and not working, which is exactly the card the user needs to see.
+    /// The user hid this provider outright (PRD §28). Distinct from ShowWhenUnavailable, which hides
+    /// only providers that are absent from the machine; this hides one that is present and working.
+    /// </summary>
+    public bool IsHiddenByUser
+    {
+        get => _isHiddenByUser;
+        set
+        {
+            if (Set(ref _isHiddenByUser, value))
+            {
+                Raise(nameof(IsHiddenByFilter));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Only a provider that is absent from the machine can be hidden by availability. An Error or
+    /// Unavailable provider is installed and not working, which is exactly the card the user needs
+    /// to see.
     /// </summary>
     public bool IsHiddenByFilter =>
-        !ShowWhenUnavailable && State is ConnectionState.NotInstalled or ConnectionState.Unsupported;
+        IsHiddenByUser || (!ShowWhenUnavailable && State is ConnectionState.NotInstalled or ConnectionState.Unsupported);
 
     /// <summary>
     /// Compact density (PRD §17). Set by <see cref="MainViewModel"/> from the one setting, never

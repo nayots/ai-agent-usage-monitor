@@ -532,6 +532,20 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
+    public void AUserHiddenProviderIsFilteredEvenWhenItIsConnected()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(ConnectionState.Connected, retrievedAt: Now), Now, Policy);
+        List<string?> raised = [];
+        card.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        card.IsHiddenByUser = true;
+
+        Assert.True(card.IsHiddenByFilter);
+        Assert.Contains(nameof(ProviderCardViewModel.IsHiddenByFilter), raised);
+    }
+
+    [Fact]
     public void AConnectedCardDropsItsStatusLineOnlyWhenCompact()
     {
         ProviderCardViewModel card = Card();

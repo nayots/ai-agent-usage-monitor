@@ -36,10 +36,15 @@ public class MainViewModelTests
         ResetsAt: Now.AddMinutes(295), WindowDuration: TimeSpan.FromHours(5),
         Order: 0, IsPartial: false, Extra: new Dictionary<string, string>(), LabelIsProviderToken: false);
 
-    private static (MainViewModel Model, IReadOnlyList<ProviderDescriptor> Providers) Build(params ProviderDescriptor[] providers)
+    private static (MainViewModel Model, IReadOnlyList<ProviderDescriptor> Providers) Build(params ProviderDescriptor[] providers) =>
+        Build(AppSettings.Default, providers);
+
+    private static (MainViewModel Model, IReadOnlyList<ProviderDescriptor> Providers) Build(
+        AppSettings settings,
+        params ProviderDescriptor[] providers)
     {
         ProviderRefreshService service = new(providers, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
-        MainViewModel model = new(service, providers, AppSettings.Default, () => Now);
+        MainViewModel model = new(service, providers, settings, () => Now);
         return (model, providers);
     }
 
@@ -195,5 +200,41 @@ public class MainViewModelTests
         Assert.All(model.Providers, card => Assert.False(card.IsCompact));
 
         model.Dispose();
+    }
+
+    [Fact]
+    public void EmptySavedOrderRestoresRegistryOrderInPlaceWithoutRecreatingCards()
+    {
+        ProviderDescriptor claude = new("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, []));
+        ProviderDescriptor codex = new("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, []));
+        (MainViewModel model, _) = Build(AppSettings.Default with { ProviderOrder = ["codex", "claude-code"] }, claude, codex);
+        ProviderCardViewModel codexCard = model.Providers[0];
+        ProviderCardViewModel claudeCard = model.Providers[1];
+
+        model.ApplySettings(AppSettings.Default);
+
+        Assert.Equal(["Claude Code", "Codex"], model.Providers.Select(card => card.DisplayName));
+        Assert.Same(claudeCard, model.Providers[0]);
+        Assert.Same(codexCard, model.Providers[1]);
+    }
+
+    [Fact]
+    public void HidingAndUnhidingAConnectedProviderChangesTheFooterWithoutRecreatingIt()
+    {
+        ProviderDescriptor claude = new("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, []));
+        ProviderDescriptor codex = new("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, []));
+        (MainViewModel model, _) = Build(claude, codex);
+        ProviderCardViewModel codexCard = model.Providers[1];
+
+        model.ApplySettings(AppSettings.Default with { HiddenProviders = ["codex"] });
+
+        Assert.Equal("1 provider", model.FooterText);
+        Assert.True(codexCard.IsHiddenByFilter);
+
+        model.ApplySettings(AppSettings.Default);
+
+        Assert.Equal("2 providers", model.FooterText);
+        Assert.Same(codexCard, model.Providers[1]);
+        Assert.False(codexCard.IsHiddenByFilter);
     }
 }

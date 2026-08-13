@@ -20,6 +20,11 @@ public sealed class UsageAlertWatcher
 
         foreach (ProviderCardViewModel provider in providers)
         {
+            if (provider.IsHiddenByFilter)
+            {
+                continue;
+            }
+
             ObserveProviderHealth(provider, alerts);
 
             // Stale data can still establish that a provider is working, but must never move a
