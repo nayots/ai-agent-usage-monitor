@@ -322,6 +322,7 @@ public partial class WidgetWindow : Window
             recheckProviders: () => _ = _model.RefreshAsync(force: true),
             openLogs: OpenLogsFolder,
             openDiagnostics: ShowDiagnostics,
+            providers: _providers,
             globalHotkeyUnavailable: _globalHotkeyUnavailable);
 
         _settingsWindow = new SettingsWindow(model) { Owner = this };

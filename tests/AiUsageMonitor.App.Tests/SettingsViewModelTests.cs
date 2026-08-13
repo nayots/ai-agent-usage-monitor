@@ -1,6 +1,8 @@
 using System.IO;
 using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.App.ViewModels;
+using AiUsageMonitor.Domain;
+using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Settings;
 
 namespace AiUsageMonitor.App.Tests;
@@ -8,6 +10,20 @@ namespace AiUsageMonitor.App.Tests;
 public class SettingsViewModelTests
 {
     private const string ScratchKey = @"Software\AiUsageMonitor\tests\SettingsVm";
+
+    private sealed class SilentProbe(string name) : IProviderProbe
+    {
+        public string Name => name;
+        public string Mechanism => "fake";
+        public MechanismTier Tier => MechanismTier.Official;
+        public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    private static IReadOnlyList<ProviderDescriptor> Providers =>
+    [
+        new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
+        new ProviderDescriptor("codex", "Codex", "CX", new SilentProbe("Codex"))
+    ];
 
     private static SettingsViewModel Model(
         out SettingsService service,
@@ -23,6 +39,7 @@ public class SettingsViewModelTests
             recheckProviders: () => { },
             openLogs: () => { },
             openDiagnostics: () => { },
+            providers: Providers,
             globalHotkeyUnavailable: globalHotkeyUnavailable);
     }
 
@@ -199,7 +216,8 @@ public class SettingsViewModelTests
             resetPosition: () => reset++,
             recheckProviders: () => recheck++,
             openLogs: () => logs++,
-            openDiagnostics: () => diagnostics++);
+            openDiagnostics: () => diagnostics++,
+            providers: Providers);
 
         model.ResetPositionCommand.Execute(null);
         model.RecheckProvidersCommand.Execute(null);
@@ -237,7 +255,7 @@ public class SettingsViewModelTests
         string path = Path.Combine(Path.GetTempPath(), "aium-vm-" + Guid.NewGuid().ToString("N"), "settings.json");
         Directory.CreateDirectory(path);
         SettingsService service = new(new AppSettingsStore(path), AppSettings.Default);
-        SettingsViewModel model = new(service, new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null), () => { }, () => { }, () => { }, () => { });
+        SettingsViewModel model = new(service, new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null), () => { }, () => { }, () => { }, () => { }, Providers);
 
         model.ColorBarsByUsage = false;
 

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using AiUsageMonitor.App.Interop;
@@ -331,6 +332,20 @@ public class ViewLoadingTests(WpfFixture wpf)
         Assert.Contains(Texts(content), text => text.StartsWith("Pinning is on the widget's title bar", StringComparison.Ordinal));
     });
 
+    [Fact]
+    public void TheSettingsWindowLoadsProviderPreferences() => wpf.Invoke(() =>
+    {
+        FrameworkElement content = SettingsContent();
+
+        Assert.Contains("PROVIDERS", Texts(content));
+        Assert.Contains(
+            Descendants(content).OfType<CheckBox>(),
+            box => AutomationProperties.GetName(box) == "Show Claude Code");
+        Assert.Contains(
+            Descendants(content).OfType<Button>(),
+            button => AutomationProperties.GetName(button) == "Move Codex down");
+    });
+
     /// <summary>
     /// Everything this window offers fits in it, on any screen with the room. A settings window is
     /// short enough to read at a glance or it is not worth having, and it was not: a cap written
@@ -427,7 +442,12 @@ public class ViewLoadingTests(WpfFixture wpf)
             resetPosition: () => { },
             recheckProviders: () => { },
             openLogs: () => { },
-            openDiagnostics: () => { });
+            openDiagnostics: () => { },
+            providers:
+            [
+                new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
+                new ProviderDescriptor("codex", "Codex", "CX", new SilentProbe("Codex"))
+            ]);
     }
 
     private static ProviderCardViewModel Card(ConnectionState state, bool compact)

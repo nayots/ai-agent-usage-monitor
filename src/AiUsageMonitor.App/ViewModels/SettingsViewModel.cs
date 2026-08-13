@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AiUsageMonitor.App.Interop;
+using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Settings;
 
 namespace AiUsageMonitor.App.ViewModels;
@@ -16,6 +17,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private readonly SettingsService _settings;
     private readonly StartupRegistration _startup;
+    private readonly IReadOnlyList<ProviderDescriptor> _providers;
     private readonly bool _globalHotkeyUnavailable;
 
     public SettingsViewModel(
@@ -25,10 +27,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         Action recheckProviders,
         Action openLogs,
         Action openDiagnostics,
+        IReadOnlyList<ProviderDescriptor> providers,
         bool globalHotkeyUnavailable = false)
     {
         _settings = settings;
         _startup = startup;
+        _providers = providers;
         _globalHotkeyUnavailable = globalHotkeyUnavailable;
 
         Themes =
@@ -57,6 +61,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             settings.Current.StaleAfterSeconds,
             seconds => _settings.Update(s => s with { StaleAfterSeconds = seconds }),
             () => _settings.Current.StaleAfterSeconds);
+
+        foreach (ProviderDescriptor provider in ProviderOrdering.Apply(_providers, settings.Current.ProviderOrder))
+        {
+            ProviderPreferences.Add(new ProviderPreferenceViewModel(provider, _settings, MoveProvider));
+        }
+        UpdateProviderMoveAvailability();
 
         ResetPositionCommand = new RelayCommand(resetPosition);
         RecheckProvidersCommand = new RelayCommand(recheckProviders);
@@ -149,6 +159,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ChoiceViewModel> StaleThresholds { get; }
 
+    public ObservableCollection<ProviderPreferenceViewModel> ProviderPreferences { get; } = [];
+
+    public string ProviderPreferencesHintText => "Hidden providers are not polled, and do not appear in the notification-area icon.";
+
     public RelayCommand ResetPositionCommand { get; }
 
     public RelayCommand RecheckProvidersCommand { get; }
@@ -217,8 +231,53 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             choice.Refresh();
         }
+
+        RebuildProviderPreferences(settings);
+
+        foreach (ProviderPreferenceViewModel provider in ProviderPreferences)
+        {
+            provider.Refresh();
+        }
     }
 
     private void OnPersistenceStateChanged(object? sender, EventArgs e) =>
         Raise(nameof(HasPersistenceWarning));
+
+    private void MoveProvider(ProviderPreferenceViewModel provider, int offset)
+    {
+        int index = ProviderPreferences.IndexOf(provider);
+        int target = index + offset;
+        if (target < 0 || target >= ProviderPreferences.Count)
+        {
+            return;
+        }
+
+        ProviderPreferences.Move(index, target);
+        _settings.Update(settings => settings with { ProviderOrder = [.. ProviderPreferences.Select(preference => preference.Key)] });
+    }
+
+    private void RebuildProviderPreferences(AppSettings settings)
+    {
+        IReadOnlyList<ProviderDescriptor> ordered = ProviderOrdering.Apply(_providers, settings.ProviderOrder);
+        for (int target = 0; target < ordered.Count; target++)
+        {
+            ProviderPreferenceViewModel preference = ProviderPreferences.Single(item =>
+                StringComparer.OrdinalIgnoreCase.Equals(item.Key, ordered[target].Key));
+            int current = ProviderPreferences.IndexOf(preference);
+            if (current != target)
+            {
+                ProviderPreferences.Move(current, target);
+            }
+        }
+
+        UpdateProviderMoveAvailability();
+    }
+
+    private void UpdateProviderMoveAvailability()
+    {
+        for (int index = 0; index < ProviderPreferences.Count; index++)
+        {
+            ProviderPreferences[index].SetMoveAvailability(index > 0, index < ProviderPreferences.Count - 1);
+        }
+    }
 }
