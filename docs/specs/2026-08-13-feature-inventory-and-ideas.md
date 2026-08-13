@@ -162,7 +162,7 @@ Sized **S** (a sitting), **M** (a plan and a few tasks), **L** (its own incremen
 
 | # | Status | Proposal | Why | Size | PRD |
 |---|---|---|---|---|---|
-| C10 | ⬜ Open | **Diagnostics view.** Per provider: mechanism string, tier, executable path, version, last error, the probe's `Notes`, and an explicit statement of what is redacted. Plus a **copy redacted bundle** action. | Already required, and it is what makes an unofficial mechanism defensible when it breaks. The `Notes` lists are fully populated and read by nothing. | M | §20 |
+| C10 | ✅ Done | **Diagnostics view.** Per provider: mechanism string, tier, executable path, version, last error, the probe's `Notes`, and an explicit statement of what is redacted. Plus a **copy redacted bundle** action. | Already required, and it is what makes an unofficial mechanism defensible when it breaks. The `Notes` lists are fully populated and read by nothing. | M | §20 |
 | C11 | ❌ forecast; ⬜ history (as X14) | **Local history and burn rate.** Sample each window locally, then show a sparkline and the one derived number that changes behaviour: *at this rate you reach 100% at 16:40*. Local file, no transmission. | The highest-value thing available without any new provider mechanism. A quota widget that cannot say "you are burning this faster than usual" is only a gauge. | L | §28 |
 | C12 | ⬜ Open | **User-set thresholds.** Replace the fixed ladder with chosen ones — "tell me at 75 and 90, nothing else". | The ladder is a good default and a poor mandate; twelve rungs is a lot of balloons for a heavy user. | M | §28 |
 | C13 | ⬜ Open | **Quiet hours.** Suppress non-critical alerts on a schedule; `LimitReached` still lands. | Cheap, and the obvious complement to C12. | S | new |
@@ -308,7 +308,30 @@ where a merge changed what was delivered, the row says so.
 | C3's "poll less often when hidden" | ❌ **Rejected** | X21's argument, accepted: hidden-to-tray is the primary operating mode, and the tray glyph and quota notifications — the whole product in that mode — are fed by polling. §16.2 exists precisely because the widget spends most of its life hidden. The presentation tick slows; the data does not. |
 | C11's exhaustion forecast | ❌ **Rejected** | X22: PRD §16 forbids claiming when quota will run out. The history half survives as X14. Reopening needs a deliberate PRD change first. |
 
-### 4.4 Still open
+### 4.4 The §2.2 new features (2026-08-13, four increments)
+
+Six of the ten. Planned as `docs/plans/2026-08-13-diagnostics-view.md`,
+`-provider-preferences.md`, `-notification-control.md` and `-mini-mode.md`, delegated in that
+order because each later plan is written against the tree the earlier ones leave behind.
+
+| Idea | Verdict | Notes |
+|---|---|---|
+| C10 — diagnostics view | ✅ **Done** | `21c0507`, `c99cff0`, `be37249`, `6ece780`, `1cdc2eb`, `f359afb`, `9a1d84c`. Every PRD §20 field, per provider and for the application, reachable from the tray menu and from Settings. The copied bundle is redacted once over the finished text — `%USERPROFILE%` and `%USERNAME%` — so nothing added to it later can bypass the masking. `IProviderProbe` gained one stable mechanism fact, `MakesFirstPartyNetworkCall`, as a default interface member so the seven test stubs and the POC kept compiling. |
+| C12 + C13 — thresholds and quiet hours | ⬜ *planned* | `docs/plans/2026-08-13-notification-control.md`. |
+| C14 + C15 — provider order, visibility, per-provider interval | ⬜ *planned* | `docs/plans/2026-08-13-provider-preferences.md`. |
+| C19 — edge-docked mini mode | ⬜ *planned* | `docs/plans/2026-08-13-mini-mode.md`. |
+
+Four are deliberately not planned, and the reasons are not the same reason:
+
+- **C11** — the forecast half is already rejected in §4.3 on PRD §16; the surviving half is **X14**,
+  which lives in §3.2 rather than §2.2.
+- **C16** — *not viable*, verified rather than assumed: `gemini`, `copilot`, `cursor-agent`, `amp`
+  and `opencode` are all absent from this machine, so there is no mechanism to verify. This repo
+  does not ship a probe against an unverified mechanism.
+- **C17** — it *is* the release process, deferred explicitly.
+- **C18** — depends on C17's release feed **and** needs a deliberate §23 decision.
+
+### 4.5 Still open
 
 | Idea | Source | Verdict | Notes |
 |---|---|---|---|
