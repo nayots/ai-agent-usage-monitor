@@ -14,6 +14,7 @@ using AiUsageMonitor.Infrastructure.Logging;
 using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
 using AiUsageMonitor.Infrastructure.Theming;
+using Microsoft.Win32;
 
 namespace AiUsageMonitor.App.Views;
 
@@ -42,6 +43,7 @@ public partial class WidgetWindow : Window
     private IntPtr _foregroundHookHandle;
     private TrayGlyphState _glyph = TrayGlyphState.Empty;
     private ThemeVariant? _glyphVariant;
+    private bool _systemEventsSubscribed;
     private bool _shuttingDown;
 
     public WidgetWindow(MainViewModel model, SettingsService settings, ProviderRefreshService? refresh = null, ThemeManager? theme = null)
@@ -85,6 +87,19 @@ public partial class WidgetWindow : Window
         {
             _theme.Changed += OnThemeChanged;
         }
+
+        try
+        {
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            SystemEvents.SessionSwitch += OnSessionSwitch;
+            _systemEventsSubscribed = true;
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning("Unable to subscribe to system events ({0}); continuing without lifecycle refreshes.", ex.GetType().Name);
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
+        }
     }
 
     protected override void OnContentRendered(EventArgs e)
@@ -114,6 +129,13 @@ public partial class WidgetWindow : Window
         if (_theme is not null)
         {
             _theme.Changed -= OnThemeChanged;
+        }
+
+        if (_systemEventsSubscribed)
+        {
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
+            _systemEventsSubscribed = false;
         }
 
         _settings.Changed -= OnSettingsChanged;
@@ -204,6 +226,28 @@ public partial class WidgetWindow : Window
 
     private void OnThemeChanged(object? sender, EventArgs e) =>
         ApplyTitleBarTheme(new WindowInteropHelper(this).Handle);
+
+    private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Resume)
+        {
+            Dispatcher.BeginInvoke(ForceRefreshAfterSystemEvent);
+        }
+    }
+
+    private void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason == SessionSwitchReason.SessionUnlock)
+        {
+            Dispatcher.BeginInvoke(ForceRefreshAfterSystemEvent);
+        }
+    }
+
+    private void ForceRefreshAfterSystemEvent()
+    {
+        _ = _model.RefreshAsync(force: true);
+        OnTick(this, EventArgs.Empty);
+    }
 
     /// <summary>
     /// Everything a settings change reaches from here. The poll timer's interval is reassigned
