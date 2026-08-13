@@ -530,7 +530,7 @@ The widget must support:
 - Remembered position and size.
 - Multi-monitor configurations.
 - Windows display scaling and high-DPI monitors.
-- Optional always-on-top behavior.
+- Optional always-on-top behavior, offered as a pin on the title bar and nowhere else. It is session state, not a stored preference: the widget starts unpinned every time, because pinning answers what the user is doing now rather than how they want the widget to behave from here on. The settings window says where the pin lives so that removing it from there is not a disappearance.
 - Standard window focus and keyboard behavior.
 - Dismissal when the focus leaves the application: the widget's other windows close and the widget itself hides to the notification area, exactly as its close action does. Focus moving between the application's own windows — its settings window, its tray menu, its tooltips — is not a dismissal, and neither is the absence of a foreground window. A widget set to stay above other windows is exempt: that setting exists to keep it visible while another window is worked in, which a dismissal would defeat.
 - Safe placement recovery when a previous monitor configuration no longer exists.
@@ -564,7 +564,7 @@ Settings must be stored separately from provider configuration.
 The settings experience must support:
 
 - Start with Windows.
-- Always on top, which is also the exemption from the focus-loss dismissal in §17. This one is session state rather than a stored preference: the widget starts unpinned every time, because pinning answers what the user is doing now and not how they want the widget to behave from here on.
+- *(Always on top is deliberately not here. It is session state, offered by the title bar's pin — see §17.)*
 - Compact or expanded default mode.
 - Light, dark, or system theme.
 - Color bars by usage, on by default, bounded by §16.1.

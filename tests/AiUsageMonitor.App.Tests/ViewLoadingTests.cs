@@ -202,32 +202,55 @@ public class ViewLoadingTests(WpfFixture wpf)
 
         try
         {
-            string path = Path.Combine(Path.GetTempPath(), "aium-view-" + Guid.NewGuid().ToString("N"), "settings.json");
-            SettingsViewModel model = new(
-                new SettingsService(new AppSettingsStore(path), AppSettings.Default),
-                new StartupRegistration(@"Software\AiUsageMonitor\tests\ViewLoading", "AiUsageMonitorTest", null),
-                resetPosition: () => { },
-                recheckProviders: () => { },
-                openLogs: () => { });
-
-            SettingsWindow window = new(model);
-
             // Measured on the window's content, not the window. A WPF Window's own DesiredSize
             // stays zero until it has an HWND, so measuring the Window asserts nothing. Measuring
             // its content still forces every template to expand and every DynamicResource in this
             // palette to resolve, which is the whole point of the test.
-            FrameworkElement content = (FrameworkElement)window.Content;
-            content.Measure(new Size(380, 640));
-            content.Arrange(new Rect(0, 0, 380, 640));
-            content.UpdateLayout();
-
-            Assert.True(content.DesiredSize.Height > 0);
+            Assert.True(SettingsContent().DesiredSize.Height > 0);
         }
         finally
         {
             Application.Current.Resources.MergedDictionaries.Remove(dictionary);
         }
     });
+
+    /// <summary>
+    /// Pinning is offered by the title bar and nowhere else: it lasts only as long as the session,
+    /// and a settings window promises the opposite. Asserted against the rendered window rather
+    /// than against the markup, because a binding left behind for a property that no longer exists
+    /// fails silently - no exception and no warning, just a checkbox that does nothing.
+    /// </summary>
+    [Fact]
+    public void TheSettingsWindowOffersNoPinning() => wpf.Invoke(() =>
+    {
+        FrameworkElement content = SettingsContent();
+
+        Assert.DoesNotContain(
+            Descendants(content).OfType<CheckBox>(),
+            box => box.Content is string label && label.Contains("top", StringComparison.OrdinalIgnoreCase));
+
+        // Removing a control silently is its own failure: someone who goes looking for the setting
+        // has to be told where it went.
+        Assert.Contains(Texts(content), text => text.StartsWith("Pinning is on the widget's title bar", StringComparison.Ordinal));
+    });
+
+    private static FrameworkElement SettingsContent()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "aium-view-" + Guid.NewGuid().ToString("N"), "settings.json");
+        SettingsViewModel model = new(
+            new SettingsService(new AppSettingsStore(path), AppSettings.Default),
+            new StartupRegistration(@"Software\AiUsageMonitor\tests\ViewLoading", "AiUsageMonitorTest", null),
+            resetPosition: () => { },
+            recheckProviders: () => { },
+            openLogs: () => { });
+
+        SettingsWindow window = new(model);
+        FrameworkElement content = (FrameworkElement)window.Content;
+        content.Measure(new Size(380, 640));
+        content.Arrange(new Rect(0, 0, 380, 640));
+        content.UpdateLayout();
+        return content;
+    }
     private static ProviderCardViewModel Card(ConnectionState state, bool compact)
     {
         ProviderCardViewModel card = new(

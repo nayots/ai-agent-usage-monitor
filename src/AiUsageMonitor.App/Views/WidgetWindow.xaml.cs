@@ -38,6 +38,8 @@ public partial class WidgetWindow : Window
 
     private readonly UsageAlertWatcher _alerts = new();
     private TrayIcon? _tray;
+    private WinEventProc? _foregroundHook;
+    private IntPtr _foregroundHookHandle;
     private TrayGlyphState _glyph = TrayGlyphState.Empty;
     private ThemeVariant? _glyphVariant;
     private bool _shuttingDown;
@@ -77,6 +79,7 @@ public partial class WidgetWindow : Window
         _tray.Show();
 
         HwndSource.FromHwnd(handle)?.AddHook(OnWindowMessage);
+        WatchTheForeground();
 
         if (_theme is not null)
         {
@@ -98,6 +101,12 @@ public partial class WidgetWindow : Window
         _tick.Stop();
         _poll.Stop();
         _dismiss.Stop();
+
+        if (_foregroundHookHandle != IntPtr.Zero)
+        {
+            UnhookWinEvent(_foregroundHookHandle);
+            _foregroundHookHandle = IntPtr.Zero;
+        }
 
         // Named rather than a lambda so it can actually be detached. ThemeManager outlives this
         // window - it is a singleton owned by the application - so a subscription left behind
@@ -327,9 +336,46 @@ public partial class WidgetWindow : Window
     /// its windows go the same way the close button sends them - the settings window closed, the
     /// widget hidden to the notification area, the process still polling behind the icon.
     /// <para>
-    /// The pin is the exemption, and the reason it is the right one: a widget kept above other
-    /// windows is being watched while something else is worked in, which is exactly the situation
-    /// this rule would otherwise make impossible.
+    /// Watched at the session's foreground rather than only at this window's own activation,
+    /// because a window that was never activated is never deactivated either - and that state is
+    /// ordinary, not exotic. A widget shown while another application holds the focus, which is
+    /// what happens when it is launched from a terminal or shown from the tray without being
+    /// granted the foreground, appears without ever becoming active. Waiting for its deactivation
+    /// would leave that widget on screen through every click elsewhere: the exact complaint this
+    /// feature exists to answer.
+    /// </para>
+    /// <para>
+    /// Out of context, so nothing is injected into another process and no other application's
+    /// content is read. Only the fact that the foreground moved is taken from the event; which
+    /// window it moved to is read from the shell at the tick, on the one path that already
+    /// answers that question.
+    /// </para>
+    /// </summary>
+    private void WatchTheForeground()
+    {
+        // Held in a field. The callback is handed to unmanaged code, which the garbage collector
+        // cannot see: a delegate referenced only by the argument would be collected while the hook
+        // was still live, and the next foreground change in the session would call into freed
+        // memory. A zero handle just means the fallback below is all there is.
+        _foregroundHook = (_, _, _, _, _, _, _) => _dismiss.Start();
+        _foregroundHookHandle = SetWinEventHook(
+            EVENT_SYSTEM_FOREGROUND,
+            EVENT_SYSTEM_FOREGROUND,
+            IntPtr.Zero,
+            _foregroundHook,
+            idProcess: 0,
+            idThread: 0,
+            WINEVENT_OUTOFCONTEXT);
+    }
+
+    /// <summary>
+    /// The fallback, and the only path when the hook above could not be installed. Kept because it
+    /// costs two lines and covers the case the hook cannot: nothing else has to be true for a
+    /// window to know it has just lost the focus.
+    /// <para>
+    /// The pin is the exemption from all of it, and the reason it is the right one: a widget kept
+    /// above other windows is being watched while something else is worked in, which is exactly
+    /// the situation a dismissal would make impossible.
     /// </para>
     /// </summary>
     protected override void OnDeactivated(EventArgs e)
@@ -505,4 +551,17 @@ public partial class WidgetWindow : Window
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+
+    private delegate void WinEventProc(
+        IntPtr hook, uint id, IntPtr window, int objectId, int childId, uint thread, uint time);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SetWinEventHook(
+        uint eventMin, uint eventMax, IntPtr module, WinEventProc callback, uint idProcess, uint idThread, uint flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool UnhookWinEvent(IntPtr hook);
 }

@@ -26,10 +26,20 @@ public class SettingsViewModelTests
     {
         SettingsViewModel model = Model(out SettingsService service);
 
-        model.AlwaysOnTop = true;
+        model.ColorBarsByUsage = false;
 
-        Assert.True(service.Current.AlwaysOnTop);
+        Assert.False(service.Current.ColorBarsByUsage);
     }
+
+    /// <summary>
+    /// Pinning is offered by the title bar and nowhere else, because it lasts only as long as the
+    /// session and a settings window promises the opposite. The window itself is checked in
+    /// <c>ViewLoadingTests.TheSettingsWindowOffersNoPinning</c>; this is the half that would let a
+    /// checkbox be added back without anyone noticing it had somewhere to bind to.
+    /// </summary>
+    [Fact]
+    public void TheSettingsViewModelHasNoPinningToBindTo() =>
+        Assert.Null(typeof(SettingsViewModel).GetProperty("AlwaysOnTop"));
 
     [Fact]
     public void QuotaNotificationsAreOnByDefault()

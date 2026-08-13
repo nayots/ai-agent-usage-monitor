@@ -61,11 +61,9 @@ public sealed class SettingsViewModel : ObservableObject
         _settings.Changed += OnSettingsChanged;
     }
 
-    public bool AlwaysOnTop
-    {
-        get => _settings.Current.AlwaysOnTop;
-        set => _settings.Update(s => s with { AlwaysOnTop = value });
-    }
+    // No AlwaysOnTop here. Pinning lives on the title bar alone: it is session state, and a
+    // settings window is where someone goes to change how the widget works from now on - the wrong
+    // place to offer something that is forgotten when the app closes.
 
     public bool ColorBarsByUsage
     {
