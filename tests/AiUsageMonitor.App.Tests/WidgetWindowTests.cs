@@ -55,7 +55,7 @@ public class WidgetWindowTests(WpfFixture wpf)
         FieldInfo watcherField = typeof(WidgetWindow).GetField("_alerts", BindingFlags.Instance | BindingFlags.NonPublic)!;
         UsageAlertWatcher watcher = Assert.IsType<UsageAlertWatcher>(watcherField.GetValue(window));
 
-        Assert.Empty(watcher.Observe(model.Providers));
+        Assert.Empty(watcher.Observe(model.Providers, QuotaMilestones.Ladder));
 
         model.Dispose();
     });

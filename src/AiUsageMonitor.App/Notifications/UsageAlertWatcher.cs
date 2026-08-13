@@ -13,8 +13,11 @@ public sealed class UsageAlertWatcher
     private readonly Dictionary<ProviderCardViewModel, ProviderHealth> _providerHealth = [];
     private readonly Dictionary<(ProviderCardViewModel Provider, string WindowId), int> _windowRungs = [];
 
-    /// <summary>Observes the cards' current state and returns only newly crossed alert edges.</summary>
-    public IReadOnlyList<UsageAlert> Observe(IEnumerable<ProviderCardViewModel> providers)
+    /// <summary>
+    /// Observes the cards' current state and returns only newly crossed alert edges, measured
+    /// against <paramref name="ladder"/> - the rungs the user chose to hear about.
+    /// </summary>
+    public IReadOnlyList<UsageAlert> Observe(IEnumerable<ProviderCardViewModel> providers, IReadOnlyList<int> ladder)
     {
         List<UsageAlert> alerts = [];
 
@@ -36,7 +39,7 @@ public sealed class UsageAlertWatcher
 
             foreach (QuotaRowViewModel window in provider.Windows)
             {
-                ObserveWindow(provider, window, alerts);
+                ObserveWindow(provider, window, alerts, ladder);
             }
         }
 
@@ -64,14 +67,18 @@ public sealed class UsageAlertWatcher
         _providerHealth[provider] = current.Value;
     }
 
-    private void ObserveWindow(ProviderCardViewModel provider, QuotaRowViewModel window, List<UsageAlert> alerts)
+    private void ObserveWindow(
+        ProviderCardViewModel provider,
+        QuotaRowViewModel window,
+        List<UsageAlert> alerts,
+        IReadOnlyList<int> ladder)
     {
         if (window.UsedPercent is null)
         {
             return;
         }
 
-        int current = QuotaMilestones.Crossed(window.UsedPercent);
+        int current = QuotaMilestones.Crossed(window.UsedPercent, ladder);
         (ProviderCardViewModel Provider, string WindowId) key = (provider, window.Id);
 
         if (!_windowRungs.TryGetValue(key, out int previous))
@@ -90,12 +97,20 @@ public sealed class UsageAlertWatcher
                 : $"{provider.DisplayName} · {window.Label} past {current}%";
             alerts.Add(new UsageAlert(kind, title, UsageText(window)));
         }
-        else if (previous >= 80 && current < 80)
+        else if (ladder.Count > 0)
         {
-            string title = previous == 100
-                ? $"{provider.DisplayName} · {window.Label} limit reset"
-                : $"{provider.DisplayName} · {window.Label} back under 80%";
-            alerts.Add(new UsageAlert(UsageAlertKind.Recovered, title, UsageText(window)));
+            // Recovery is worth saying only once a window had got seriously full, and 80% is where
+            // that starts. A ladder that does not offer 80 has nothing to say below its own bottom
+            // rung, so falling under that rung is the same event by the only definition left.
+            int recoveryRung = ladder.Contains(80) ? 80 : ladder.Min();
+
+            if (previous >= recoveryRung && current < recoveryRung)
+            {
+                string title = previous == 100
+                    ? $"{provider.DisplayName} · {window.Label} limit reset"
+                    : $"{provider.DisplayName} · {window.Label} back under {recoveryRung}%";
+                alerts.Add(new UsageAlert(UsageAlertKind.Recovered, title, UsageText(window)));
+            }
         }
     }
 

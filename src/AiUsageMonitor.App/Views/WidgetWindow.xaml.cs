@@ -195,18 +195,27 @@ public partial class WidgetWindow : Window
     /// edge-triggered: skipping the observation would leave every rung where it stood, and turning
     /// notifications back on would then release a burst of crossings the user already lived through.
     /// <para>
-    /// The setting is read here rather than cached, so switching it off silences the next alert
-    /// rather than the next restart.
+    /// Quiet hours are the same argument a second time, which is why they are applied here and not
+    /// inside the watcher: suppressing the observation overnight would bank every crossing the user
+    /// slept through and release them all at 07:00. They are applied before coalescing, so a
+    /// suppressed milestone cannot ride along inside a merged balloon.
+    /// </para>
+    /// <para>
+    /// The settings are read here rather than cached, so switching either off silences the next
+    /// alert rather than the next restart.
     /// </para>
     /// </summary>
     private void DeliverAlerts()
     {
-        IReadOnlyList<UsageAlert> alerts = _alerts.Observe(_model.Providers);
+        AppSettings settings = _settings.Current;
+        IReadOnlyList<UsageAlert> alerts = _alerts.Observe(_model.Providers, settings.EffectiveAlertThresholds);
 
-        if (!_settings.Current.NotifyOnQuotaEvents)
+        if (!settings.NotifyOnQuotaEvents)
         {
             return;
         }
+
+        alerts = QuietHoursFilter.Apply(alerts, settings.QuietHours, TimeOnly.FromDateTime(DateTime.Now));
 
         foreach (UsageAlert alert in AlertBatch.Coalesce(alerts))
         {

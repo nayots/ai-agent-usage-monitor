@@ -25,7 +25,7 @@ public class UsageAlertWatcherTests
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 81));
 
-        Assert.Empty(watcher.Observe([card]));
+        Assert.Empty(watcher.Observe([card], QuotaMilestones.Ladder));
     }
 
     [Fact]
@@ -33,11 +33,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 79));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Connected("five-hour", "5-hour", 81, Now.AddHours(1).AddMinutes(12)), Now, Policy);
 
-        UsageAlert alert = Assert.Single(watcher.Observe([card]));
+        UsageAlert alert = Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder));
         Assert.Equal(new UsageAlert(UsageAlertKind.Milestone, "Claude Code · 5-hour past 80%", "81% used. Resets in 1h 12m."), alert);
     }
 
@@ -46,11 +46,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 95));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Connected("five-hour", "5-hour", 100, Now.AddMinutes(47)), Now, Policy);
 
-        UsageAlert alert = Assert.Single(watcher.Observe([card]));
+        UsageAlert alert = Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder));
         Assert.Equal(new UsageAlert(UsageAlertKind.LimitReached, "Claude Code · 5-hour limit reached", "100% used. Resets in 47m 00s."), alert);
     }
 
@@ -59,11 +59,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 95));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Connected("five-hour", "5-hour", 100), Now, Policy);
 
-        Assert.Equal("100% used.", Assert.Single(watcher.Observe([card])).Text);
+        Assert.Equal("100% used.", Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder)).Text);
     }
 
     [Fact]
@@ -71,11 +71,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 100));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Connected("five-hour", "5-hour", 12, Now.AddHours(4).AddMinutes(58)), Now, Policy);
 
-        UsageAlert alert = Assert.Single(watcher.Observe([card]));
+        UsageAlert alert = Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder));
         Assert.Equal(new UsageAlert(UsageAlertKind.Recovered, "Claude Code · 5-hour limit reset", "12% used. Resets in 4h 58m."), alert);
     }
 
@@ -84,11 +84,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 86));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Connected("five-hour", "5-hour", 62, Now.AddHours(2).AddMinutes(3)), Now, Policy);
 
-        UsageAlert alert = Assert.Single(watcher.Observe([card]));
+        UsageAlert alert = Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder));
         Assert.Equal(new UsageAlert(UsageAlertKind.Recovered, "Claude Code · 5-hour back under 80%", "62% used. Resets in 2h 03m."), alert);
     }
 
@@ -97,11 +97,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 86));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Connected("five-hour", "5-hour", 82), Now, Policy);
 
-        Assert.Empty(watcher.Observe([card]));
+        Assert.Empty(watcher.Observe([card], QuotaMilestones.Ladder));
     }
 
     [Fact]
@@ -109,11 +109,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 20));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Snapshot(ConnectionState.Error, error: "bearer secret"), Now, Policy);
 
-        Assert.Equal(new UsageAlert(UsageAlertKind.ProviderFailed, "Claude Code stopped reporting usage", "Open the widget for the reason."), Assert.Single(watcher.Observe([card])));
+        Assert.Equal(new UsageAlert(UsageAlertKind.ProviderFailed, "Claude Code stopped reporting usage", "Open the widget for the reason."), Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder)));
     }
 
     [Fact]
@@ -121,11 +121,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Snapshot(ConnectionState.Error));
-        Assert.Empty(watcher.Observe([card]));
+        Assert.Empty(watcher.Observe([card], QuotaMilestones.Ladder));
 
         card.Apply(Connected("five-hour", "5-hour", 20), Now, Policy);
 
-        Assert.Equal(new UsageAlert(UsageAlertKind.ProviderRecovered, "Claude Code is reporting usage again", "The numbers on the card are current."), Assert.Single(watcher.Observe([card])));
+        Assert.Equal(new UsageAlert(UsageAlertKind.ProviderRecovered, "Claude Code is reporting usage again", "The numbers on the card are current."), Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder)));
     }
 
     [Fact]
@@ -133,15 +133,15 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 79));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
         card.IsHiddenByUser = true;
         card.Apply(Snapshot(ConnectionState.Error), Now, Policy);
 
-        Assert.Empty(watcher.Observe([card]));
+        Assert.Empty(watcher.Observe([card], QuotaMilestones.Ladder));
 
         card.Apply(Connected("five-hour", "5-hour", 81), Now, Policy);
 
-        Assert.Empty(watcher.Observe([card]));
+        Assert.Empty(watcher.Observe([card], QuotaMilestones.Ladder));
     }
 
     [Theory]
@@ -151,11 +151,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Snapshot(state));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Snapshot(ConnectionState.Error), Now, Policy);
 
-        Assert.Empty(watcher.Observe([card]));
+        Assert.Empty(watcher.Observe([card], QuotaMilestones.Ladder));
     }
 
     [Fact]
@@ -163,11 +163,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Snapshot(ConnectionState.NotInstalled));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Snapshot(ConnectionState.Connected), Now, Policy);
 
-        Assert.Empty(watcher.Observe([card]));
+        Assert.Empty(watcher.Observe([card], QuotaMilestones.Ladder));
     }
 
     [Fact]
@@ -175,11 +175,11 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 12));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Connected("five-hour", "5-hour", 92), Now, Policy);
 
-        UsageAlert alert = Assert.Single(watcher.Observe([card]));
+        UsageAlert alert = Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder));
         Assert.Equal(UsageAlertKind.Milestone, alert.Kind);
         Assert.Equal("Claude Code · 5-hour past 90%", alert.Title);
     }
@@ -189,13 +189,13 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 79));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Connected("five-hour", "5-hour", null), Now, Policy);
-        Assert.Empty(watcher.Observe([card]));
+        Assert.Empty(watcher.Observe([card], QuotaMilestones.Ladder));
 
         card.Apply(Connected("five-hour", "5-hour", 81), Now, Policy);
-        Assert.Equal(UsageAlertKind.Milestone, Assert.Single(watcher.Observe([card])).Kind);
+        Assert.Equal(UsageAlertKind.Milestone, Assert.Single(watcher.Observe([card], QuotaMilestones.Ladder)).Kind);
     }
 
     [Fact]
@@ -204,12 +204,12 @@ public class UsageAlertWatcherTests
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel claude = Card("Claude Code", Connected("five-hour", "5-hour", 79));
         ProviderCardViewModel codex = Card("Codex", Connected("five-hour", "5-hour", 12));
-        watcher.Observe([claude, codex]);
+        watcher.Observe([claude, codex], QuotaMilestones.Ladder);
 
         claude.Apply(Connected("five-hour", "5-hour", 81), Now, Policy);
         codex.Apply(Connected("five-hour", "5-hour", 12), Now, Policy);
 
-        UsageAlert alert = Assert.Single(watcher.Observe([claude, codex]));
+        UsageAlert alert = Assert.Single(watcher.Observe([claude, codex], QuotaMilestones.Ladder));
         Assert.Equal("Claude Code · 5-hour past 80%", alert.Title);
     }
 
@@ -218,15 +218,93 @@ public class UsageAlertWatcherTests
     {
         UsageAlertWatcher watcher = new();
         ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 79));
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
 
         card.Apply(Snapshot(ConnectionState.Error), Now, Policy);
-        watcher.Observe([card]);
+        watcher.Observe([card], QuotaMilestones.Ladder);
         card.Apply(Connected("five-hour", "5-hour", 81), Now, Policy);
 
-        UsageAlert[] alerts = [.. watcher.Observe([card])];
+        UsageAlert[] alerts = [.. watcher.Observe([card], QuotaMilestones.Ladder)];
         Assert.Contains(alerts, alert => alert.Kind == UsageAlertKind.ProviderRecovered);
         Assert.Contains(alerts, alert => alert.Title == "Claude Code · 5-hour past 80%");
+    }
+
+    /// <summary>
+    /// The point of choosing a sparse ladder: a crossing that the default ladder would announce
+    /// passes in silence, and only the chosen rungs speak.
+    /// </summary>
+    [Fact]
+    public void ACrossingBetweenTheRungsOfAChosenLadderIsSilent()
+    {
+        UsageAlertWatcher watcher = new();
+        ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 70));
+        watcher.Observe([card], [90, 100]);
+
+        card.Apply(Connected("five-hour", "5-hour", 85), Now, Policy);
+
+        Assert.Empty(watcher.Observe([card], [90, 100]));
+    }
+
+    [Fact]
+    public void ACrossingOfAChosenRungStillSpeaks()
+    {
+        UsageAlertWatcher watcher = new();
+        ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 85));
+        watcher.Observe([card], [90, 100]);
+
+        card.Apply(Connected("five-hour", "5-hour", 92), Now, Policy);
+
+        UsageAlert alert = Assert.Single(watcher.Observe([card], [90, 100]));
+        Assert.Equal(UsageAlertKind.Milestone, alert.Kind);
+        Assert.Equal("Claude Code · 5-hour past 90%", alert.Title);
+    }
+
+    [Fact]
+    public void TheHundredPercentOnlyLadderSaysNothingUntilTheLimitIsReached()
+    {
+        UsageAlertWatcher watcher = new();
+        ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 50));
+        watcher.Observe([card], [100]);
+
+        card.Apply(Connected("five-hour", "5-hour", 99), Now, Policy);
+        Assert.Empty(watcher.Observe([card], [100]));
+
+        card.Apply(Connected("five-hour", "5-hour", 100), Now, Policy);
+        Assert.Equal(UsageAlertKind.LimitReached, Assert.Single(watcher.Observe([card], [100])).Kind);
+    }
+
+    /// <summary>
+    /// A ladder without 80 recovers at its own bottom rung instead, and says so - a message reading
+    /// "back under 80%" from a ladder that never mentions 80 would be describing another app.
+    /// </summary>
+    [Fact]
+    public void ALadderWithoutEightyRecoversAtItsOwnBottomRung()
+    {
+        UsageAlertWatcher watcher = new();
+        ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 95));
+        watcher.Observe([card], [90, 100]);
+
+        card.Apply(Connected("five-hour", "5-hour", 88), Now, Policy);
+
+        UsageAlert alert = Assert.Single(watcher.Observe([card], [90, 100]));
+        Assert.Equal(UsageAlertKind.Recovered, alert.Kind);
+        Assert.Equal("Claude Code · 5-hour back under 90%", alert.Title);
+    }
+
+    /// <summary>
+    /// Reaching the limit and coming back is the one recovery worth hearing about whatever the
+    /// ladder, and it keeps its own wording rather than borrowing the bottom rung's.
+    /// </summary>
+    [Fact]
+    public void TheLimitResetWordingSurvivesASparseLadder()
+    {
+        UsageAlertWatcher watcher = new();
+        ProviderCardViewModel card = Card("Claude Code", Connected("five-hour", "5-hour", 100));
+        watcher.Observe([card], [100]);
+
+        card.Apply(Connected("five-hour", "5-hour", 4), Now, Policy);
+
+        Assert.Equal("Claude Code · 5-hour limit reset", Assert.Single(watcher.Observe([card], [100])).Title);
     }
 
     private static ProviderCardViewModel Card(string name, ProviderSnapshot snapshot)
