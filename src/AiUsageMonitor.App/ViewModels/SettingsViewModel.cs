@@ -9,7 +9,7 @@ namespace AiUsageMonitor.App.ViewModels;
 /// <see cref="SettingsService.Current"/> and writes through <see cref="SettingsService.Update"/>,
 /// so there is no working copy to get out of step and no Apply button to forget.
 /// </summary>
-public sealed class SettingsViewModel : ObservableObject
+public sealed class SettingsViewModel : ObservableObject, IDisposable
 {
     private static readonly int[] RefreshPresets = [15, 30, 60, 120, 300, 600];
     private static readonly int[] StalePresets = [60, 120, 300, 600, 1800, 3600];
@@ -59,6 +59,7 @@ public sealed class SettingsViewModel : ObservableObject
         OpenLogsCommand = new RelayCommand(openLogs);
 
         _settings.Changed += OnSettingsChanged;
+        _settings.PersistenceStateChanged += OnPersistenceStateChanged;
     }
 
     // No AlwaysOnTop here. Pinning lives on the title bar alone: it is session state, and a
@@ -109,6 +110,10 @@ public sealed class SettingsViewModel : ObservableObject
 
     public bool CanStartWithWindows => _startup.IsSupported;
 
+    public bool HasPersistenceWarning => _settings.PersistenceFailed;
+
+    public string PersistenceWarningText => "Changes apply to this session only — the settings file could not be saved.";
+
     public string? StartWithWindowsUnavailableReason => _startup.IsSupported
         ? null
         : "Unavailable: this build cannot determine its own location.";
@@ -127,7 +132,11 @@ public sealed class SettingsViewModel : ObservableObject
 
     public RelayCommand OpenLogsCommand { get; }
 
-    public void Dispose() => _settings.Changed -= OnSettingsChanged;
+    public void Dispose()
+    {
+        _settings.Changed -= OnSettingsChanged;
+        _settings.PersistenceStateChanged -= OnPersistenceStateChanged;
+    }
 
     private ChoiceViewModel Theme(string label, ThemePreference preference) => new(
         label,
@@ -184,4 +193,7 @@ public sealed class SettingsViewModel : ObservableObject
             choice.Refresh();
         }
     }
+
+    private void OnPersistenceStateChanged(object? sender, EventArgs e) =>
+        Raise(nameof(HasPersistenceWarning));
 }

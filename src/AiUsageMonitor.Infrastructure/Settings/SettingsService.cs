@@ -25,7 +25,11 @@ public sealed class SettingsService
 
     public AppSettings Current { get; private set; }
 
+    public bool PersistenceFailed { get; private set; }
+
     public event EventHandler<AppSettings>? Changed;
+
+    public event EventHandler? PersistenceStateChanged;
 
     /// <summary>
     /// Applies <paramref name="change"/> to <see cref="Current"/>, announces it, then persists.
@@ -52,10 +56,23 @@ public sealed class SettingsService
         try
         {
             _store.Save(updated);
+            SetPersistenceFailed(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            SetPersistenceFailed(true);
             _logger?.LogWarning(ex, "Settings could not be saved; the change applies to this session only.");
         }
+    }
+
+    private void SetPersistenceFailed(bool failed)
+    {
+        if (PersistenceFailed == failed)
+        {
+            return;
+        }
+
+        PersistenceFailed = failed;
+        PersistenceStateChanged?.Invoke(this, EventArgs.Empty);
     }
 }

@@ -68,4 +68,26 @@ public class SettingsServiceTests
 
         Assert.True(service.Current.AlwaysOnTop);
     }
+
+    [Fact]
+    public void AFailedSaveIsVisibleUntilALaterSaveSucceeds()
+    {
+        using TempDirectory dir = new();
+        string path = dir.File("settings.json");
+        Directory.CreateDirectory(path);
+        SettingsService service = new(new AppSettingsStore(path), AppSettings.Default);
+        int changed = 0;
+        service.Changed += (_, _) => changed++;
+
+        service.Update(s => s with { ColorBarsByUsage = false });
+
+        Assert.False(service.Current.ColorBarsByUsage);
+        Assert.Equal(1, changed);
+        Assert.True(service.PersistenceFailed);
+
+        Directory.Delete(path);
+        service.Update(s => s with { NotifyOnQuotaEvents = false });
+
+        Assert.False(service.PersistenceFailed);
+    }
 }

@@ -175,4 +175,21 @@ public class SettingsViewModelTests
         Assert.False(model.Densities[0].IsSelected);
         Assert.True(model.Densities[1].IsSelected);
     }
+
+    [Fact]
+    public void PersistenceWarningFollowsTheSettingsServiceWithoutExposingFailureDetails()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "aium-vm-" + Guid.NewGuid().ToString("N"), "settings.json");
+        Directory.CreateDirectory(path);
+        SettingsService service = new(new AppSettingsStore(path), AppSettings.Default);
+        SettingsViewModel model = new(service, new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null), () => { }, () => { }, () => { });
+
+        model.ColorBarsByUsage = false;
+
+        Assert.True(model.HasPersistenceWarning);
+        Assert.Equal("Changes apply to this session only — the settings file could not be saved.", model.PersistenceWarningText);
+        Assert.DoesNotContain(path, model.PersistenceWarningText);
+        Assert.DoesNotContain("IOException", model.PersistenceWarningText);
+        model.Dispose();
+    }
 }

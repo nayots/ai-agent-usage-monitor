@@ -17,6 +17,15 @@
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <StackPanel Margin="14,10,14,14">
 
+      <TextBlock Text="{Binding PersistenceWarningText}" TextWrapping="Wrap" Margin="0,0,0,8" Foreground="{DynamicResource StateBadBrush}">
+        <TextBlock.Style>
+          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers><DataTrigger Binding="{Binding HasPersistenceWarning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+          </Style>
+        </TextBlock.Style>
+      </TextBlock>
+
       <TextBlock Text="APPEARANCE" Style="{StaticResource SettingsSectionTextStyle}" Margin="0,0,0,4" />
       <TextBlock Text="Theme" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
       <ItemsControl ItemsSource="{Binding Themes}" Margin="0,5,0,0" Focusable="False">
