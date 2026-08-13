@@ -1,0 +1,79 @@
+<Window x:Class="AiUsageMonitor.App.Views.MiniWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:AiUsageMonitor.App.Controls"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" SizeToContent="WidthAndHeight" Topmost="True"
+        AllowsTransparency="False" Background="{DynamicResource WidgetWindowBackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}" FontFamily="{StaticResource WidgetFontFamily}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        MouseLeftButtonDown="Background_MouseLeftButtonDown" MouseLeftButtonUp="Background_MouseLeftButtonUp"
+        MouseRightButtonUp="Background_MouseRightButtonUp" MouseDoubleClick="Background_MouseDoubleClick">
+  <!-- Square on every corner. The docked edge has to be square, and a strip rounded on one long
+       edge only reads as a mistake rather than as a decision. -->
+  <Border BorderBrush="{DynamicResource WidgetWindowStrokeBrush}" BorderThickness="1" CornerRadius="0" Padding="8,6">
+    <DockPanel LastChildFill="False">
+      <!--
+        AlternationCount gives each container its real index rather than a cycling one, which is
+        what lets the separator be a leading rule on every item but the first. With the first
+        provider hidden the rule leads the row - a one-pixel artifact in a rare configuration,
+        accepted over the code it would take to track "first still-visible item".
+      -->
+      <ItemsControl ItemsSource="{Binding Providers}" AlternationCount="2147483647">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemContainerStyle>
+          <Style TargetType="ContentPresenter">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsHiddenByFilter}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </ItemsControl.ItemContainerStyle>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Border Width="1" Margin="0,0,10,0" Background="{DynamicResource WidgetWindowStrokeBrush}">
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                      <DataTrigger Value="0" Binding="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType=ContentPresenter}}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
+              </Border>
+              <TextBlock Text="{Binding Monogram}" FontWeight="SemiBold" Margin="0,0,6,0" VerticalAlignment="Center" />
+              <!--
+                The same QuotaBarFillSelector inputs the card row uses, so the strip cannot disagree
+                with the card about a colour. UsedPercent is nullable all the way down: a provider
+                with no primary window leaves the track empty rather than drawing a 0% fill.
+              -->
+              <controls:QuotaBar Width="44" Height="4" VerticalAlignment="Center"
+                                 UsedPercent="{Binding PrimaryWindow.UsedPercent}"
+                                 LimitReached="{Binding PrimaryWindow.IsExhausted}"
+                                 IsStale="{Binding PrimaryWindow.IsStale}"
+                                 ColorBarsByUsage="{Binding PrimaryWindow.ColorBarsByUsage}" />
+              <!--
+                Both null values, and they are not the same null. TargetNullValue covers a window
+                that reported no percentage; FallbackValue covers there being no window at all,
+                which breaks the path rather than yielding null. With only the first, a provider
+                with nothing to report renders as blank space.
+              -->
+              <TextBlock Text="{Binding PrimaryWindow.UsedText, TargetNullValue=—, FallbackValue=—}"
+                         Margin="6,0,10,0" VerticalAlignment="Center" />
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Button DockPanel.Dock="Right" Style="{StaticResource TitleBarIconButtonStyle}"
+              Width="20" Height="16" FontSize="11" VerticalAlignment="Center"
+              Content="&#xE76C;" ToolTip="Show the full widget"
+              AutomationProperties.Name="Show the full widget" Click="Expand_Click" />
+    </DockPanel>
+  </Border>
+</Window>
