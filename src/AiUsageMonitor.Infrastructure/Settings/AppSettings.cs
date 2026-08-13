@@ -18,6 +18,13 @@ public enum WidgetDensity
     Compact
 }
 
+/// <summary>Which screen edge the mini strip is pinned to.</summary>
+public enum MiniDock
+{
+    Top,
+    Bottom
+}
+
 /// <summary>
 /// Application-owned settings (PRD §19). Provider-owned configuration is never stored here and
 /// is never modified by this application.
@@ -64,6 +71,21 @@ public sealed record AppSettings
     public bool GlobalHotkeyEnabled { get; init; } = true;
 
     public WidgetDensity Density { get; init; } = WidgetDensity.Normal;
+
+    /// <summary>
+    /// The edge-docked one-line strip instead of the widget window (PRD §28). Persisted, unlike the
+    /// title bar's pin: this is how the user wants to read the widget from now on, not what they are
+    /// doing this minute.
+    /// </summary>
+    public bool MiniMode { get; init; }
+
+    public MiniDock MiniDock { get; init; } = MiniDock.Top;
+
+    /// <summary>
+    /// Where along its edge the strip sits, or null before it has ever been placed. Null rather than
+    /// 0 for the same reason <see cref="WindowLeft"/> is: 0 is a position a user could have chosen.
+    /// </summary>
+    public double? MiniLeft { get; init; }
 
     /// <summary>PRD §15: an unavailable provider keeps its card unless the user hides it.</summary>
     public bool ShowUnavailableProviders { get; init; } = true;

@@ -211,6 +211,27 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
+    public void PrimaryWindowFollowsTheFirstProviderReportedWindowAndRaisesAChangeNotification()
+    {
+        ProviderCardViewModel card = Card();
+        Assert.Null(card.PrimaryWindow);
+
+        List<string?> raised = [];
+        card.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        card.Apply(Snapshot(windows: [Window("first", 0, 20), Window("second", 1, 40)], retrievedAt: Now), Now, Policy);
+
+        Assert.Equal("first", card.PrimaryWindow!.Label);
+        Assert.Contains(nameof(ProviderCardViewModel.PrimaryWindow), raised);
+
+        raised.Clear();
+        card.Apply(Snapshot(windows: [Window("replacement", 0, 30), Window("first", 1, 20)], retrievedAt: Now), Now, Policy);
+
+        Assert.Equal("replacement", card.PrimaryWindow!.Label);
+        Assert.Contains(nameof(ProviderCardViewModel.PrimaryWindow), raised);
+    }
+
+    [Fact]
     public void AFailingCardSaysWhenItsNextAttemptWillBe()
     {
         ProviderCardViewModel card = Card();

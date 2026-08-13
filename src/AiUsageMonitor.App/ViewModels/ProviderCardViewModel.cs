@@ -53,6 +53,14 @@ public sealed class ProviderCardViewModel : ObservableObject
     public bool HasWindows => Windows.Count > 0;
 
     /// <summary>
+    /// The first window this provider reported, or null when it has reported none. "First" is the
+    /// provider's own answer - windows arrive in provider order and are never re-sorted - and it is
+    /// the same window the tray glyph takes its digits from, so the strip and the glyph can never
+    /// disagree about which limit they are showing.
+    /// </summary>
+    public QuotaRowViewModel? PrimaryWindow => Windows.Count > 0 ? Windows[0] : null;
+
+    /// <summary>
     /// Setting this rebuilds the rows rather than mutating them. A <see cref="QuotaRowViewModel"/>
     /// is a pure projection of one <see cref="QuotaWindow"/>, and the rows are rebuilt on every
     /// snapshot anyway; making the row's own flag mutable would add observable state to the one
@@ -244,6 +252,7 @@ public sealed class ProviderCardViewModel : ObservableObject
         }
 
         Raise(nameof(HasWindows));
+        Raise(nameof(PrimaryWindow));
     }
 
     /// <summary>

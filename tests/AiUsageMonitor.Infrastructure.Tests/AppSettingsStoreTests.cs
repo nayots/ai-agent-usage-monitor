@@ -16,6 +16,9 @@ public class AppSettingsStoreTests
         Assert.False(defaults.StartWithWindows);
         Assert.True(defaults.GlobalHotkeyEnabled);
         Assert.Equal(WidgetDensity.Normal, defaults.Density);
+        Assert.False(defaults.MiniMode);
+        Assert.Equal(MiniDock.Top, defaults.MiniDock);
+        Assert.Null(defaults.MiniLeft);
         Assert.True(defaults.ShowUnavailableProviders);
         Assert.Equal(300, defaults.StaleAfterSeconds);
     }
@@ -80,6 +83,9 @@ public class AppSettingsStoreTests
             StartWithWindows = true,
             GlobalHotkeyEnabled = false,
             Density = WidgetDensity.Compact,
+            MiniMode = true,
+            MiniDock = MiniDock.Bottom,
+            MiniLeft = 1234.5,
             ShowUnavailableProviders = false,
             StaleAfterSeconds = 90,
             TrayHintShown = true
@@ -93,6 +99,9 @@ public class AppSettingsStoreTests
         Assert.Equal(written.StartWithWindows, loaded.StartWithWindows);
         Assert.Equal(written.GlobalHotkeyEnabled, loaded.GlobalHotkeyEnabled);
         Assert.Equal(written.Density, loaded.Density);
+        Assert.Equal(written.MiniMode, loaded.MiniMode);
+        Assert.Equal(written.MiniDock, loaded.MiniDock);
+        Assert.Equal(written.MiniLeft, loaded.MiniLeft);
         Assert.Equal(written.ShowUnavailableProviders, loaded.ShowUnavailableProviders);
         Assert.Equal(written.StaleAfterSeconds, loaded.StaleAfterSeconds);
         Assert.True(loaded.TrayHintShown);
@@ -104,11 +113,26 @@ public class AppSettingsStoreTests
         using TempDirectory dir = new();
         AppSettingsStore store = new(dir.File("settings.json"));
 
-        store.Save(AppSettings.Default with { Theme = ThemePreference.Dark });
+        store.Save(AppSettings.Default with { Theme = ThemePreference.Dark, MiniDock = MiniDock.Bottom });
 
         string json = File.ReadAllText(dir.File("settings.json"));
         Assert.Contains("\"Dark\"", json);
+        Assert.Contains("\"Bottom\"", json);
         Assert.DoesNotContain("\"Theme\": 2", json);
+    }
+
+    [Fact]
+    public void AnUnknownMiniDockFallsBackToTopWithoutDiscardingTheSettingsFile()
+    {
+        using TempDirectory dir = new();
+        string path = dir.File("settings.json");
+        File.WriteAllText(path, """{ "MiniDock": "Sideways" }""");
+
+        SettingsLoadResult result = new AppSettingsStore(path).Load();
+
+        Assert.Equal(MiniDock.Top, result.Settings.MiniDock);
+        Assert.Null(result.CorruptBackupPath);
+        Assert.True(File.Exists(path));
     }
 
     [Fact]

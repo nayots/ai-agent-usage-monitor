@@ -34,7 +34,12 @@ public sealed class AppSettingsStore
         {
             WriteIndented = true,
             TypeInfoResolver = resolver,
-            Converters = { new JsonStringEnumConverter() }
+            Converters =
+            {
+                new TolerantEnumConverter<ThemePreference>(ThemePreference.System),
+                new TolerantEnumConverter<WidgetDensity>(WidgetDensity.Normal),
+                new TolerantEnumConverter<MiniDock>(MiniDock.Top)
+            }
         };
     }
 
@@ -107,4 +112,31 @@ public sealed class AppSettingsStore
         HiddenProviders = settings.HiddenProviders ?? [],
         ProviderRefreshSeconds = settings.ProviderRefreshSeconds ?? new Dictionary<string, int>()
     };
+
+    private sealed class TolerantEnumConverter<T>(T fallback) : JsonConverter<T> where T : struct, Enum
+    {
+        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.String &&
+                Enum.TryParse(reader.GetString(), ignoreCase: false, out T value) &&
+                Enum.IsDefined(value))
+            {
+                return value;
+            }
+
+            if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out int number))
+            {
+                T numericValue = (T)Enum.ToObject(typeof(T), number);
+                if (Enum.IsDefined(numericValue))
+                {
+                    return numericValue;
+                }
+            }
+
+            return fallback;
+        }
+
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
+            writer.WriteStringValue(value.ToString());
+    }
 }
