@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using AiUsageMonitor.Domain;
+using AiUsageMonitor.Infrastructure.Providers;
 
 namespace AiUsageMonitor.Infrastructure.Providers.Claude;
 
@@ -46,6 +47,11 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
 
     private static readonly HttpClient Client = CreateClient();
 
+    private readonly IProcessRunner _processes;
+    private readonly HttpClient _client;
+    private readonly Func<string?> _locateExecutable;
+    private readonly Func<string> _credentialsPath;
+
     private static HttpClient CreateClient()
     {
         var handler = new HttpClientHandler
@@ -60,11 +66,38 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         };
     }
 
+    private static HttpClient CreateClient(HttpMessageHandler handler)
+    {
+        if (handler is HttpClientHandler httpHandler)
+        {
+            // Test-only seams retain the production no-redirect policy without touching Client.
+            httpHandler.AllowAutoRedirect = false;
+        }
+
+        return new HttpClient(handler)
+        {
+            Timeout = Client.Timeout,
+        };
+    }
+
+    public ClaudeOAuthUsageProbe(
+        IProcessRunner? processes = null,
+        HttpMessageHandler? handler = null,
+        Func<string?>? locateExecutable = null,
+        Func<string>? credentialsPath = null)
+    {
+        _processes = processes ?? DefaultProcessRunner.Instance;
+        _client = handler is null ? Client : CreateClient(handler);
+        _locateExecutable = locateExecutable ?? ClaudeExecutableLocator.Locate;
+        _credentialsPath = credentialsPath ?? GetCredentialsPath;
+    }
+
     public async Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var notes = new List<string>();
 
-        string? exePath = ClaudeExecutableLocator.Locate();
+        string? exePath = _locateExecutable();
         if (exePath is null)
         {
             notes.Add("No local claude executable found (checked %USERPROFILE%\\.local\\bin, the npm global shim, and PATH).");
@@ -85,7 +118,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
 
         string? version = await TryGetVersionAsync(exePath, ct, notes).ConfigureAwait(false);
 
-        string credentialsPath = GetCredentialsPath();
+        string credentialsPath = _credentialsPath();
         bool credentialsFileExists = File.Exists(credentialsPath);
 
         // The token lives only in this local variable for the lifetime of this method call. It is
@@ -113,7 +146,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             request.Headers.Add("anthropic-beta", AnthropicBetaHeaderValue);
             request.Headers.UserAgent.ParseAdd(UserAgent);
 
-            using HttpResponseMessage response = await Client.SendAsync(request, ct).ConfigureAwait(false);
+            using HttpResponseMessage response = await _client.SendAsync(request, ct).ConfigureAwait(false);
             string body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
@@ -168,7 +201,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
                 ConnectionState.Error,
                 [],
                 null,
-                $"Request to the usage endpoint timed out after {Client.Timeout.TotalSeconds:0}s.",
+                $"Request to the usage endpoint timed out after {_client.Timeout.TotalSeconds:0}s.",
                 notes);
         }
         catch (HttpRequestException ex)
@@ -177,12 +210,12 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         }
     }
 
-    private static async Task<string?> TryGetVersionAsync(string exePath, CancellationToken ct, List<string> notes)
+    private async Task<string?> TryGetVersionAsync(string exePath, CancellationToken ct, List<string> notes)
     {
         try
         {
             (int exitCode, string stdOut, _) =
-                await ProcessRunner.RunCapturedAsync(exePath, "--version", VersionTimeout, ct).ConfigureAwait(false);
+                await _processes.RunCapturedAsync(exePath, "--version", VersionTimeout, ct).ConfigureAwait(false);
 
             string? version = exitCode == 0 ? ClaudeExecutableLocator.ParseVersion(stdOut) : null;
             notes.Add(version is null
