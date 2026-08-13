@@ -23,11 +23,19 @@ public sealed class CodexProbe : IProviderProbe
 
     private readonly IProcessRunner _processes;
     private readonly Func<string?> _locateExecutable;
+    private readonly ProviderVersionCache _versions;
+    private readonly Func<string, DateTime> _lastWriteUtc;
 
-    public CodexProbe(IProcessRunner? processes = null, Func<string?>? locateExecutable = null)
+    public CodexProbe(
+        IProcessRunner? processes = null,
+        Func<string?>? locateExecutable = null,
+        ProviderVersionCache? versions = null,
+        Func<string, DateTime>? lastWriteUtc = null)
     {
         _processes = processes ?? DefaultProcessRunner.Instance;
         _locateExecutable = locateExecutable ?? CodexExecutableLocator.Locate;
+        _versions = versions ?? new ProviderVersionCache();
+        _lastWriteUtc = lastWriteUtc ?? File.GetLastWriteTimeUtc;
     }
 
     public async Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
@@ -120,6 +128,13 @@ public sealed class CodexProbe : IProviderProbe
 
     private async Task<string?> TryGetVersionAsync(string exePath, CancellationToken ct, List<string> notes)
     {
+        DateTime? lastWrite = TryGetLastWriteUtc(exePath);
+        if (lastWrite is DateTime timestamp && _versions.TryGet(exePath, timestamp, out string cachedVersion))
+        {
+            notes.Add($"Version {cachedVersion} (cached; executable unchanged since it was read).");
+            return cachedVersion;
+        }
+
         try
         {
             (int exitCode, string stdOut, string stdErr) =
@@ -137,6 +152,11 @@ public sealed class CodexProbe : IProviderProbe
                 return null;
             }
 
+            if (lastWrite is DateTime storedAt)
+            {
+                _versions.Store(exePath, storedAt, text);
+            }
+
             return text;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -147,6 +167,18 @@ public sealed class CodexProbe : IProviderProbe
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             notes.Add($"codex --version failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    private DateTime? TryGetLastWriteUtc(string exePath)
+    {
+        try
+        {
+            return _lastWriteUtc(exePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
             return null;
         }
     }

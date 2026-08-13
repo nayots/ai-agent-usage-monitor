@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using AiUsageMonitor.Domain;
+using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Providers.Codex;
 using AiUsageMonitor.Infrastructure.Tests.Fakes;
 
@@ -139,6 +140,62 @@ public sealed class CodexProbeTests
 
         Assert.Equal(ConnectionState.Connected, snapshot.State);
         Assert.Null(snapshot.Version);
+    }
+
+    [Fact]
+    public async Task UnchangedExecutableUsesTheCachedVersionOnTheSecondProbe()
+    {
+        FakeProcessRunner processes = WithVersion();
+        processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
+        processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
+        DateTime lastWrite = new(2026, 8, 13, 10, 0, 0, DateTimeKind.Utc);
+        var probe = new CodexProbe(processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite);
+
+        ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
+        ProviderSnapshot second = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(1, processes.RunCapturedCallCount(ExePath));
+        Assert.Equal(first.Version, second.Version);
+        Assert.Contains("Version codex 1.2.3 (cached; executable unchanged since it was read).", second.Notes);
+    }
+
+    [Fact]
+    public async Task ChangedExecutableTimestampRereadsTheVersion()
+    {
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, "--version", 0, "codex 1.2.3");
+        processes.EnqueueCaptured(ExePath, "--version", 0, "codex 1.2.4");
+        processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
+        processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
+        DateTime lastWrite = new(2026, 8, 13, 10, 0, 0, DateTimeKind.Utc);
+        var probe = new CodexProbe(processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite);
+
+        ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
+        lastWrite = lastWrite.AddSeconds(1);
+        ProviderSnapshot second = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(2, processes.RunCapturedCallCount(ExePath));
+        Assert.Equal("codex 1.2.3", first.Version);
+        Assert.Equal("codex 1.2.4", second.Version);
+    }
+
+    [Fact]
+    public async Task FailedVersionReadIsRetriedOnTheNextProbe()
+    {
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCapturedFailure(ExePath, "--version", new Win32Exception());
+        processes.EnqueueCaptured(ExePath, "--version", 0, "codex 1.2.3");
+        processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
+        processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
+        DateTime lastWrite = new(2026, 8, 13, 10, 0, 0, DateTimeKind.Utc);
+        var probe = new CodexProbe(processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite);
+
+        ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
+        ProviderSnapshot second = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(2, processes.RunCapturedCallCount(ExePath));
+        Assert.Null(first.Version);
+        Assert.Equal("codex 1.2.3", second.Version);
     }
 
     private static FakeProcessRunner WithVersion()

@@ -51,6 +51,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private readonly HttpClient _client;
     private readonly Func<string?> _locateExecutable;
     private readonly Func<string> _credentialsPath;
+    private readonly ProviderVersionCache _versions;
+    private readonly Func<string, DateTime> _lastWriteUtc;
 
     private static HttpClient CreateClient()
     {
@@ -84,12 +86,16 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         IProcessRunner? processes = null,
         HttpMessageHandler? handler = null,
         Func<string?>? locateExecutable = null,
-        Func<string>? credentialsPath = null)
+        Func<string>? credentialsPath = null,
+        ProviderVersionCache? versions = null,
+        Func<string, DateTime>? lastWriteUtc = null)
     {
         _processes = processes ?? DefaultProcessRunner.Instance;
         _client = handler is null ? Client : CreateClient(handler);
         _locateExecutable = locateExecutable ?? ClaudeExecutableLocator.Locate;
         _credentialsPath = credentialsPath ?? GetCredentialsPath;
+        _versions = versions ?? new ProviderVersionCache();
+        _lastWriteUtc = lastWriteUtc ?? File.GetLastWriteTimeUtc;
     }
 
     public async Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
@@ -212,6 +218,13 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
 
     private async Task<string?> TryGetVersionAsync(string exePath, CancellationToken ct, List<string> notes)
     {
+        DateTime? lastWrite = TryGetLastWriteUtc(exePath);
+        if (lastWrite is DateTime timestamp && _versions.TryGet(exePath, timestamp, out string cachedVersion))
+        {
+            notes.Add($"Version {cachedVersion} (cached; executable unchanged since it was read).");
+            return cachedVersion;
+        }
+
         try
         {
             (int exitCode, string stdOut, _) =
@@ -221,6 +234,12 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             notes.Add(version is null
                 ? $"claude --version exited {exitCode} without a parseable version."
                 : $"Version reported by the official `claude --version` command: {version}.");
+
+            if (version is not null && lastWrite is DateTime storedAt)
+            {
+                _versions.Store(exePath, storedAt, version);
+            }
+
             return version;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -238,6 +257,18 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             // Caller-requested cancellation is deliberately NOT caught here: it propagates so the
             // refresh service can tell shutdown apart from a provider failure.
             notes.Add($"claude --version failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    private DateTime? TryGetLastWriteUtc(string exePath)
+    {
+        try
+        {
+            return _lastWriteUtc(exePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
             return null;
         }
     }

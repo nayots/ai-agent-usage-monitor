@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using AiUsageMonitor.Domain;
+using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Providers.Claude;
 using AiUsageMonitor.Infrastructure.Tests.Fakes;
 
@@ -158,6 +159,32 @@ public sealed class ClaudeOAuthUsageProbeTests
         var probe = new ClaudeOAuthUsageProbe(new FakeProcessRunner(), new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}")), () => ExePath, () => "unused");
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => probe.ProbeAsync(cancellation.Token));
+    }
+
+    [Fact]
+    public async Task UnchangedExecutableUsesTheCachedVersionOnTheSecondProbe()
+    {
+        using var directory = new TempDirectory();
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.227 (Claude Code)");
+        DateTime lastWrite = new(2026, 8, 13, 10, 0, 0, DateTimeKind.Utc);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(
+            HttpStatusCode.OK,
+            """{"five_hour":{"utilization":42.5,"resets_at":"2026-08-17T12:00:00Z"}}"""));
+        var probe = new ClaudeOAuthUsageProbe(
+            processes,
+            handler,
+            () => ExePath,
+            () => WriteCredentials(directory, "token"),
+            new ProviderVersionCache(),
+            _ => lastWrite);
+
+        ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
+        ProviderSnapshot second = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(1, processes.RunCapturedCallCount(ExePath));
+        Assert.Equal(first.Version, second.Version);
+        Assert.Contains("Version 2.1.227 (cached; executable unchanged since it was read).", second.Notes);
     }
 
     private static ClaudeOAuthUsageProbe CreateProbe(HttpMessageHandler handler, string credentialsPath)
