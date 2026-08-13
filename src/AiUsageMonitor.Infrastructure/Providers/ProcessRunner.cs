@@ -65,4 +65,57 @@ internal static class ProcessRunner
             // Best-effort backstop only - the process may already be gone.
         }
     }
+
+    public static IProcessSession StartDuplex(string exePath, string arguments)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = exePath,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = new UTF8Encoding(false),
+            StandardErrorEncoding = new UTF8Encoding(false),
+            StandardInputEncoding = new UTF8Encoding(false),
+            CreateNoWindow = true,
+        };
+
+        var process = new Process { StartInfo = psi };
+        try
+        {
+            process.Start();
+            return new ProcessSession(process);
+        }
+        catch
+        {
+            process.Dispose();
+            throw;
+        }
+    }
+
+    private sealed class ProcessSession(Process process) : IProcessSession
+    {
+        private Process? _process = process;
+
+        public TextWriter StandardInput => GetProcess().StandardInput;
+        public TextReader StandardOutput => GetProcess().StandardOutput;
+
+        public Task WaitForExitAsync(CancellationToken ct) => GetProcess().WaitForExitAsync(ct);
+
+        public void Dispose()
+        {
+            Process? process = Interlocked.Exchange(ref _process, null);
+            if (process is null)
+            {
+                return;
+            }
+
+            TryKill(process);
+            process.Dispose();
+        }
+
+        private Process GetProcess() => _process ?? throw new ObjectDisposedException(nameof(ProcessSession));
+    }
 }
