@@ -164,14 +164,14 @@ Sized **S** (a sitting), **M** (a plan and a few tasks), **L** (its own incremen
 |---|---|---|---|---|---|
 | C10 | ✅ Done | **Diagnostics view.** Per provider: mechanism string, tier, executable path, version, last error, the probe's `Notes`, and an explicit statement of what is redacted. Plus a **copy redacted bundle** action. | Already required, and it is what makes an unofficial mechanism defensible when it breaks. The `Notes` lists are fully populated and read by nothing. | M | §20 |
 | C11 | ❌ forecast; ⬜ history (as X14) | **Local history and burn rate.** Sample each window locally, then show a sparkline and the one derived number that changes behaviour: *at this rate you reach 100% at 16:40*. Local file, no transmission. | The highest-value thing available without any new provider mechanism. A quota widget that cannot say "you are burning this faster than usual" is only a gauge. | L | §28 |
-| C12 | ⬜ Open | **User-set thresholds.** Replace the fixed ladder with chosen ones — "tell me at 75 and 90, nothing else". | The ladder is a good default and a poor mandate; twelve rungs is a lot of balloons for a heavy user. | M | §28 |
-| C13 | ⬜ Open | **Quiet hours.** Suppress non-critical alerts on a schedule; `LimitReached` still lands. | Cheap, and the obvious complement to C12. | S | new |
+| C12 | ✅ Done | **User-set thresholds.** Replace the fixed ladder with chosen ones — "tell me at 75 and 90, nothing else". | The ladder is a good default and a poor mandate; twelve rungs is a lot of balloons for a heavy user. | M | §28 |
+| C13 | ✅ Done | **Quiet hours.** Suppress non-critical alerts on a schedule; `LimitReached` still lands. | Cheap, and the obvious complement to C12. | S | new |
 | C14 | ✅ Done | **Provider ordering and per-provider visibility.** Drag to reorder; hide a provider outright. | Asked for, and it changes the tray glyph too — the digits come from the first visible provider's primary window. | S | §28 |
 | C15 | ✅ Done | **Per-provider refresh intervals.** Codex is a local process; Claude is a network call against an undocumented endpoint. One interval for both is the wrong shape. | Also the polite thing to do to an unofficial endpoint. | M | §28 |
 | C16 | ⬜ Open | **A third provider.** Gemini CLI, Copilot, or whatever else is installed. The registry is a hardcoded two-element list. | The strongest possible test of "the domain model is provider-neutral" is a third provider that was not in mind when it was written. | L | §28 |
 | C17 | ⬜ Open | **Release, versioning and a README.** Semantic version stamped into the assembly and shown in diagnostics, a tagged GitHub release carrying the self-contained `.exe`, and a README covering setup, the unofficial-mechanism caveat, and privacy behaviour. | The repo currently has no README and no way for anyone else to install this. Already agreed as the last increment. | M | §27 |
 | C18 | ⬜ Open — needs a §23 decision | **Opt-in update check.** A version check against the release feed. **Flagged, not recommended as-is:** it is an outbound call to a third party, which §23 forbids by default — it would need to be off by default, explicitly consented, and separately labelled. | Worth a decision rather than a silent omission. | M | §28 |
-| C19 | ⬜ Open | **Edge-docked mini mode.** A one-line strip pinned to a screen edge: monogram, bar, percent, nothing else. | Compact density is smaller; this is *different* — the always-visible form the tray glyph currently approximates in 16 px. | L | §28 |
+| C19 | ✅ Done | **Edge-docked mini mode.** A one-line strip pinned to a screen edge: monogram, bar, percent, nothing else. | Compact density is smaller; this is *different* — the always-visible form the tray glyph currently approximates in 16 px. | L | §28 |
 
 ### 2.3 Deliberately not proposed
 
@@ -317,9 +317,9 @@ order because each later plan is written against the tree the earlier ones leave
 | Idea | Verdict | Notes |
 |---|---|---|
 | C10 — diagnostics view | ✅ **Done** | `21c0507`, `c99cff0`, `be37249`, `6ece780`, `1cdc2eb`, `f359afb`, `9a1d84c`. Every PRD §20 field, per provider and for the application, reachable from the tray menu and from Settings. The copied bundle is redacted once over the finished text — `%USERPROFILE%` and `%USERNAME%` — so nothing added to it later can bypass the masking. `IProviderProbe` gained one stable mechanism fact, `MakesFirstPartyNetworkCall`, as a default interface member so the seven test stubs and the POC kept compiling. |
-| C12 + C13 — thresholds and quiet hours | ⬜ *planned* | `docs/plans/2026-08-13-notification-control.md`. |
+| C12 + C13 — thresholds and quiet hours | ✅ *done* | `1c45605`, `9a8c1dc`, `5cf9548`, `188c00d`, `d0ccb77`. Built inline: four tasks of mostly pure domain code, where the plan already carried the implementation. |
 | C14 + C15 — provider order, visibility, per-provider interval | ✅ **Done** | `7f5297b`, `c217742`, `e7ccb16`, `9481f3a`, `09913ba`. Providers gained a stable settings key (`claude-code`, `codex`) separate from their display name. Cadence moved out of the window's poll timer into `ProviderRefreshService`, which now decides per provider — the timer is a fixed 5 s tick that only asks whether anything is due. **Hidden means not polled**, so a hidden provider costs no work and, for Claude Code, no call to an undocumented endpoint. **Delivered with move up/down buttons rather than C14's drag**, because they are keyboard-reachable and screen-reader-nameable and the list is two rows long. |
-| C19 — edge-docked mini mode | ⬜ *planned* | `docs/plans/2026-08-13-mini-mode.md`. |
+| C19 — edge-docked mini mode | ✅ *done* | `cd11a4d`, `f6f3150`, `0bb51bf`, `9cb3cde`. Delegated; the worker hung after Task 1 and a relaunch never started at all, so Tasks 2–4 were finished inline. |
 
 Four are deliberately not planned, and the reasons are not the same reason:
 
@@ -335,7 +335,7 @@ Four are deliberately not planned, and the reasons are not the same reason:
 
 | Idea | Source | Verdict | Notes |
 |---|---|---|---|
-| C10–C19, X10–X15 | both | ⬜ *open* | All §2.2 / §3.2 new features. Includes the diagnostics view (C10/X10), local history (C11/X14), reset application data (X11), the zero-provider home state (X12), restored snapshots (X13), localization (X15), and release/versioning/README (C17). |
+| C11, C16, C17, C18, X10–X15 | both | ⬜ *open* | What is left of §2.2 / §3.2 after the four increments of §4.4. C10, C12–C15 and C19 are done. The remainder: local history (C11/X14), a third provider (C16), release/versioning/README (C17), the update check (C18), reset application data (X11), the zero-provider home state (X12), restored snapshots (X13), localization (X15). X10 is closed by C10. |
 | X8's deadline scheduler and network-recovery trigger | Codex | ⬜ *open* | The unbuilt remainder of X8 — see the C3/X8 row in §4.2. Not scheduled: the fixed 5 s hidden tick already removed the churn that motivated it, so the remainder buys little until there is a reason to want it. |
 
 The pre-existing PRD backlog is unchanged: diagnostics (§20), reset application settings (§19),
