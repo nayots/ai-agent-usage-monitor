@@ -29,21 +29,61 @@ public static class QuotaMilestones
     /// thoroughly spent.
     /// </para>
     /// </summary>
-    public static int Crossed(double? usedPercent)
+    public static int Crossed(double? usedPercent) => Crossed(usedPercent, Ladder);
+
+    /// <inheritdoc cref="Crossed(double?)"/>
+    /// <param name="ladder">
+    /// The rungs to measure against, ascending. Supplied rather than assumed because the user
+    /// chooses how often to be told; <see cref="Ladder"/> is only the default.
+    /// </param>
+    public static int Crossed(double? usedPercent, IReadOnlyList<int> ladder)
     {
         if (usedPercent is not double used)
         {
             return 0;
         }
 
-        for (int index = Ladder.Count - 1; index >= 0; index--)
+        for (int index = ladder.Count - 1; index >= 0; index--)
         {
-            if (used >= Ladder[index])
+            if (used >= ladder[index])
             {
-                return Ladder[index];
+                return ladder[index];
             }
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// A user-supplied ladder made safe to use. Values outside 1-100 are dropped, duplicates
+    /// collapse, 100 is always present, and the result is ascending. A list with no usable value at
+    /// all falls back to <see cref="Ladder"/>: a hand-edited settings file must not be able to
+    /// silence alerts by accident, and the notifications switch already exists for silencing them
+    /// on purpose.
+    /// </summary>
+    public static IReadOnlyList<int> Sanitize(IReadOnlyList<int>? thresholds)
+    {
+        if (thresholds is null)
+        {
+            return Ladder;
+        }
+
+        SortedSet<int> kept = [];
+
+        foreach (int threshold in thresholds)
+        {
+            if (threshold is >= 1 and <= 100)
+            {
+                kept.Add(threshold);
+            }
+        }
+
+        if (kept.Count == 0)
+        {
+            return Ladder;
+        }
+
+        kept.Add(100);
+        return [.. kept];
     }
 }

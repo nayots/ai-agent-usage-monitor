@@ -34,4 +34,54 @@ public class QuotaMilestonesTests
     [Fact]
     public void AnAbsentReadingReachesNoRungRatherThanTheBottomOne() =>
         Assert.Equal(QuotaMilestones.Crossed(0), QuotaMilestones.Crossed(null));
+
+    [Theory]
+    [InlineData(84d, 80)]
+    [InlineData(90d, 90)]
+    [InlineData(140d, 100)]
+    [InlineData(null, 0)]
+    public void ASuppliedLadderReplacesTheDefaultOne(double? used, int expected) =>
+        Assert.Equal(expected, QuotaMilestones.Crossed(used, [80, 90, 100]));
+
+    /// <summary>
+    /// A sparse ladder must go quiet between its rungs rather than fall back to the default one.
+    /// Choosing to hear less is the whole point of choosing a ladder.
+    /// </summary>
+    [Fact]
+    public void AReadingBelowTheLowestRungOfASparseLadderReachesNothing() =>
+        Assert.Equal(0, QuotaMilestones.Crossed(9, [10, 100]));
+
+    [Fact]
+    public void SanitizeDropsOutOfRangeValuesCollapsesDuplicatesAndSorts() =>
+        Assert.Equal([20, 95, 100], QuotaMilestones.Sanitize([95, 20, 20, 200, -3]));
+
+    [Fact]
+    public void SanitizeKeepsALadderThatIsAlreadyJustTheTopRung() =>
+        Assert.Equal([100], QuotaMilestones.Sanitize([100]));
+
+    [Fact]
+    public void SanitizeAddsAHundredToALadderThatOmittedIt() =>
+        Assert.Equal([50, 100], QuotaMilestones.Sanitize([50]));
+
+    /// <summary>
+    /// The three ways a hand-edited settings file can hold nothing usable. Each falls back to the
+    /// default ladder rather than to silence: the notifications switch is how someone asks for
+    /// silence on purpose, and a typo must not be able to imitate it.
+    /// </summary>
+    [Fact]
+    public void SanitizeFallsBackToTheDefaultLadderRatherThanToSilence()
+    {
+        Assert.Equal(QuotaMilestones.Ladder, QuotaMilestones.Sanitize(null));
+        Assert.Equal(QuotaMilestones.Ladder, QuotaMilestones.Sanitize([]));
+        Assert.Equal(QuotaMilestones.Ladder, QuotaMilestones.Sanitize([0, -5, 101, 900]));
+    }
+
+    [Fact]
+    public void SanitizeAlwaysProducesAnAscendingLadderContainingAHundred()
+    {
+        IReadOnlyList<int> sanitized = QuotaMilestones.Sanitize([100, 3, 77, 3, 40]);
+
+        Assert.Contains(100, sanitized);
+        Assert.Equal(sanitized.OrderBy(rung => rung), sanitized);
+    }
 }

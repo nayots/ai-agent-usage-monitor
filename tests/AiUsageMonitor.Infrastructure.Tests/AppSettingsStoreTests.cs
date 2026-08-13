@@ -1,3 +1,4 @@
+using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Settings;
 
 namespace AiUsageMonitor.Infrastructure.Tests;
@@ -264,6 +265,52 @@ public class AppSettingsStoreTests
         Assert.False(settings.IsProviderHidden("codex"));
         Assert.Null(settings.RefreshSecondsOverrideFor("codex"));
         Assert.Equal(settings.RefreshInterval, settings.RefreshIntervalFor("codex"));
+    }
+
+    [Fact]
+    public void AlertThresholdsDefaultToTheFullLadder() =>
+        Assert.Equal(QuotaMilestones.Ladder, AppSettings.Default.EffectiveAlertThresholds);
+
+    [Fact]
+    public void AlertThresholdsRoundTripThroughTheStore()
+    {
+        using TempDirectory dir = new();
+        AppSettingsStore store = new(dir.File("settings.json"));
+
+        store.Save(AppSettings.Default with { AlertThresholds = [90, 100] });
+
+        Assert.Equal([90, 100], store.Load().Settings.AlertThresholds);
+    }
+
+    /// <summary>
+    /// The sanitized view is derived. Writing it would quietly rewrite what the user typed into the
+    /// file, and would then be read back as if they had typed that.
+    /// </summary>
+    [Fact]
+    public void TheSanitizedLadderIsNeverWrittenToTheFile()
+    {
+        using TempDirectory dir = new();
+        AppSettingsStore store = new(dir.File("settings.json"));
+
+        store.Save(AppSettings.Default with { AlertThresholds = [90, 100] });
+
+        Assert.DoesNotContain("EffectiveAlertThresholds", File.ReadAllText(dir.File("settings.json")));
+    }
+
+    /// <summary>
+    /// A hand-edited file can hold a null here just as it can for the provider collections, and the
+    /// derived view has to survive it - the widget must still start, and still alert.
+    /// </summary>
+    [Fact]
+    public void ANullLadderInAHandEditedFileFallsBackToTheDefaultOne()
+    {
+        using TempDirectory dir = new();
+        string path = dir.File("settings.json");
+        File.WriteAllText(path, """{ "AlertThresholds": null }""");
+
+        AppSettings settings = new AppSettingsStore(path).Load().Settings;
+
+        Assert.Equal(QuotaMilestones.Ladder, settings.EffectiveAlertThresholds);
     }
 
     [Fact]

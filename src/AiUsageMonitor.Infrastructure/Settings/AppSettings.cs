@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using AiUsageMonitor.Domain;
 
 namespace AiUsageMonitor.Infrastructure.Settings;
 
@@ -89,6 +90,19 @@ public sealed record AppSettings
     /// </summary>
     [JsonIgnore]
     public TimeSpan RefreshInterval => TimeSpan.FromSeconds(Math.Clamp(RefreshIntervalSeconds, 15, 3600));
+
+    /// <summary>
+    /// The percentages worth a balloon. Persisted as a plain array of numbers so the file stays
+    /// hand-editable; read through <see cref="EffectiveAlertThresholds"/>, never directly.
+    /// </summary>
+    public IReadOnlyList<int> AlertThresholds { get; init; } = QuotaMilestones.Ladder;
+
+    /// <summary>
+    /// <see cref="AlertThresholds"/> made safe to use. Derived, never written to the file - a
+    /// sanitized copy on disk would quietly rewrite what the user typed there.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<int> EffectiveAlertThresholds => QuotaMilestones.Sanitize(AlertThresholds);
 
     public IReadOnlyList<string> ProviderOrder { get; init; } = [];
 
