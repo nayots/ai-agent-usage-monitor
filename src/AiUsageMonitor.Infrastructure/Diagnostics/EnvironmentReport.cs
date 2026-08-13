@@ -31,8 +31,12 @@ public sealed record EnvironmentReport(
         try
         {
             Assembly? assembly = Assembly.GetEntryAssembly();
-            string? version = assembly?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-                ?? assembly?.GetName().Version?.ToString();
+            string? informationalVersion = assembly?
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion;
+            string? version = !string.IsNullOrWhiteSpace(informationalVersion)
+                ? informationalVersion
+                : assembly?.GetName().Version?.ToString();
 
             if (string.IsNullOrWhiteSpace(version))
             {
