@@ -1,6 +1,7 @@
 # Feature inventory and ideas
 
-**Status:** open — §3 awaiting Codex, §4 awaiting a decision from Stoyan.
+**Status:** open — §1 and §2 describe commit `4ef5f12`; the six defects marked **Done** in §4 have
+since been fixed, so §1.2's and §1.3's descriptions of failure behaviour are now understated.
 **Written:** 2026-08-13, against commit `4ef5f12`.
 
 ## Why this document exists
@@ -245,4 +246,11 @@ For Stoyan. Nothing above is scheduled until it appears here.
 
 | Idea | Source | Verdict | Notes |
 |---|---|---|---|
-| | | | |
+| X1 — retain the last good rows through a failure | Codex | **Done** | `342c9ff`. Rows survive an Error/Unavailable read, render stale, and are still cleared by a *successful* empty read. No expiry — see X13/X14. |
+| X2 — single-flight, latest-wins refresh | Codex | **Done** | `5e11612`. A superseded completion raises nothing and touches no backoff state. |
+| X3 — stable tier and mechanism on failures | Codex | **Done** | `7358a62`. `IProviderProbe` now carries both; a timeout can no longer relabel Codex Unofficial. |
+| X5 — bounded, app-authored error copy | Codex | **Done** | `c251366`, `c00bbf6`. Raw JSON-RPC error objects and framework exception messages no longer reach a card. C6's "Details" affordance is *not* done. |
+| X9 — say when a change is session-only | Codex | **Done** | `646470c`. |
+| X23 — never launch the npm shim | Codex | **Done** | `ebac34a`. PATH resolution now finds the vendored executable behind a shim, or reports `NotInstalled`. |
+| X6 — contract tests for the real adapters | Codex | **Partial** | The testable slices the fixes above needed were extracted (`CodexExecutableLocator`, `CodexProtocol`, `ProviderErrorText`). Injectable HTTP/process boundaries for the full probes remain open. |
+| X4, X7/X18, X8/X21, X10–X15, C1–C19 | both | *open* | Untouched. The fix increment was scoped to defects only. |
