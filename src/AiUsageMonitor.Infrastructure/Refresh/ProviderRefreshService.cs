@@ -35,6 +35,8 @@ public sealed class ProviderRefreshService
     private readonly Dictionary<ProviderDescriptor, Backoff> _backoff = [];
     private readonly Dictionary<ProviderDescriptor, AttemptState> _attempts = [];
     private readonly Lock _gate = new();
+    private IReadOnlyDictionary<string, TimeSpan> _intervalOverrides = new Dictionary<string, TimeSpan>();
+    private IReadOnlyCollection<string> _hiddenProviderKeys = [];
 
     public ProviderRefreshService(
         IReadOnlyList<ProviderDescriptor> providers,
@@ -60,6 +62,58 @@ public sealed class ProviderRefreshService
     /// next attempt against the new value.
     /// </summary>
     public TimeSpan BaseInterval { get; set; }
+
+    /// <summary>
+    /// Per-provider cadence overrides, keyed by <see cref="ProviderDescriptor.Key"/>. A provider not
+    /// named here polls at <see cref="BaseInterval"/>. Replaced wholesale when settings change.
+    /// </summary>
+    public IReadOnlyDictionary<string, TimeSpan> IntervalOverrides
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _intervalOverrides;
+            }
+        }
+        set
+        {
+            lock (_gate)
+            {
+                _intervalOverrides = value ?? new Dictionary<string, TimeSpan>();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Providers the user has hidden. They are not polled at all: a hidden card shows nothing, feeds
+    /// no glyph bar and raises no alert, so polling it would be work with no consumer.
+    /// </summary>
+    public IReadOnlyCollection<string> HiddenProviderKeys
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _hiddenProviderKeys;
+            }
+        }
+        set
+        {
+            lock (_gate)
+            {
+                _hiddenProviderKeys = value ?? [];
+            }
+        }
+    }
+
+    public TimeSpan IntervalFor(ProviderDescriptor provider)
+    {
+        lock (_gate)
+        {
+            return IntervalForUnsafe(provider);
+        }
+    }
 
     /// <summary>
     /// When this provider is next eligible for an unforced attempt, or null when it is not being
@@ -112,6 +166,14 @@ public sealed class ProviderRefreshService
 
         foreach (ProviderDescriptor provider in _providers)
         {
+            lock (_gate)
+            {
+                if (IsHiddenUnsafe(provider))
+                {
+                    continue;
+                }
+            }
+
             running.Add(StartRefreshAsync(provider, force, now, ct));
         }
 
@@ -328,8 +390,27 @@ public sealed class ProviderRefreshService
         }
 
         state.ConsecutiveFailures = failed ? state.ConsecutiveFailures + 1 : 0;
-        state.NextAttempt = now + BackoffFor(state.ConsecutiveFailures, BaseInterval);
+        TimeSpan interval = IntervalForUnsafe(provider);
+        state.NextAttempt = now + (failed
+            ? BackoffFor(state.ConsecutiveFailures, interval)
+            : interval);
     }
+
+    private TimeSpan IntervalForUnsafe(ProviderDescriptor provider)
+    {
+        foreach ((string key, TimeSpan interval) in _intervalOverrides)
+        {
+            if (StringComparer.OrdinalIgnoreCase.Equals(key, provider.Key))
+            {
+                return interval;
+            }
+        }
+
+        return BaseInterval;
+    }
+
+    private bool IsHiddenUnsafe(ProviderDescriptor provider) =>
+        _hiddenProviderKeys.Contains(provider.Key, StringComparer.OrdinalIgnoreCase);
 
     private sealed class Backoff
     {

@@ -50,6 +50,9 @@ public class ProviderRefreshServiceTests
     private static ProviderRefreshService Service(params ProviderDescriptor[] providers) =>
         new(providers, TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(60));
 
+    private static ProviderRefreshService ServiceWithInterval(TimeSpan baseInterval, params ProviderDescriptor[] providers) =>
+        new(providers, TimeSpan.FromMilliseconds(250), baseInterval);
+
     [Fact]
     public void ActivityForAnUnprobedProviderIsEmpty()
     {
@@ -320,6 +323,9 @@ public class ProviderRefreshServiceTests
         await service.RefreshAllAsync(force: true, Now.AddSeconds(1), CancellationToken.None);
 
         await service.RefreshAllAsync(force: false, Now.AddSeconds(2), CancellationToken.None);
+        Assert.Equal(2, probe.Calls);
+
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(62), CancellationToken.None);
         Assert.Equal(3, probe.Calls);
     }
 
@@ -338,7 +344,7 @@ public class ProviderRefreshServiceTests
 
         next = ConnectionState.Connected;
         await service.RefreshAllAsync(force: true, Now.AddSeconds(1), CancellationToken.None);
-        Assert.Null(service.NextAttemptFor(provider, Now.AddSeconds(2)));
+        Assert.Equal(Now.AddMinutes(1).AddSeconds(1), service.NextAttemptFor(provider, Now.AddSeconds(2)));
     }
 
     [Fact]
@@ -370,7 +376,7 @@ public class ProviderRefreshServiceTests
         Assert.Single(raised);
         Assert.Equal(ConnectionState.Connected, raised[0].State);
 
-        await service.RefreshAllAsync(force: false, Now.AddSeconds(2), CancellationToken.None);
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(62), CancellationToken.None);
         Assert.Equal(3, probe.Calls);
     }
 
@@ -453,6 +459,96 @@ public class ProviderRefreshServiceTests
     public void NotInstalledIsAFactNotAFailureSoItIsNeverBackedOff()
     {
         Assert.Equal(TimeSpan.Zero, ProviderRefreshService.BackoffFor(0, TimeSpan.FromSeconds(60)));
+    }
+
+    [Fact]
+    public async Task ASuccessfulRefreshWaitsForTheConfiguredIntervalBeforeAnotherUnforcedCycle()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service([provider]);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(30), CancellationToken.None);
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(61), CancellationToken.None);
+
+        Assert.Equal(2, probe.Calls);
+    }
+
+    [Fact]
+    public async Task AnOverridePollsOnlyItsProviderWhenTheSharedIntervalHasNotElapsed()
+    {
+        FakeProbe alphaProbe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        FakeProbe betaProbe = new("Beta", _ => Task.FromResult(Snapshot("Beta", ConnectionState.Connected)));
+        ProviderDescriptor alpha = new("alpha", "Alpha", "A", alphaProbe);
+        ProviderDescriptor beta = new("beta", "Beta", "B", betaProbe);
+        ProviderRefreshService service = ServiceWithInterval(TimeSpan.FromSeconds(300), alpha, beta);
+        service.IntervalOverrides = new Dictionary<string, TimeSpan> { ["ALPHA"] = TimeSpan.FromSeconds(15) };
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(20), CancellationToken.None);
+
+        Assert.Equal(2, alphaProbe.Calls);
+        Assert.Equal(1, betaProbe.Calls);
+    }
+
+    [Fact]
+    public async Task AHiddenProviderIsSkippedByForcedRefreshAll()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service([provider]);
+        service.HiddenProviderKeys = ["ALPHA"];
+
+        await service.RefreshAllAsync(force: true, Now, CancellationToken.None);
+
+        Assert.Equal(0, probe.Calls);
+    }
+
+    [Fact]
+    public async Task AHiddenProviderIsStillProbedByExplicitRefresh()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service([provider]);
+        service.HiddenProviderKeys = ["ALPHA"];
+
+        await service.RefreshAsync(provider, Now, CancellationToken.None);
+
+        Assert.Equal(1, probe.Calls);
+    }
+
+    [Fact]
+    public async Task ANotInstalledProviderWaitsForTheNormalIntervalBeforeAnotherUnforcedCycle()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.NotInstalled)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service([provider]);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(30), CancellationToken.None);
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(61), CancellationToken.None);
+
+        Assert.Equal(2, probe.Calls);
+    }
+
+    [Fact]
+    public void IntervalAndHiddenProviderSettingsAreCaseInsensitiveAndNeverNull()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderRefreshService service = Service([provider]);
+
+        service.IntervalOverrides = new Dictionary<string, TimeSpan> { ["ALPHA"] = TimeSpan.FromSeconds(15) };
+        service.HiddenProviderKeys = ["ALPHA"];
+
+        Assert.Equal(TimeSpan.FromSeconds(15), service.IntervalFor(provider));
+        Assert.Contains("alpha", service.HiddenProviderKeys, StringComparer.OrdinalIgnoreCase);
+
+        service.IntervalOverrides = null!;
+        service.HiddenProviderKeys = null!;
+
+        Assert.Empty(service.IntervalOverrides);
+        Assert.Empty(service.HiddenProviderKeys);
     }
 
     [Theory]
