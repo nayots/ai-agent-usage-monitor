@@ -181,6 +181,16 @@ public sealed record AppSettings
     public double? WindowTop { get; init; }
 
     /// <summary>
+    /// The size the user last dragged the settings window to, or null before they ever have. Null
+    /// rather than 0 for the same reason <see cref="WindowLeft"/> is: the window has a deliberate
+    /// default size, and "never resized" is a different fact from "resized to nothing".
+    /// </summary>
+    public double? SettingsWindowWidth { get; init; }
+
+    /// <inheritdoc cref="SettingsWindowWidth"/>
+    public double? SettingsWindowHeight { get; init; }
+
+    /// <summary>
     /// Whether the "the widget is in the notification area" balloon has been shown. Application
     /// state rather than a preference, and deliberately not offered in the settings window: it
     /// answers "has this user been told once", which no one needs to configure.

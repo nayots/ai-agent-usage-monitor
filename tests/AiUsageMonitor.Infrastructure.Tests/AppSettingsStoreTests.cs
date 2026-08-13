@@ -381,4 +381,24 @@ public class AppSettingsStoreTests
         Assert.Equal(1234.5, loaded.WindowLeft);
         Assert.Equal(-20, loaded.WindowTop);
     }
+
+    [Fact]
+    public void TheSettingsWindowSizeRoundTrips()
+    {
+        using TempDirectory directory = new();
+        AppSettingsStore store = new(directory.File("settings.json"));
+
+        store.Save(AppSettings.Default with { SettingsWindowWidth = 900, SettingsWindowHeight = 700 });
+
+        AppSettings loaded = store.Load().Settings;
+        Assert.Equal(900, loaded.SettingsWindowWidth);
+        Assert.Equal(700, loaded.SettingsWindowHeight);
+    }
+
+    [Fact]
+    public void AWindowSizeIsNullUntilTheWindowHasBeenResized()
+    {
+        Assert.Null(AppSettings.Default.SettingsWindowWidth);
+        Assert.Null(AppSettings.Default.SettingsWindowHeight);
+    }
 }
