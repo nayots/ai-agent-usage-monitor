@@ -140,7 +140,10 @@ Every task's requirements implicitly include this section.
 
   public static class DiagnosticRedaction
   {
-      public static string Redact(string text);
+      /// <summary>
+      /// One method, nullable in and nullable out. Two overloads differing only by nullable
+      /// annotation are not a valid overload set — the annotations are not part of the signature.
+      /// </summary>
       public static string? Redact(string? text);
   }
   ```
