@@ -205,9 +205,10 @@ These are requirement changes, made explicitly rather than contradicted in code:
 - `Select(key)` opens the requested page, including the tray's diagnostics entry point;
 - a remembered size larger than the work area is clamped on open (extends `PlacementClampTests`).
 
-`SettingsViewModelTests` changes only by dropping two constructor arguments at each construction
-site. If it needs any other edit, the refactor has gone wrong. `DiagnosticsViewModelTests` does not
-change at all.
+`SettingsViewModelTests` changes in exactly two ways: two constructor arguments disappear from each
+construction site, and `TheActionsCallWhatTheyClaimTo` loses the two commands that no longer exist.
+If it needs an edit that is neither of those, the refactor has gone wrong.
+`DiagnosticsViewModelTests` does not change at all.
 
 Neither proves it looks right. A bounded smoke launch and a look at the real window close the
 increment, per the project's usual practice for presentation work.
