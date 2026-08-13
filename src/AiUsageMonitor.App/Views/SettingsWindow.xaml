@@ -84,6 +84,14 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
+      <TextBlock Text="{Binding StaleThresholdWarningText}" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource StateWarnBrush}">
+        <TextBlock.Style>
+          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers><DataTrigger Binding="{Binding HasStaleThresholdWarning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+          </Style>
+        </TextBlock.Style>
+      </TextBlock>
 
       <TextBlock Text="ACTIONS" Style="{StaticResource SettingsSectionTextStyle}" />
       <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Re-check providers" Command="{Binding RecheckProvidersCommand}" AutomationProperties.Name="Re-check providers" />

@@ -112,6 +112,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public bool HasPersistenceWarning => _settings.PersistenceFailed;
 
+    public bool HasStaleThresholdWarning => _settings.Current.StaleAfter <= _settings.Current.RefreshInterval;
+
+    public string StaleThresholdWarningText => "Cards will always look stale — this is shorter than the refresh interval.";
+
     public string PersistenceWarningText => "Changes apply to this session only — the settings file could not be saved.";
 
     public string? StartWithWindowsUnavailableReason => _startup.IsSupported

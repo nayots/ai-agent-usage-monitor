@@ -91,6 +91,24 @@ public class SettingsViewModelTests
         Assert.True(model.RefreshIntervals.Single(c => c.Value == 300).IsSelected);
     }
 
+    [Theory]
+    [InlineData(60, 300, true)]
+    [InlineData(300, 60, false)]
+    [InlineData(60, 60, true)]
+    public void TheStaleThresholdWarningReflectsTheClampedSettings(int staleAfterSeconds, int refreshIntervalSeconds, bool expected)
+    {
+        SettingsViewModel model = Model(
+            out _,
+            AppSettings.Default with
+            {
+                StaleAfterSeconds = staleAfterSeconds,
+                RefreshIntervalSeconds = refreshIntervalSeconds
+            });
+
+        Assert.Equal(expected, model.HasStaleThresholdWarning);
+        Assert.Equal("Cards will always look stale — this is shorter than the refresh interval.", model.StaleThresholdWarningText);
+    }
+
     [Fact]
     public void DeselectingAChoiceChangesNothing()
     {
