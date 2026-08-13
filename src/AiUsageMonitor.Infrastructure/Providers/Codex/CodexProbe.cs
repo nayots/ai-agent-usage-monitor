@@ -185,58 +185,15 @@ public sealed class CodexProbe : IProviderProbe
                     break; // stdout closed before we saw an id:2 response
                 }
 
-                if (string.IsNullOrWhiteSpace(line))
+                if (CodexProtocol.TryReadResult(line, notes, out JsonElement response))
                 {
-                    continue;
-                }
-
-                JsonDocument doc;
-                try
-                {
-                    doc = JsonDocument.Parse(line);
-                }
-                catch (JsonException)
-                {
-                    continue; // defensive: skip any line that fails to parse as JSON
-                }
-
-                using (doc)
-                {
-                    JsonElement root = doc.RootElement;
-
-                    // Responses omit "jsonrpc" entirely. Any line without an "id" is an unsolicited
-                    // notification (e.g. remoteControl/status/changed) interleaved right after
-                    // initialize - skip it and keep reading, never assume the first line is the answer.
-                    if (!root.TryGetProperty("id", out JsonElement idEl) || idEl.ValueKind != JsonValueKind.Number)
-                    {
-                        if (root.TryGetProperty("method", out JsonElement methodEl) && methodEl.ValueKind == JsonValueKind.String)
-                        {
-                            notes.Add($"Observed and skipped unsolicited notification: {methodEl.GetString()}");
-                        }
-
-                        continue;
-                    }
-
-                    if (idEl.GetInt32() != 2)
-                    {
-                        continue; // e.g. the id:1 initialize acknowledgement
-                    }
-
-                    if (root.TryGetProperty("error", out JsonElement errorEl))
-                    {
-                        throw new InvalidOperationException($"codex app-server returned an error: {errorEl.GetRawText()}");
-                    }
-
-                    if (root.TryGetProperty("result", out JsonElement resultEl))
-                    {
-                        result = resultEl.Clone();
-                    }
+                    result = response;
                 }
             }
 
             if (result is null)
             {
-                throw new InvalidOperationException("codex app-server closed stdout before an id:2 response was observed.");
+                throw new ProviderMechanismException("codex app-server closed stdout before an id:2 response was observed.");
             }
 
             // Close stdin now that we have what we need - verified behaviour: exits code 0 in ~25ms.
@@ -293,11 +250,6 @@ public sealed class CodexProbe : IProviderProbe
             unlimitedCredits = TryGetBool(credits, "unlimited");
         }
 
-        string? individualLimitRaw =
-            bucket.TryGetProperty("individualLimit", out JsonElement il) && il.ValueKind != JsonValueKind.Null
-                ? il.GetRawText()
-                : null;
-
         var sharedExtra = new Dictionary<string, string>();
         if (planType is not null)
         {
@@ -322,11 +274,6 @@ public sealed class CodexProbe : IProviderProbe
         if (creditsBalance is not null)
         {
             sharedExtra["credits.balance"] = creditsBalance;
-        }
-
-        if (individualLimitRaw is not null)
-        {
-            sharedExtra["individualLimit"] = individualLimitRaw;
         }
 
         if (bucket.TryGetProperty("primary", out JsonElement primary) && primary.ValueKind == JsonValueKind.Object)
