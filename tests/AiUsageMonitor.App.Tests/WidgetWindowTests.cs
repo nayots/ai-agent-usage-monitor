@@ -241,6 +241,14 @@ public class WidgetWindowTests(WpfFixture wpf)
         model.Dispose();
     });
 
+    [Fact]
+    public void EscapeDismissesOnlyAVisibleUnpinnedWidget()
+    {
+        Assert.True(WidgetWindow.ShouldDismissOnEscape(isPinned: false, isVisible: true));
+        Assert.False(WidgetWindow.ShouldDismissOnEscape(isPinned: true, isVisible: true));
+        Assert.False(WidgetWindow.ShouldDismissOnEscape(isPinned: false, isVisible: false));
+    }
+
     /// <summary>
     /// The wiring between losing the focus and answering for it. The delay is the point: the focus
     /// can come back to this application a moment after it leaves - a click on the notification

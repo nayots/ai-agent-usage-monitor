@@ -536,6 +536,7 @@ public partial class WidgetWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Activate();
+        Dispatcher.BeginInvoke(new Action(() => FooterRefreshButton.Focus()), DispatcherPriority.Input);
 
         // Hidden-to-tray is the primary operating mode: provider polling continues at full rate so
         // the glyph and quota notifications remain current. Only unseen presentation work slows.
@@ -587,6 +588,17 @@ public partial class WidgetWindow : Window
     private void TrayExit_Click(object sender, RoutedEventArgs e) => ExitApplication();
 
     private void Close_Click(object sender, RoutedEventArgs e) => HideToTray();
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && ShouldDismissOnEscape(_settings.Current.AlwaysOnTop, Visibility == Visibility.Visible))
+        {
+            HideToTray();
+            e.Handled = true;
+        }
+    }
+
+    public static bool ShouldDismissOnEscape(bool isPinned, bool isVisible) => !isPinned && isVisible;
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
