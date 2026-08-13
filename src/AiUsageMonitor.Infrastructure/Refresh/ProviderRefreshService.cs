@@ -20,6 +20,7 @@ public sealed class ProviderRefreshService
     private readonly TimeSpan _timeout;
     private readonly ILogger _logger;
     private readonly Dictionary<ProviderDescriptor, Backoff> _backoff = [];
+    private readonly Dictionary<ProviderDescriptor, AttemptState> _attempts = [];
     private readonly Lock _gate = new();
 
     public ProviderRefreshService(
@@ -67,80 +68,110 @@ public sealed class ProviderRefreshService
 
         foreach (ProviderDescriptor provider in _providers)
         {
-            if (!force && IsBackedOff(provider, now))
-            {
-                continue;
-            }
-
-            running.Add(RefreshAsync(provider, now, ct));
+            running.Add(StartRefreshAsync(provider, force, now, ct));
         }
 
         await Task.WhenAll(running).ConfigureAwait(false);
     }
 
     /// <summary>Probes one provider, ignoring its backoff. This is what a manual retry calls.</summary>
-    public async Task RefreshAsync(ProviderDescriptor provider, DateTimeOffset now, CancellationToken ct)
+    public Task RefreshAsync(ProviderDescriptor provider, DateTimeOffset now, CancellationToken ct) =>
+        StartRefreshAsync(provider, force: true, now, ct);
+
+    private Task StartRefreshAsync(ProviderDescriptor provider, bool force, DateTimeOffset now, CancellationToken ct)
+    {
+        long sequence;
+
+        lock (_gate)
+        {
+            AttemptState attempts = GetAttempts(provider);
+            if (!force && (IsBackedOff(provider, now) || attempts.InFlight.Count > 0))
+            {
+                return Task.CompletedTask;
+            }
+
+            sequence = ++attempts.LastStarted;
+            attempts.InFlight.Add(sequence);
+        }
+
+        return RefreshAttemptAsync(provider, sequence, now, ct);
+    }
+
+    private async Task RefreshAttemptAsync(
+        ProviderDescriptor provider,
+        long sequence,
+        DateTimeOffset now,
+        CancellationToken ct)
     {
         ProviderSnapshot snapshot;
 
-        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        linked.CancelAfter(_timeout);
-
         try
         {
-            // Raced against the token rather than simply awaited. CancelAfter only *signals*
-            // cancellation; a probe that never observes its token would leave a bare await pending
-            // forever, making the timeout cooperative rather than real. PRD ss24 asks for a bound
-            // that holds regardless of how well-behaved the probe is, and this is the isolation
-            // boundary for probes that do not exist yet.
-            Task<ProviderSnapshot> probing = provider.Probe.ProbeAsync(linked.Token);
-            Task settled = await Task
-                .WhenAny(probing, Task.Delay(Timeout.InfiniteTimeSpan, linked.Token))
-                .ConfigureAwait(false);
+            using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            linked.CancelAfter(_timeout);
 
-            if (!ReferenceEquals(settled, probing))
+            try
             {
-                Observe(probing, provider);
+                // Raced against the token rather than simply awaited. CancelAfter only *signals*
+                // cancellation; a probe that never observes its token would leave a bare await pending
+                // forever, making the timeout cooperative rather than real. PRD ss24 asks for a bound
+                // that holds regardless of how well-behaved the probe is, and this is the isolation
+                // boundary for probes that do not exist yet.
+                Task<ProviderSnapshot> probing = provider.Probe.ProbeAsync(linked.Token);
+                Task settled = await Task
+                    .WhenAny(probing, Task.Delay(Timeout.InfiniteTimeSpan, linked.Token))
+                    .ConfigureAwait(false);
 
-                if (ct.IsCancellationRequested)
+                if (!ReferenceEquals(settled, probing))
                 {
-                    return;
-                }
+                    Observe(probing, provider);
 
+                    if (ct.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    snapshot = Failed(provider, $"Timed out after {_timeout.TotalSeconds:0}s.");
+                }
+                else
+                {
+                    snapshot = await probing.ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // The application is shutting down or the user cancelled. Not a provider failure, and
+                // not something to report as one - raise nothing and leave the last snapshot standing.
+                return;
+            }
+            catch (OperationCanceledException)
+            {
                 snapshot = Failed(provider, $"Timed out after {_timeout.TotalSeconds:0}s.");
             }
-            else
+            catch (Exception ex)
             {
-                snapshot = await probing.ConfigureAwait(false);
+                // A probe is expected to return a state rather than throw. If one throws anyway, the
+                // failure stays inside its own card.
+                //
+                // The split here is deliberate. The local log gets the whole exception, because that is
+                // what makes a failing provider diagnosable. The card gets the type name ALONE - never
+                // ex.Message - because this catch is the generic backstop for any IProviderProbe,
+                // including ones not written yet, and an arbitrary message is exactly the sort of
+                // string that can carry something it should not. The same rule already governs the
+                // generic catch in ClaudeOAuthUsageProbe.ReadAccessToken; follow it here.
+                _logger.LogWarning(ex, "The probe for {Provider} threw instead of returning a state.", provider.DisplayName);
+                snapshot = Failed(provider, $"The provider probe failed unexpectedly ({ex.GetType().Name}).");
+            }
+
+            if (TryPublish(provider, sequence, snapshot, now))
+            {
+                RaiseRefreshed(provider, snapshot);
             }
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        finally
         {
-            // The application is shutting down or the user cancelled. Not a provider failure, and
-            // not something to report as one - raise nothing and leave the last snapshot standing.
-            return;
+            ClearInFlight(provider, sequence);
         }
-        catch (OperationCanceledException)
-        {
-            snapshot = Failed(provider, $"Timed out after {_timeout.TotalSeconds:0}s.");
-        }
-        catch (Exception ex)
-        {
-            // A probe is expected to return a state rather than throw. If one throws anyway, the
-            // failure stays inside its own card.
-            //
-            // The split here is deliberate. The local log gets the whole exception, because that is
-            // what makes a failing provider diagnosable. The card gets the type name ALONE - never
-            // ex.Message - because this catch is the generic backstop for any IProviderProbe,
-            // including ones not written yet, and an arbitrary message is exactly the sort of
-            // string that can carry something it should not. The same rule already governs the
-            // generic catch in ClaudeOAuthUsageProbe.ReadAccessToken; follow it here.
-            _logger.LogWarning(ex, "The probe for {Provider} threw instead of returning a state.", provider.DisplayName);
-            snapshot = Failed(provider, $"The provider probe failed unexpectedly ({ex.GetType().Name}).");
-        }
-
-        Record(provider, snapshot, now);
-        RaiseRefreshed(provider, snapshot);
     }
 
     /// <summary>
@@ -190,11 +221,46 @@ public sealed class ProviderRefreshService
         Error: error,
         Notes: []);
 
-    private bool IsBackedOff(ProviderDescriptor provider, DateTimeOffset now)
+    private bool IsBackedOff(ProviderDescriptor provider, DateTimeOffset now) =>
+        _backoff.TryGetValue(provider, out Backoff? state) && state.NextAttempt > now;
+
+    private AttemptState GetAttempts(ProviderDescriptor provider)
+    {
+        if (!_attempts.TryGetValue(provider, out AttemptState? attempts))
+        {
+            attempts = new AttemptState();
+            _attempts[provider] = attempts;
+        }
+
+        return attempts;
+    }
+
+    private bool TryPublish(ProviderDescriptor provider, long sequence, ProviderSnapshot snapshot, DateTimeOffset now)
     {
         lock (_gate)
         {
-            return _backoff.TryGetValue(provider, out Backoff? state) && state.NextAttempt > now;
+            AttemptState attempts = GetAttempts(provider);
+            if (sequence < attempts.HighestPublished)
+            {
+                _logger.LogDebug(
+                    "Discarding superseded refresh attempt {Sequence} for {Provider}; attempt {Published} was already published.",
+                    sequence,
+                    provider.DisplayName,
+                    attempts.HighestPublished);
+                return false;
+            }
+
+            attempts.HighestPublished = sequence;
+            Record(provider, snapshot, now);
+            return true;
+        }
+    }
+
+    private void ClearInFlight(ProviderDescriptor provider, long sequence)
+    {
+        lock (_gate)
+        {
+            GetAttempts(provider).InFlight.Remove(sequence);
         }
     }
 
@@ -204,17 +270,14 @@ public sealed class ProviderRefreshService
         // more slowly - and re-checking them costs a file-existence test.
         bool failed = snapshot.State is ConnectionState.Error or ConnectionState.Unavailable;
 
-        lock (_gate)
+        if (!_backoff.TryGetValue(provider, out Backoff? state))
         {
-            if (!_backoff.TryGetValue(provider, out Backoff? state))
-            {
-                state = new Backoff();
-                _backoff[provider] = state;
-            }
-
-            state.ConsecutiveFailures = failed ? state.ConsecutiveFailures + 1 : 0;
-            state.NextAttempt = now + BackoffFor(state.ConsecutiveFailures, BaseInterval);
+            state = new Backoff();
+            _backoff[provider] = state;
         }
+
+        state.ConsecutiveFailures = failed ? state.ConsecutiveFailures + 1 : 0;
+        state.NextAttempt = now + BackoffFor(state.ConsecutiveFailures, BaseInterval);
     }
 
     private sealed class Backoff
@@ -222,5 +285,14 @@ public sealed class ProviderRefreshService
         public int ConsecutiveFailures { get; set; }
 
         public DateTimeOffset NextAttempt { get; set; }
+    }
+
+    private sealed class AttemptState
+    {
+        public long LastStarted { get; set; }
+
+        public long HighestPublished { get; set; }
+
+        public HashSet<long> InFlight { get; } = [];
     }
 }

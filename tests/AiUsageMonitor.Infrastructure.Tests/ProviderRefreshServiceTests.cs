@@ -249,6 +249,114 @@ public class ProviderRefreshServiceTests
     }
 
     [Fact]
+    public async Task ANewerCompletionSupersedesAnOlderFailureAndLeavesNoBackoff()
+    {
+        var first = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int attempt = 0;
+        FakeProbe probe = new("Alpha", _ => ++attempt switch
+        {
+            1 => first.Task,
+            2 => second.Task,
+            _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)),
+        });
+        ProviderDescriptor provider = new("Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+        List<ProviderSnapshot> raised = [];
+        service.Refreshed += (_, e) => raised.Add(e.Snapshot);
+
+        Task older = service.RefreshAsync(provider, Now, CancellationToken.None);
+        Task newer = service.RefreshAsync(provider, Now.AddSeconds(1), CancellationToken.None);
+        Assert.Equal(2, probe.Calls);
+
+        second.SetResult(Snapshot("Alpha", ConnectionState.Connected));
+        await newer;
+        first.SetResult(Snapshot("Alpha", ConnectionState.Error));
+        await older;
+
+        Assert.Single(raised);
+        Assert.Equal(ConnectionState.Connected, raised[0].State);
+
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(2), CancellationToken.None);
+        Assert.Equal(3, probe.Calls);
+    }
+
+    [Fact]
+    public async Task ANonForcedCycleSkipsAProviderWithAnAttemptInFlight()
+    {
+        var pending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeProbe probe = new("Alpha", _ => pending.Task);
+        ProviderDescriptor provider = new("Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+
+        Task inFlight = service.RefreshAllAsync(force: true, Now, CancellationToken.None);
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(1), CancellationToken.None);
+
+        Assert.Equal(1, probe.Calls);
+        pending.SetResult(Snapshot("Alpha", ConnectionState.Connected));
+        await inFlight;
+    }
+
+    [Fact]
+    public async Task AManualRetryStartsASecondAttemptWhileTheFirstIsInFlight()
+    {
+        var first = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int attempt = 0;
+        FakeProbe probe = new("Alpha", _ => ++attempt == 1 ? first.Task : second.Task);
+        ProviderDescriptor provider = new("Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+
+        Task initial = service.RefreshAllAsync(force: true, Now, CancellationToken.None);
+        Task retry = service.RefreshAsync(provider, Now.AddSeconds(1), CancellationToken.None);
+
+        Assert.Equal(2, probe.Calls);
+        second.SetResult(Snapshot("Alpha", ConnectionState.Connected));
+        first.SetResult(Snapshot("Alpha", ConnectionState.Connected));
+        await Task.WhenAll(initial, retry);
+    }
+
+    [Fact]
+    public async Task CancellationClearsTheInFlightMarkerWithoutPublishingAFailure()
+    {
+        var pending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int attempt = 0;
+        FakeProbe probe = new("Alpha", _ => ++attempt == 1
+            ? pending.Task
+            : Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+        using CancellationTokenSource cts = new();
+
+        Task cancelled = service.RefreshAllAsync(force: true, Now, cts.Token);
+        await cts.CancelAsync();
+        await cancelled;
+
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(1), CancellationToken.None);
+        Assert.Equal(2, probe.Calls);
+    }
+
+    [Fact]
+    public async Task DifferentProvidersBeginProbingBeforeEitherCompletes()
+    {
+        var alphaPending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var betaPending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeProbe alphaProbe = new("Alpha", _ => alphaPending.Task);
+        FakeProbe betaProbe = new("Beta", _ => betaPending.Task);
+        ProviderDescriptor alpha = new("Alpha", "A", alphaProbe);
+        ProviderDescriptor beta = new("Beta", "B", betaProbe);
+        ProviderRefreshService service = Service(alpha, beta);
+
+        Task cycle = service.RefreshAllAsync(force: true, Now, CancellationToken.None);
+
+        Assert.Equal(1, alphaProbe.Calls);
+        Assert.Equal(1, betaProbe.Calls);
+        alphaPending.SetResult(Snapshot("Alpha", ConnectionState.Connected));
+        betaPending.SetResult(Snapshot("Beta", ConnectionState.Connected));
+        await cycle;
+    }
+
+    [Fact]
     public void NotInstalledIsAFactNotAFailureSoItIsNeverBackedOff()
     {
         Assert.Equal(TimeSpan.Zero, ProviderRefreshService.BackoffFor(0, TimeSpan.FromSeconds(60)));
