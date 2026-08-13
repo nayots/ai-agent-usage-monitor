@@ -163,6 +163,26 @@ Settled decisions, recorded here so a fresh reader does not spend a suggestion r
 - **`PublishTrimmed`** — WPF hard-errors, NETSDK1168.
 - **Domain properties named after plan periods** (`FiveHourQuota`, `WeeklyQuota`) — windows are discovered, never assumed.
 
+### 2.4 Corrections to this section
+
+Left in place rather than rewritten — §2 is the record of one independent reading, and editing
+it after seeing §3 would destroy the thing this document is for. Three claims above are wrong,
+were caught in §3.3, and have been verified against the code and the PRD:
+
+- **C1** says four process launches per poll. It is three (X20): `claude --version`, plus
+  `codex --version` and `codex app-server`. The proposal itself stands.
+- **C11** proposes a burn-rate forecast. PRD §16 forbids exactly that — "The UI must not claim
+  that a user will run out of quota, calculate projected exhaustion, or imply a
+  provider-defined safe usage rate" (X22). The history half survives as **X14**; the forecast
+  needs a deliberate PRD change before it is even a candidate.
+- **C14**'s justification misreads the tray glyph. `TrayGlyphState.From` takes the *highest*
+  reading among every visible provider's primary window, not the first provider's (X22).
+  Reordering therefore does not change the digits; hiding a provider still does.
+
+One correction runs the other way. **X1** is stronger than its own citation: PRD §14 ends with
+"The widget must never silently replace stale data with an empty or apparently current value,"
+which is precisely what `RebuildWindows` does with a failure snapshot's empty window list.
+
 ---
 
 ## 3. Codex's proposals
