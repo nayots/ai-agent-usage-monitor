@@ -16,16 +16,19 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private readonly SettingsService _settings;
     private readonly StartupRegistration _startup;
+    private readonly bool _globalHotkeyUnavailable;
 
     public SettingsViewModel(
         SettingsService settings,
         StartupRegistration startup,
         Action resetPosition,
         Action recheckProviders,
-        Action openLogs)
+        Action openLogs,
+        bool globalHotkeyUnavailable = false)
     {
         _settings = settings;
         _startup = startup;
+        _globalHotkeyUnavailable = globalHotkeyUnavailable;
 
         Themes =
         [
@@ -77,6 +80,20 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         get => _settings.Current.NotifyOnQuotaEvents;
         set => _settings.Update(s => s with { NotifyOnQuotaEvents = value });
     }
+
+    public bool GlobalHotkeyEnabled
+    {
+        get => _settings.Current.GlobalHotkeyEnabled;
+        set => _settings.Update(s => s with { GlobalHotkeyEnabled = value });
+    }
+
+    public string GlobalHotkeyLabel => "Ctrl+Alt+Q";
+
+    public string? GlobalHotkeyUnavailableReason => _globalHotkeyUnavailable
+        ? "Unavailable: another application already uses this shortcut."
+        : null;
+
+    public bool HasGlobalHotkeyWarning => GlobalHotkeyUnavailableReason is not null;
 
     public bool ShowUnavailableProviders
     {

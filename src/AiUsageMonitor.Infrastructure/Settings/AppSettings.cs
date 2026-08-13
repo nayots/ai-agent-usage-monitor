@@ -59,6 +59,9 @@ public sealed record AppSettings
 
     public bool StartWithWindows { get; init; }
 
+    /// <summary>Ctrl+Alt+Q shows or hides the widget from anywhere. On by default.</summary>
+    public bool GlobalHotkeyEnabled { get; init; } = true;
+
     public WidgetDensity Density { get; init; } = WidgetDensity.Normal;
 
     /// <summary>PRD §15: an unavailable provider keeps its card unless the user hides it.</summary>

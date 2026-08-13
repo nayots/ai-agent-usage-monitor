@@ -9,7 +9,10 @@ public class SettingsViewModelTests
 {
     private const string ScratchKey = @"Software\AiUsageMonitor\tests\SettingsVm";
 
-    private static SettingsViewModel Model(out SettingsService service, AppSettings? initial = null)
+    private static SettingsViewModel Model(
+        out SettingsService service,
+        AppSettings? initial = null,
+        bool globalHotkeyUnavailable = false)
     {
         string path = Path.Combine(Path.GetTempPath(), "aium-vm-" + Guid.NewGuid().ToString("N"), "settings.json");
         service = new SettingsService(new AppSettingsStore(path), initial ?? AppSettings.Default);
@@ -18,7 +21,8 @@ public class SettingsViewModelTests
             new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null),
             resetPosition: () => { },
             recheckProviders: () => { },
-            openLogs: () => { });
+            openLogs: () => { },
+            globalHotkeyUnavailable: globalHotkeyUnavailable);
     }
 
     [Fact]
@@ -57,6 +61,35 @@ public class SettingsViewModelTests
         model.NotifyOnQuotaEvents = false;
 
         Assert.False(service.Current.NotifyOnQuotaEvents);
+    }
+
+    [Fact]
+    public void TheGlobalHotkeyTogglePersistsThroughTheService()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        model.GlobalHotkeyEnabled = false;
+
+        Assert.False(service.Current.GlobalHotkeyEnabled);
+    }
+
+    [Fact]
+    public void ARegisteredGlobalHotkeyHasNoWarning()
+    {
+        SettingsViewModel model = Model(out _, globalHotkeyUnavailable: false);
+
+        Assert.Equal("Ctrl+Alt+Q", model.GlobalHotkeyLabel);
+        Assert.False(model.HasGlobalHotkeyWarning);
+        Assert.Null(model.GlobalHotkeyUnavailableReason);
+    }
+
+    [Fact]
+    public void AnUnavailableGlobalHotkeyExplainsTheConflict()
+    {
+        SettingsViewModel model = Model(out _, globalHotkeyUnavailable: true);
+
+        Assert.True(model.HasGlobalHotkeyWarning);
+        Assert.Equal("Unavailable: another application already uses this shortcut.", model.GlobalHotkeyUnavailableReason);
     }
 
     [Fact]

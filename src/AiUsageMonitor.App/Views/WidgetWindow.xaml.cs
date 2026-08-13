@@ -44,6 +44,9 @@ public partial class WidgetWindow : Window
     private TrayGlyphState _glyph = TrayGlyphState.Empty;
     private ThemeVariant? _glyphVariant;
     private bool _systemEventsSubscribed;
+    private bool _sourceInitialized;
+    private bool _globalHotkeyRegistered;
+    private bool _globalHotkeyUnavailable;
     private bool _shuttingDown;
 
     public WidgetWindow(MainViewModel model, SettingsService settings, ProviderRefreshService? refresh = null, ThemeManager? theme = null)
@@ -83,6 +86,8 @@ public partial class WidgetWindow : Window
 
         HwndSource.FromHwnd(handle)?.AddHook(OnWindowMessage);
         WatchTheForeground();
+        _sourceInitialized = true;
+        UpdateGlobalHotkeyRegistration(_settings.Current);
 
         if (_theme is not null)
         {
@@ -146,6 +151,7 @@ public partial class WidgetWindow : Window
 
         _settings.Changed -= OnSettingsChanged;
 
+        UnregisterGlobalHotkey();
         SavePlacement();
         _tray?.Dispose();
         _model.Dispose();
@@ -276,6 +282,10 @@ public partial class WidgetWindow : Window
 
         _theme?.Apply(settings.Theme);
         _model.ApplySettings(settings);
+        if (_sourceInitialized)
+        {
+            UpdateGlobalHotkeyRegistration(settings);
+        }
         UpdateTrayGlyph();
     }
 
@@ -293,7 +303,8 @@ public partial class WidgetWindow : Window
             StartupRegistration.ForThisProcess(),
             resetPosition: ResetPlacement,
             recheckProviders: () => _ = _model.RefreshAsync(force: true),
-            openLogs: OpenLogsFolder);
+            openLogs: OpenLogsFolder,
+            globalHotkeyUnavailable: _globalHotkeyUnavailable);
 
         _settingsWindow = new SettingsWindow(model) { Owner = this };
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
@@ -356,6 +367,12 @@ public partial class WidgetWindow : Window
 
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if ((uint)msg == WindowMessageHotkey && wParam.ToInt32() == GlobalHotkeyId)
+        {
+            ToggleGlobalHotkey();
+            handled = true;
+        }
+
         if ((uint)msg == SingleInstance.ShowMessage)
         {
             ShowFromTray();
@@ -363,6 +380,17 @@ public partial class WidgetWindow : Window
         }
 
         return IntPtr.Zero;
+    }
+
+    private void ToggleGlobalHotkey()
+    {
+        if (Visibility == Visibility.Hidden || !IsActive)
+        {
+            ShowFromTray();
+            return;
+        }
+
+        HideToTray();
     }
 
     /// <summary>
@@ -606,8 +634,53 @@ public partial class WidgetWindow : Window
     private void SavePlacement() =>
         _settings.Update(s => s with { WindowLeft = Left, WindowTop = Top });
 
+    private void UpdateGlobalHotkeyRegistration(AppSettings settings)
+    {
+        UnregisterGlobalHotkey();
+        _globalHotkeyUnavailable = false;
+
+        if (!settings.GlobalHotkeyEnabled)
+        {
+            return;
+        }
+
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+        if (RegisterHotKey(handle, GlobalHotkeyId, HotkeyControl | HotkeyAlt | HotkeyNoRepeat, VirtualKeyQ))
+        {
+            _globalHotkeyRegistered = true;
+            return;
+        }
+
+        _globalHotkeyUnavailable = true;
+        Trace.TraceInformation("Global hotkey Ctrl+Alt+Q is unavailable because another application already uses it.");
+    }
+
+    private void UnregisterGlobalHotkey()
+    {
+        if (!_globalHotkeyRegistered)
+        {
+            return;
+        }
+
+        _ = UnregisterHotKey(new WindowInteropHelper(this).Handle, GlobalHotkeyId);
+        _globalHotkeyRegistered = false;
+    }
+
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    private const int GlobalHotkeyId = 1;
+    private const uint HotkeyControl = 0x0002;
+    private const uint HotkeyAlt = 0x0001;
+    private const uint HotkeyNoRepeat = 0x4000;
+    private const uint VirtualKeyQ = 0x51;
+    private const uint WindowMessageHotkey = 0x0312;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint virtualKey);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();

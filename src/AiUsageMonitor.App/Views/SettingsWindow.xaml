@@ -61,6 +61,15 @@
           </Style>
         </TextBlock.Style>
       </TextBlock>
+      <CheckBox x:Name="GlobalHotkeyBox" Style="{StaticResource SettingsCheckBoxStyle}" Content="{Binding GlobalHotkeyLabel}" IsChecked="{Binding GlobalHotkeyEnabled, Mode=TwoWay}" AutomationProperties.Name="Ctrl+Alt+Q" />
+      <TextBlock Text="{Binding GlobalHotkeyUnavailableReason}" TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource TextTertiaryBrush}">
+        <TextBlock.Style>
+          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers><DataTrigger Binding="{Binding HasGlobalHotkeyWarning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+          </Style>
+        </TextBlock.Style>
+      </TextBlock>
 
       <TextBlock Text="NOTIFICATIONS" Style="{StaticResource SettingsSectionTextStyle}" />
       <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Notify on quota milestones and resets" IsChecked="{Binding NotifyOnQuotaEvents, Mode=TwoWay}" AutomationProperties.Name="Notify on quota milestones and resets" />

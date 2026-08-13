@@ -13,6 +13,7 @@ public class AppSettingsStoreTests
         Assert.True(defaults.ColorBarsByUsage);
         Assert.False(defaults.AlwaysOnTop);
         Assert.False(defaults.StartWithWindows);
+        Assert.True(defaults.GlobalHotkeyEnabled);
         Assert.Equal(WidgetDensity.Normal, defaults.Density);
         Assert.True(defaults.ShowUnavailableProviders);
         Assert.Equal(300, defaults.StaleAfterSeconds);
@@ -76,6 +77,7 @@ public class AppSettingsStoreTests
             Theme = ThemePreference.Dark,
             ColorBarsByUsage = false,
             StartWithWindows = true,
+            GlobalHotkeyEnabled = false,
             Density = WidgetDensity.Compact,
             ShowUnavailableProviders = false,
             StaleAfterSeconds = 90,
