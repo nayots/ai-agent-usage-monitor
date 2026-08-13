@@ -15,6 +15,8 @@ public sealed class ProviderCardViewModel : ObservableObject
     private bool _showWhenUnavailable = true;
     private bool _isCompact;
     private ProviderSnapshot? _snapshot;
+    private IReadOnlyList<QuotaWindow> _rows = [];
+    private bool _rowsRetained;
     private DateTimeOffset? _lastSuccessAt;
     private FreshnessPolicy _freshness = FreshnessPolicy.Default;
     private ConnectionState _state = ConnectionState.Discovering;
@@ -51,9 +53,9 @@ public sealed class ProviderCardViewModel : ObservableObject
         get => _colorBarsByUsage;
         set
         {
-            if (Set(ref _colorBarsByUsage, value) && _snapshot is ProviderSnapshot snapshot)
+            if (Set(ref _colorBarsByUsage, value) && _snapshot is not null)
             {
-                RebuildWindows(snapshot);
+                RebuildWindows();
             }
         }
     }
@@ -121,6 +123,8 @@ public sealed class ProviderCardViewModel : ObservableObject
 
     public bool IsStale => State == ConnectionState.Stale;
 
+    private bool RowsAreStale => IsStale || _rowsRetained;
+
     public MechanismTier Tier { get => _tier; private set => Set(ref _tier, value); }
 
     public string? VersionText { get => _versionText; private set => Set(ref _versionText, value); }
@@ -175,18 +179,33 @@ public sealed class ProviderCardViewModel : ObservableObject
         Tier = snapshot.Tier;
         VersionText = FormatVersion(snapshot.Version);
 
-        RebuildWindows(snapshot);
+        if (snapshot.Windows.Count > 0)
+        {
+            _rows = snapshot.Windows;
+            _rowsRetained = false;
+        }
+        else if (snapshot.State is ConnectionState.Error or ConnectionState.Unavailable)
+        {
+            _rowsRetained = _rows.Count > 0;
+        }
+        else
+        {
+            _rows = [];
+            _rowsRetained = false;
+        }
+
+        RebuildWindows();
 
         Tick(now);
     }
 
-    private void RebuildWindows(ProviderSnapshot snapshot)
+    private void RebuildWindows()
     {
         Windows.Clear();
 
-        foreach (QuotaWindow window in QuotaOrdering.InProviderOrder(snapshot.Windows))
+        foreach (QuotaWindow window in QuotaOrdering.InProviderOrder(_rows))
         {
-            Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage) { IsStale = IsStale });
+            Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage) { IsStale = RowsAreStale });
         }
 
         Raise(nameof(HasWindows));
@@ -237,7 +256,7 @@ public sealed class ProviderCardViewModel : ObservableObject
 
         foreach (QuotaRowViewModel window in Windows)
         {
-            window.IsStale = IsStale;
+            window.IsStale = RowsAreStale;
             window.Tick(now);
         }
     }
@@ -246,11 +265,12 @@ public sealed class ProviderCardViewModel : ObservableObject
     /// The one line on a card that states a time, and which of two facts it states depends on
     /// whether the card is showing anything.
     /// <para>
-    /// A card with rows reports how old those rows are. A card whose rows are gone reports how long
-    /// it has been failing instead: "Updated" would be claiming freshness for data that is not on
-    /// screen, and saying nothing at all leaves the user unable to tell a provider that broke a
-    /// moment ago from one that has been down all day - which is the whole question during an
-    /// outage. Both are the same shape in the same place, so the eye reads one line, not two.
+    /// A card with rows reports how old those rows are, including rows retained through an Error or
+    /// Unavailable snapshot. A card whose rows are gone reports how long it has been failing
+    /// instead: "Updated" would be claiming freshness for data that is not on screen, and saying
+    /// nothing at all leaves the user unable to tell a provider that broke a moment ago from one
+    /// that has been down all day - which is the whole question during an outage. Both are the same
+    /// shape in the same place, so the eye reads one line, not two.
     /// </para>
     /// <para>
     /// Only the failure states earn the second form. NotInstalled, Unsupported and Waiting are

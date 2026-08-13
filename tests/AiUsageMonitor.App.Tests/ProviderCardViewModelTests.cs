@@ -271,6 +271,93 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
+    public void AnErrorRetainsAndStalesTheLastGoodRows()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("first", 0, 20), Window("second", 1, 40)], retrievedAt: Now), Now, Policy);
+
+        card.Apply(Snapshot(state: ConnectionState.Error, windows: [], retrievedAt: null, error: "boom"), Now.AddMinutes(4), Policy);
+
+        Assert.Equal(ConnectionState.Error, card.State);
+        Assert.False(card.IsStale);
+        Assert.True(card.HasWindows);
+        Assert.Equal(["first", "second"], card.Windows.Select(w => w.Label));
+        Assert.All(card.Windows, row => Assert.True(row.IsStale));
+        Assert.True(card.Notice!.IsAlert);
+        Assert.Equal("Last succeeded 4 minutes ago", card.TimestampText);
+    }
+
+    [Fact]
+    public void AnUnavailableSnapshotAlsoRetainsAndStalesTheLastGoodRows()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("first", 0, 20), Window("second", 1, 40)], retrievedAt: Now), Now, Policy);
+
+        card.Apply(Snapshot(state: ConnectionState.Unavailable, windows: [], retrievedAt: null, error: "boom"), Now.AddMinutes(4), Policy);
+
+        Assert.Equal(ConnectionState.Unavailable, card.State);
+        Assert.True(card.HasWindows);
+        Assert.All(card.Windows, row => Assert.True(row.IsStale));
+    }
+
+    [Fact]
+    public void AConnectedEmptySnapshotClearsRowsAndExplainsTheAbsence()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("first", 0, 20), Window("second", 1, 40)], retrievedAt: Now), Now, Policy);
+
+        card.Apply(Snapshot(state: ConnectionState.Connected, windows: [], retrievedAt: Now.AddMinutes(1)), Now.AddMinutes(1), Policy);
+
+        Assert.Empty(card.Windows);
+        Assert.False(card.HasWindows);
+        Assert.Equal("No quota windows reported", card.Notice!.Title);
+    }
+
+    [Theory]
+    [InlineData(ConnectionState.NotInstalled)]
+    [InlineData(ConnectionState.Unsupported)]
+    [InlineData(ConnectionState.Waiting)]
+    public void ASettledEmptyStateClearsPreviouslyDisplayedRows(ConnectionState state)
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("first", 0, 20)], retrievedAt: Now), Now, Policy);
+
+        card.Apply(Snapshot(state: state, windows: [], retrievedAt: null), Now.AddMinutes(1), Policy);
+
+        Assert.Empty(card.Windows);
+        Assert.False(card.HasWindows);
+    }
+
+    [Fact]
+    public void ALaterSuccessfulSnapshotReplacesRetainedRows()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("old", 0, 20)], retrievedAt: Now), Now, Policy);
+        card.Apply(Snapshot(state: ConnectionState.Error, windows: [], retrievedAt: null, error: "boom"), Now.AddMinutes(1), Policy);
+
+        card.Apply(Snapshot(windows: [Window("new", 0, 35)], retrievedAt: Now.AddMinutes(2)), Now.AddMinutes(2), Policy);
+
+        QuotaRowViewModel row = Assert.Single(card.Windows);
+        Assert.Equal("new", row.Label);
+        Assert.False(row.IsStale);
+    }
+
+    [Fact]
+    public void ChangingBarColorsDoesNotDiscardRetainedRows()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [Window("old", 0, 82)], retrievedAt: Now), Now, Policy);
+        card.Apply(Snapshot(state: ConnectionState.Error, windows: [], retrievedAt: null, error: "boom"), Now.AddMinutes(1), Policy);
+
+        card.ColorBarsByUsage = false;
+
+        QuotaRowViewModel row = Assert.Single(card.Windows);
+        Assert.Equal("old", row.Label);
+        Assert.True(row.IsStale);
+        Assert.False(row.ColorBarsByUsage);
+    }
+
+    [Fact]
     public void ACardThatHasNeverSucceededDatesNothing()
     {
         // Failing since launch. There is no last success to count from, and inventing one - or
