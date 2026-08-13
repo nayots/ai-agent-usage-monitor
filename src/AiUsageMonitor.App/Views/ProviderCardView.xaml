@@ -37,7 +37,7 @@
         <Polygon Grid.Column="0" Points="0,9 5,0 10,9" Margin="0,3,7,0" VerticalAlignment="Top" Fill="{DynamicResource StateBadBrush}" Visibility="{Binding Notice.IsAlert, Converter={StaticResource BooleanToVisibility}}" />
         <StackPanel Grid.Column="1">
           <TextBlock Text="{Binding Notice.Title}" TextWrapping="Wrap" FontSize="12" FontWeight="SemiBold" FontFamily="{StaticResource WidgetFontFamily}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /><Style.Triggers><DataTrigger Binding="{Binding Notice.IsAlert}" Value="True"><Setter Property="Foreground" Value="{DynamicResource StateBadBrush}" /></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-          <TextBlock Text="{Binding Notice.Body}" TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBlock Text="{Binding Notice.Body}" ToolTip="{Binding Notice.DetailText}" TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" />
           <Button Margin="0,7,0,0" HorizontalAlignment="Left" Padding="9,3" Content="{Binding Notice.ActionText}" Command="{Binding RetryCommand}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource LinkButtonStyle}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding Notice.ActionText}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></Button.Style></Button>
         </StackPanel>
       </Grid>
