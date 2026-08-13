@@ -64,59 +64,24 @@ public class ViewLoadingTests(WpfFixture wpf)
     });
 
     [Fact]
-    public void DiagnosticsWindowLoadsWithAPopulatedViewModel() => wpf.Invoke(() =>
+    public void TheDiagnosticsPagesLoadWithAPopulatedViewModel() => wpf.Invoke(() =>
     {
-        ProviderDescriptor provider = new("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code"));
-        ProviderCardViewModel card = new(provider, colorBarsByUsage: true, _ => { });
-        card.Apply(Snapshot(ConnectionState.Connected, [Window(47d, false, true)]), Now, FreshnessPolicy.Default);
-        DiagnosticsViewModel model = new(
-            [card],
-            [provider],
-            new ProviderRefreshService([provider], TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1)),
-            new EnvironmentReport("1.0", ".NET", "Windows", "C:\\logs", true, false),
-            new StartupReport(Now, null),
-            "System",
-            "100%",
-            () => Now,
-            _ => { },
-            () => { });
+        FrameworkElement content = SettingsContent("Claude Code");
 
-        DiagnosticsWindow window = new(model)
-        {
-            WindowStartupLocation = WindowStartupLocation.Manual,
-            Left = -4000,
-            Top = -4000,
-            Opacity = 0,
-            ShowActivated = false
-        };
-
-        try
-        {
-            window.Show();
-            window.UpdateLayout();
-            Assert.True(window.ActualHeight > 0);
-        }
-        finally
-        {
-            window.Close();
-        }
+        Assert.Contains("Installed", Texts(content));
+        Assert.Contains("Mechanism tier", Texts(content));
     });
 
+    /// <summary>
+    /// The confirmation is the shell's, and it appears only once there is something to confirm.
+    /// Copy is also the one action that replaces every DiagnosticSection while a page is on screen,
+    /// so this exercises the path that would leave an orphaned section rendering.
+    /// </summary>
     [Fact]
-    public void DiagnosticsCopyConfirmationAppearsOnlyAfterCopying() => wpf.Invoke(() =>
+    public void TheCopyConfirmationAppearsOnlyAfterCopying() => wpf.Invoke(() =>
     {
-        DiagnosticsViewModel model = new(
-            [],
-            [],
-            new ProviderRefreshService([], TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1)),
-            new EnvironmentReport("1.0", ".NET", "Windows", "C:\\logs", true, false),
-            new StartupReport(Now, null),
-            "System",
-            "100%",
-            () => Now,
-            _ => { },
-            () => { });
-        DiagnosticsWindow window = new(model)
+        SettingsShellViewModel shell = Shell();
+        SettingsWindow window = new(shell)
         {
             WindowStartupLocation = WindowStartupLocation.Manual,
             Left = -4000,
@@ -128,14 +93,18 @@ public class ViewLoadingTests(WpfFixture wpf)
         try
         {
             window.Show();
+            shell.SelectFirstDiagnosticsPage();
             window.UpdateLayout();
             TextBlock confirmation = (TextBlock)window.FindName("CopyConfirmation");
             Assert.Equal(Visibility.Collapsed, confirmation.Visibility);
 
-            model.CopyCommand.Execute(null);
+            shell.Diagnostics.CopyCommand.Execute(null);
             window.UpdateLayout();
 
             Assert.Equal(Visibility.Visible, confirmation.Visibility);
+            Assert.Same(
+                shell.Diagnostics.Sections.First(),
+                shell.Pages.First(page => page.IsDiagnostics).Content);
         }
         finally
         {
@@ -321,7 +290,7 @@ public class ViewLoadingTests(WpfFixture wpf)
     [Fact]
     public void TheSettingsWindowOffersNoPinning() => wpf.Invoke(() =>
     {
-        FrameworkElement content = SettingsContent();
+        FrameworkElement content = SettingsContent("Window");
 
         Assert.DoesNotContain(
             Descendants(content).OfType<CheckBox>(),
@@ -339,11 +308,12 @@ public class ViewLoadingTests(WpfFixture wpf)
     [Fact]
     public void TheSettingsWindowLoadsMiniModeWithItsDockFollowingIt() => wpf.Invoke(() =>
     {
-        SettingsViewModel model = SettingsModel();
-        SettingsWindow window = new(model);
+        SettingsShellViewModel shell = Shell();
+        SettingsWindow window = new(shell);
         FrameworkElement content = (FrameworkElement)window.Content;
-        content.Measure(new Size(380, 640));
+        content.Measure(new Size(740, 560));
         content.UpdateLayout();
+        SettingsViewModel model = shell.Settings;
 
         Assert.Contains(
             Descendants(content).OfType<CheckBox>(),
@@ -359,13 +329,13 @@ public class ViewLoadingTests(WpfFixture wpf)
         content.UpdateLayout();
         Assert.True(bottom.IsEnabled);
 
-        model.Dispose();
+        shell.Dispose();
     });
 
     [Fact]
     public void TheSettingsWindowLoadsTheNotificationControls() => wpf.Invoke(() =>
     {
-        FrameworkElement content = SettingsContent();
+        FrameworkElement content = SettingsContent("Notifications");
 
         Assert.Contains("Tell me when a window passes", Texts(content));
         Assert.Contains(
@@ -385,11 +355,13 @@ public class ViewLoadingTests(WpfFixture wpf)
     [Fact]
     public void TheQuietHoursTimesFollowTheirOwnCheckboxAndTheNotificationsSwitch() => wpf.Invoke(() =>
     {
-        SettingsViewModel model = SettingsModel();
-        SettingsWindow window = new(model);
+        SettingsShellViewModel shell = Shell();
+        SettingsWindow window = new(shell);
+        shell.SelectedPage = shell.Pages.Single(entry => entry.Title == "Notifications");
         FrameworkElement content = (FrameworkElement)window.Content;
-        content.Measure(new Size(380, 640));
+        content.Measure(new Size(740, 560));
         content.UpdateLayout();
+        SettingsViewModel model = shell.Settings;
 
         RadioButton start = Descendants(content).OfType<RadioButton>()
             .First(button => button.GroupName == "quiet-start");
@@ -404,15 +376,13 @@ public class ViewLoadingTests(WpfFixture wpf)
         content.UpdateLayout();
         Assert.False(start.IsEnabled);
 
-        model.Dispose();
+        shell.Dispose();
     });
 
     [Fact]
     public void TheSettingsWindowLoadsProviderPreferences() => wpf.Invoke(() =>
     {
-        FrameworkElement content = SettingsContent();
-
-        Assert.Contains("PROVIDERS", Texts(content));
+        FrameworkElement content = SettingsContent("Providers");
         Assert.Contains(
             Descendants(content).OfType<CheckBox>(),
             box => AutomationProperties.GetName(box) == "Show Claude Code");
@@ -421,26 +391,78 @@ public class ViewLoadingTests(WpfFixture wpf)
             button => AutomationProperties.GetName(button) == "Move Codex down");
     });
 
+    [Fact]
+    public void TheSidebarOffersEveryCategoryAndDiagnosticsAmongThem() => wpf.Invoke(() =>
+    {
+        FrameworkElement content = SettingsContent();
+        ListBox navigation = Descendants(content).OfType<ListBox>().Single();
+
+        Assert.Equal(
+            new[] { "Appearance", "Window", "Providers", "Notifications", "Refresh", "Claude Code", "Codex", "Application" },
+            navigation.Items.Cast<SettingsPageViewModel>().Select(page => page.Title));
+    });
+
     /// <summary>
-    /// Everything this window offers fits in it, on any screen with the room. A settings window is
-    /// short enough to read at a glance or it is not worth having, and it was not: a cap written
-    /// into the markup put a scrollbar over the last two sections on a screen with hundreds of
-    /// spare pixels. The escape clause is the screen genuinely too short to hold the content, where
-    /// the window is at its cap and the ScrollViewer is doing the only thing left to do.
+    /// The copy button is the shell's, not the page's, so that it can be offered on every
+    /// diagnostics page while the logs folder stays on the one page it belongs to.
+    /// <para>
+    /// Asserted on <c>Visibility</c>, not on presence in the visual tree: the footer is always in
+    /// the tree and collapses, so a <c>DoesNotContain</c> over descendants can never fail however
+    /// wrong the markup is. Not on <c>IsVisible</c> either - that is false for every element in a
+    /// tree which has only been measured and arranged and never shown, so it would pass for the
+    /// wrong reason. The <c>Visibility</c> property is what the DataTriggers actually set.
+    /// </para>
     /// </summary>
     [Fact]
-    public void TheSettingsWindowShowsEverySettingWithoutScrolling() => wpf.Invoke(() =>
+    public void TheLogsFolderIsOfferedOnTheApplicationPageAndNoOther() => wpf.Invoke(() =>
     {
-        SettingsWindow window = Shown();
+        FrameworkElement provider = SettingsContent("Claude Code");
+        Assert.Equal(Visibility.Visible, DiagnosticsActions(provider).Visibility);
+        Assert.Equal(Visibility.Visible, ActionButton(provider, "Copy all diagnostics").Visibility);
+        Assert.Equal(Visibility.Collapsed, ActionButton(provider, "Open logs folder").Visibility);
+
+        FrameworkElement application = SettingsContent("Application");
+        Assert.Equal(Visibility.Visible, DiagnosticsActions(application).Visibility);
+        Assert.Equal(Visibility.Visible, ActionButton(application, "Copy all diagnostics").Visibility);
+        Assert.Equal(Visibility.Visible, ActionButton(application, "Open logs folder").Visibility);
+    });
+
+    [Fact]
+    public void ASettingsPageOffersNeitherOfTheDiagnosticsActions() => wpf.Invoke(() =>
+    {
+        Assert.Equal(Visibility.Collapsed, DiagnosticsActions(SettingsContent()).Visibility);
+    });
+
+    /// <summary>The shell's diagnostics footer, which is present on every page and collapses.</summary>
+    private static FrameworkElement DiagnosticsActions(FrameworkElement content) =>
+        Descendants(content).OfType<FrameworkElement>().First(element => element.Name == "DiagnosticsActions");
+
+    private static Button ActionButton(FrameworkElement content, string automationName) =>
+        Descendants(content).OfType<Button>().First(button => AutomationProperties.GetName(button) == automationName);
+
+    [Fact]
+    public void ARememberedSizeTooBigForTheScreenIsCutDownToIt() => wpf.Invoke(() =>
+    {
+        SettingsShellViewModel shell = Shell();
+        shell.RememberSize(20000, 20000);
+
+        SettingsWindow window = new(shell)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -4000,
+            Top = -4000,
+            Opacity = 0,
+            ShowActivated = false
+        };
 
         try
         {
-            ScrollViewer viewer = (ScrollViewer)window.Content;
+            window.Show();
+            window.UpdateLayout();
 
-            Assert.True(
-                viewer.ScrollableHeight == 0 || window.ActualHeight >= window.MaxHeight,
-                $"{viewer.ExtentHeight} of content in a viewport of {viewer.ViewportHeight}: the "
-                    + $"window is {window.ActualHeight} tall against a cap of {window.MaxHeight}");
+            Rect screen = SystemParameters.WorkArea;
+            Assert.True(window.ActualWidth <= screen.Width + 0.5, $"{window.ActualWidth} wide against a screen of {screen.Width}");
+            Assert.True(window.ActualHeight <= screen.Height + 0.5, $"{window.ActualHeight} tall against a screen of {screen.Height}");
         }
         finally
         {
@@ -474,16 +496,9 @@ public class ViewLoadingTests(WpfFixture wpf)
         }
     });
 
-    /// <summary>
-    /// The settings window on screen, which is the only way to ask it how tall it ended up: a WPF
-    /// window measures to nothing until it has a handle, and the scrollbar these tests are about
-    /// exists only once the ScrollViewer has a real viewport to compare its content against.
-    /// Transparent and unactivated, so a test run neither flashes a window at whoever is at the
-    /// machine nor takes the focus off what they were doing.
-    /// </summary>
     private static SettingsWindow Shown(double left = -4000, double top = -4000)
     {
-        SettingsWindow window = new(SettingsModel())
+        SettingsWindow window = new(Shell())
         {
             WindowStartupLocation = WindowStartupLocation.Manual,
             Left = left,
@@ -497,32 +512,56 @@ public class ViewLoadingTests(WpfFixture wpf)
         return window;
     }
 
-    private static FrameworkElement SettingsContent()
+    /// <summary>
+    /// The shell's content, laid out at the window's default size, with <paramref name="page"/>
+    /// showing. One page is in the visual tree at a time now, so a test that looks for a control has
+    /// to say which page it expects to find it on.
+    /// </summary>
+    private static FrameworkElement SettingsContent(string page = "Appearance")
     {
-        SettingsWindow window = new(SettingsModel());
+        SettingsShellViewModel shell = Shell();
+        SettingsWindow window = new(shell);
+        shell.SelectedPage = shell.Pages.Single(entry => entry.Title == page);
         FrameworkElement content = (FrameworkElement)window.Content;
-        content.Measure(new Size(380, 640));
-        content.Arrange(new Rect(0, 0, 380, 640));
+        content.Measure(new Size(740, 560));
+        content.Arrange(new Rect(0, 0, 740, 560));
         content.UpdateLayout();
         return content;
     }
 
-    private static SettingsViewModel SettingsModel()
+    private static SettingsShellViewModel Shell()
     {
-        string path = Path.Combine(Path.GetTempPath(), "aium-view-" + Guid.NewGuid().ToString("N"), "settings.json");
+        IReadOnlyList<ProviderDescriptor> providers =
+        [
+            new("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
+            new("codex", "Codex", "CX", new SilentProbe("Codex"))
+        ];
 
-        return new SettingsViewModel(
-            new SettingsService(new AppSettingsStore(path), AppSettings.Default),
+        string path = Path.Combine(Path.GetTempPath(), "aium-view-" + Guid.NewGuid().ToString("N"), "settings.json");
+        SettingsService store = new(new AppSettingsStore(path), AppSettings.Default);
+
+        SettingsViewModel settings = new(
+            store,
             new StartupRegistration(@"Software\AiUsageMonitor\tests\ViewLoading", "AiUsageMonitorTest", null),
             resetPosition: () => { },
             recheckProviders: () => { },
             openLogs: () => { },
             openDiagnostics: () => { },
-            providers:
-            [
-                new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
-                new ProviderDescriptor("codex", "Codex", "CX", new SilentProbe("Codex"))
-            ]);
+            providers: providers);
+
+        DiagnosticsViewModel diagnostics = new(
+            [],
+            providers,
+            new ProviderRefreshService(providers, TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1)),
+            new EnvironmentReport("1.0", ".NET", "Windows", "C:\\logs", true, false),
+            new StartupReport(Now, null),
+            "System",
+            "100%",
+            () => Now,
+            _ => { },
+            () => { });
+
+        return new SettingsShellViewModel(store, settings, diagnostics);
     }
 
     private static ProviderCardViewModel Card(ConnectionState state, bool compact)

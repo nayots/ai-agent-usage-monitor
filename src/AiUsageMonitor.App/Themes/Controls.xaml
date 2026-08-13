@@ -224,4 +224,42 @@
     <Setter Property="HorizontalAlignment" Value="Left" />
     <Setter Property="Padding" Value="0,6" />
   </Style>
+  <Style x:Key="SettingsNavGroupTextStyle" TargetType="TextBlock" BasedOn="{StaticResource CaptionMicroTextStyle}">
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
+    <Setter Property="Margin" Value="12,14,12,4" />
+  </Style>
+
+  <!--
+    The sidebar entry. Templated rather than themed through the default ListBoxItem because that one
+    paints the system highlight colour, which belongs to no palette here and is invisible under high
+    contrast against the layer it sits on. Selection is carried by the fill AND the weight, never by
+    colour alone.
+  -->
+  <Style x:Key="SettingsNavItemStyle" TargetType="ListBoxItem">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ListBoxItem">
+          <Border x:Name="Fill" Margin="6,1" Padding="8,5" CornerRadius="{DynamicResource RadiusControl}" Background="Transparent">
+            <TextBlock x:Name="Label" Text="{Binding Title}" TextTrimming="CharacterEllipsis" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Fill" Property="Background" Value="{DynamicResource WidgetLayerAltBackgroundBrush}" />
+              <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+              <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Fill" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+              <Setter TargetName="Fill" Property="BorderThickness" Value="1" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
 </ResourceDictionary>

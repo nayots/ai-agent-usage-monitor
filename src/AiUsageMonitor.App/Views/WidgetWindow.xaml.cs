@@ -31,7 +31,6 @@ public partial class WidgetWindow : Window
     private readonly EnvironmentReport _environment;
     private readonly StartupReport _startup;
     private SettingsWindow? _settingsWindow;
-    private DiagnosticsWindow? _diagnosticsWindow;
     private MiniWindow? _mini;
     private readonly DispatcherTimer _tick = new() { Interval = TickCadence.Visible };
     private readonly DispatcherTimer _poll = new();
@@ -367,16 +366,25 @@ public partial class WidgetWindow : Window
         _refresh.HiddenProviderKeys = settings.HiddenProviders;
     }
 
-    /// <summary>Opens the settings window, or focuses the one already open.</summary>
-    public void ShowSettings()
+    /// <summary>Opens the settings window on its first page, or focuses the one already open.</summary>
+    public void ShowSettings() => ShowShell(shell => shell.SelectedPage = shell.Pages[0]);
+
+    /// <summary>
+    /// Opens the settings window on diagnostics, or moves the one already open to it. The tray menu
+    /// keeps both entries because they answer different questions; they are one window now.
+    /// </summary>
+    public void ShowDiagnostics() => ShowShell(shell => shell.SelectFirstDiagnosticsPage());
+
+    private void ShowShell(Action<SettingsShellViewModel> select)
     {
         if (_settingsWindow is not null)
         {
+            select((SettingsShellViewModel)_settingsWindow.DataContext);
             _settingsWindow.Activate();
             return;
         }
 
-        SettingsViewModel model = new(
+        SettingsViewModel settings = new(
             _settings,
             StartupRegistration.ForThisProcess(),
             resetPosition: ResetPlacement,
@@ -386,29 +394,7 @@ public partial class WidgetWindow : Window
             providers: _providers,
             globalHotkeyUnavailable: _globalHotkeyUnavailable);
 
-        _settingsWindow = new SettingsWindow(model) { Owner = this };
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
-
-        // The settings window feeds the same dismissal timer, so an outside click takes the pair
-        // down whichever of them held the focus. Without this, focus leaving from the settings
-        // window would never reach the widget's own OnDeactivated: the widget was deactivated when
-        // the settings window opened, and a window that is already inactive is not deactivated again.
-        _settingsWindow.Deactivated += (_, _) => _dismiss.Start();
-        _settingsWindow.Activated += (_, _) => _dismiss.Stop();
-
-        _settingsWindow.Show();
-    }
-
-    /// <summary>Opens diagnostics, or focuses the one already open.</summary>
-    public void ShowDiagnostics()
-    {
-        if (_diagnosticsWindow is not null)
-        {
-            _diagnosticsWindow.Activate();
-            return;
-        }
-
-        DiagnosticsViewModel model = new(
+        DiagnosticsViewModel diagnostics = new(
             _model.Providers,
             _providers,
             _refresh ?? new ProviderRefreshService(_providers, TimeSpan.Zero, TimeSpan.Zero),
@@ -420,11 +406,20 @@ public partial class WidgetWindow : Window
             copyToClipboard: CopyToClipboard,
             openLogs: OpenLogsFolder);
 
-        _diagnosticsWindow = new DiagnosticsWindow(model) { Owner = this };
-        _diagnosticsWindow.Closed += (_, _) => _diagnosticsWindow = null;
-        _diagnosticsWindow.Deactivated += (_, _) => _dismiss.Start();
-        _diagnosticsWindow.Activated += (_, _) => _dismiss.Stop();
-        _diagnosticsWindow.Show();
+        SettingsShellViewModel shell = new(_settings, settings, diagnostics);
+        select(shell);
+
+        _settingsWindow = new SettingsWindow(shell) { Owner = this };
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+
+        // The settings window feeds the same dismissal timer, so an outside click takes the pair
+        // down whichever of them held the focus. Without this, focus leaving from the settings
+        // window would never reach the widget's own OnDeactivated: the widget was deactivated when
+        // the settings window opened, and a window that is already inactive is not deactivated again.
+        _settingsWindow.Deactivated += (_, _) => _dismiss.Start();
+        _settingsWindow.Activated += (_, _) => _dismiss.Stop();
+
+        _settingsWindow.Show();
     }
 
     private string ThemeDescription() => _theme is null
@@ -645,12 +640,9 @@ public partial class WidgetWindow : Window
             return;
         }
 
-        // The owned windows first: they are owned by the widget, and hiding an owner leaves an owned
-        // window on screen as the only thing left of an application that has just gone away. Both of
-        // them, not just the settings one - diagnostics is the larger window and would be the more
-        // conspicuous thing left behind.
+        // The owned window first: it is owned by the widget, and hiding an owner leaves an owned
+        // window on screen as the only thing left of an application that has just gone away.
         _settingsWindow?.Close();
-        _diagnosticsWindow?.Close();
         HideToTray();
     }
 

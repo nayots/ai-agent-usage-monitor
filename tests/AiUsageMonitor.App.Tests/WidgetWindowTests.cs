@@ -181,12 +181,12 @@ public class WidgetWindowTests(WpfFixture wpf)
     });
 
     /// <summary>
-    /// The dismissal has to take the owned windows with it. A widget that hides while its
-    /// diagnostics window stays up leaves the largest window this application owns on screen with
-    /// nothing behind it - the exact state the settings window is already closed to prevent.
+    /// The dismissal has to take the owned window with it. A widget that hides while its settings
+    /// window stays up leaves the largest window this application owns on screen with nothing
+    /// behind it. Diagnostics is a page of that window now, so there is one window to close, not two.
     /// </summary>
     [Fact]
-    public void DismissalClosesTheDiagnosticsWindowToo() => wpf.Invoke(() =>
+    public void DismissalClosesTheSettingsWindowOpenedOnDiagnostics() => wpf.Invoke(() =>
     {
         IReadOnlyList<ProviderDescriptor> providers = Providers();
         MainViewModel model = Model(providers, AppSettings.Default);
@@ -195,11 +195,11 @@ public class WidgetWindowTests(WpfFixture wpf)
         window.Show();
         window.ShowDiagnostics();
 
-        Assert.Contains(Application.Current.Windows.OfType<DiagnosticsWindow>(), _ => true);
+        Assert.Contains(Application.Current.Windows.OfType<SettingsWindow>(), _ => true);
 
         window.DismissIfFocusLeftTheApplication(focusStayedInTheApplication: false);
 
-        Assert.Empty(Application.Current.Windows.OfType<DiagnosticsWindow>());
+        Assert.Empty(Application.Current.Windows.OfType<SettingsWindow>());
         Assert.Equal(Visibility.Hidden, window.Visibility);
 
         window.Close();

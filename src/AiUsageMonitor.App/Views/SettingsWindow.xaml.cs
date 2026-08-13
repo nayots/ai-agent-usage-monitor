@@ -11,36 +11,47 @@ namespace AiUsageMonitor.App.Views;
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    private readonly SettingsViewModel _model;
+    private readonly SettingsShellViewModel _model;
 
-    public SettingsWindow(SettingsViewModel model)
+    public SettingsWindow(SettingsShellViewModel model)
     {
         _model = model;
         InitializeComponent();
         DataContext = model;
+
+        // Before the first layout pass, so the size below is the one the window is measured at
+        // rather than a resize the user sees happen.
+        if (model.RememberedWidth is double width)
+        {
+            Width = width;
+        }
+
+        if (model.RememberedHeight is double height)
+        {
+            Height = height;
+        }
     }
 
     /// <summary>
-    /// Caps the window at the screen it is opening on, so that <c>SizeToContent</c> can take it as
-    /// tall as its content needs and no taller. Set here rather than in markup because the screen
-    /// is not known until the window has a handle, and set before the first layout pass, which is
-    /// what makes it the cap the size-to-content measurement obeys.
+    /// Caps the window at the screen it is opening on. The window no longer sizes itself to its
+    /// content, but a size remembered from a larger monitor is the same problem wearing a different
+    /// hat: set before the first layout pass, this is the bound that measurement obeys.
     /// </summary>
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        MaxHeight = ScreenBounds.WorkAreaFor(this).Height;
+
+        Rect screen = ScreenBounds.WorkAreaFor(this);
+        MaxHeight = screen.Height;
+        MaxWidth = screen.Width;
     }
 
     /// <summary>
-    /// Brings the window back inside the screen as soon as it knows how big it is - which is here,
-    /// in the same layout pass that grew it to its content, and so before it is ever painted at a
-    /// position half off the screen.
+    /// Brings the window back inside the screen as soon as it knows how big it is.
     /// <para>
     /// <c>WindowStartupLocation="CenterOwner"</c> centres this window on the widget and stops
-    /// there: it knows nothing of screen edges, so a tall settings window opened from a widget
-    /// parked near the bottom of the screen would hang off it - the last section unreachable, which
-    /// is worse than the scrollbar this window no longer has.
+    /// there: it knows nothing of screen edges, so a window opened from a widget parked near the
+    /// bottom of the screen would hang off it, with the sidebar's last entries unreachable.
     /// </para>
     /// </summary>
     protected override void OnRenderSizeChanged(SizeChangedInfo info)
@@ -51,7 +62,7 @@ public partial class SettingsWindow : Window
 
         // ActualHeight, not info.NewSize.Height: a Window's ActualWidth and ActualHeight are its
         // outer size, title bar and borders included, and it is the outer rectangle that has to fit
-        // on the screen. NewSize is the content's, some 39 device-independent pixels shorter.
+        // on the screen.
         //
         // Math.Max, not Math.Clamp alone: on a screen too short for the window the low bound would
         // exceed the high one, and Math.Clamp throws rather than picking a side.
@@ -61,6 +72,14 @@ public partial class SettingsWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        // RestoreBounds, not ActualWidth, when the window is not in its normal state: a window
+        // closed while maximised reports the maximised size, and reopening at that size next time
+        // would be a size the user never chose.
+        Rect bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, ActualWidth, ActualHeight)
+            : RestoreBounds;
+
+        _model.RememberSize(bounds.Width, bounds.Height);
         _model.Dispose();
         base.OnClosed(e);
     }

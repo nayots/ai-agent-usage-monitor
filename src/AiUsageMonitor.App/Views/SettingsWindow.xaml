@@ -1,224 +1,129 @@
 <Window x:Class="AiUsageMonitor.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:settings="clr-namespace:AiUsageMonitor.App.Views.Settings"
         Title="Quota Monitor settings"
-        Width="380" SizeToContent="Height"
-        WindowStyle="ToolWindow" ResizeMode="NoResize" ShowInTaskbar="False"
+        Width="740" Height="560" MinWidth="620" MinHeight="440"
+        WindowStyle="ToolWindow" ResizeMode="CanResize" ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WidgetWindowBackgroundBrush}"
         Foreground="{DynamicResource TextPrimaryBrush}"
         FontFamily="{StaticResource WidgetFontFamily}"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
-  <!-- The height comes from the content (SizeToContent), capped in code-behind by the screen this
-       window opens on rather than by a number written here: a fixed cap is a guess at how tall the
-       content will be after the next setting is added, at the user's font scaling, and it was
-       wrong - it put a scrollbar over settings that fit on the screen perfectly well. The
-       ScrollViewer stays for the screen genuinely too short to hold everything. -->
-  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="14,10,14,14">
+  <Window.Resources>
+    <settings:SettingsPageTemplateSelector x:Key="PageBody">
+      <settings:SettingsPageTemplateSelector.Appearance>
+        <DataTemplate><settings:AppearancePage DataContext="{Binding Content}" /></DataTemplate>
+      </settings:SettingsPageTemplateSelector.Appearance>
+      <settings:SettingsPageTemplateSelector.Window>
+        <DataTemplate><settings:WindowPage DataContext="{Binding Content}" /></DataTemplate>
+      </settings:SettingsPageTemplateSelector.Window>
+      <settings:SettingsPageTemplateSelector.Providers>
+        <DataTemplate><settings:ProvidersPage DataContext="{Binding Content}" /></DataTemplate>
+      </settings:SettingsPageTemplateSelector.Providers>
+      <settings:SettingsPageTemplateSelector.Notifications>
+        <DataTemplate><settings:NotificationsPage DataContext="{Binding Content}" /></DataTemplate>
+      </settings:SettingsPageTemplateSelector.Notifications>
+      <settings:SettingsPageTemplateSelector.Refresh>
+        <DataTemplate><settings:RefreshPage DataContext="{Binding Content}" /></DataTemplate>
+      </settings:SettingsPageTemplateSelector.Refresh>
+      <settings:SettingsPageTemplateSelector.Diagnostics>
+        <DataTemplate><settings:DiagnosticsPage DataContext="{Binding Content}" /></DataTemplate>
+      </settings:SettingsPageTemplateSelector.Diagnostics>
+    </settings:SettingsPageTemplateSelector>
+  </Window.Resources>
 
-      <TextBlock Text="{Binding PersistenceWarningText}" TextWrapping="Wrap" Margin="0,0,0,8" Foreground="{DynamicResource StateBadBrush}">
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="176" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+
+    <Border Grid.Column="0"
+            Background="{DynamicResource WidgetLayerAltBackgroundBrush}"
+            BorderBrush="{DynamicResource WidgetCardStrokeBrush}" BorderThickness="0,0,1,0">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ListBox x:Name="Navigation"
+                 ItemsSource="{Binding PagesView}"
+                 SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
+                 ItemContainerStyle="{StaticResource SettingsNavItemStyle}"
+                 Background="Transparent" BorderThickness="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 HorizontalContentAlignment="Stretch"
+                 AutomationProperties.Name="Settings categories">
+          <ListBox.GroupStyle>
+            <GroupStyle>
+              <GroupStyle.HeaderTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Name}" Style="{StaticResource SettingsNavGroupTextStyle}" />
+                </DataTemplate>
+              </GroupStyle.HeaderTemplate>
+            </GroupStyle>
+          </ListBox.GroupStyle>
+        </ListBox>
+      </ScrollViewer>
+    </Border>
+
+    <Grid Grid.Column="1">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <!-- The banner is the shell's, not Appearance's: settings that cannot be saved is a fact
+           about every page, and putting it on one of them means it is missed from the other seven. -->
+      <TextBlock Grid.Row="0" Text="{Binding Settings.PersistenceWarningText}" TextWrapping="Wrap"
+                 Margin="18,14,18,0" Foreground="{DynamicResource StateBadBrush}">
         <TextBlock.Style>
           <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
             <Setter Property="Visibility" Value="Collapsed" />
-            <Style.Triggers><DataTrigger Binding="{Binding HasPersistenceWarning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+            <Style.Triggers><DataTrigger Binding="{Binding Settings.HasPersistenceWarning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
           </Style>
         </TextBlock.Style>
       </TextBlock>
 
-      <TextBlock Text="APPEARANCE" Style="{StaticResource SettingsSectionTextStyle}" Margin="0,0,0,4" />
-      <TextBlock Text="Theme" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-      <ItemsControl ItemsSource="{Binding Themes}" Margin="0,5,0,0" Focusable="False">
-        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-      <TextBlock Text="Density" Margin="0,10,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-      <TextBlock Text="Compact hides versions, the monogram and the connected chip" TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
-      <ItemsControl ItemsSource="{Binding Densities}" Margin="0,5,0,0" Focusable="False">
-        <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate><DataTemplate><RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" /></DataTemplate></ItemsControl.ItemTemplate>
-      </ItemsControl>
-      <!-- Mini mode is not compact density. Density shrinks this same window; mini mode replaces
-           it with a different presentation of the same model, which is why it sits after the
-           density group rather than inside it. -->
-      <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Mini mode" IsChecked="{Binding MiniMode, Mode=TwoWay}" AutomationProperties.Name="Mini mode" />
-      <TextBlock Text="{Binding MiniModeHintText}" TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
-      <StackPanel IsEnabled="{Binding MiniMode}">
-        <TextBlock Text="Dock" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-        <ItemsControl ItemsSource="{Binding MiniDocks}" Margin="0,5,0,0" Focusable="False">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate><DataTemplate><RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" /></DataTemplate></ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
-
-      <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Color bars by usage" IsChecked="{Binding ColorBarsByUsage, Mode=TwoWay}" AutomationProperties.Name="Color bars by usage" />
-
-      <TextBlock Text="WINDOW" Style="{StaticResource SettingsSectionTextStyle}" />
-      <!-- No "Always on top" here. Pinning is session state and belongs to the title bar's pin
-           alone; this window is for how the widget works from now on. The line below is what tells
-           anyone who reaches for it where it went, and what it now also does. -->
-      <TextBlock Text="Pinning is on the widget's title bar. A pinned widget stays on top and stays open when you click another window, until you close the app." TextWrapping="Wrap" Margin="0,0,0,6" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
-      <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Show providers that are not installed" IsChecked="{Binding ShowUnavailableProviders, Mode=TwoWay}" AutomationProperties.Name="Show providers that are not installed" />
-      <CheckBox x:Name="StartWithWindowsBox" Style="{StaticResource SettingsCheckBoxStyle}" Content="Start with Windows" IsChecked="{Binding StartWithWindows, Mode=TwoWay}" IsEnabled="{Binding CanStartWithWindows}" AutomationProperties.Name="Start with Windows" />
-      <!-- Style is set only as a property element here. Setting the Style attribute as well and
-           then nesting TextBlock.Style is MC3024 - the property can be set once. -->
-      <TextBlock Text="{Binding StartWithWindowsUnavailableReason}" TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource TextTertiaryBrush}">
-        <TextBlock.Style>
-          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
-            <Setter Property="Visibility" Value="Visible" />
-            <Style.Triggers><DataTrigger Binding="{Binding CanStartWithWindows}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
-          </Style>
-        </TextBlock.Style>
-      </TextBlock>
-      <CheckBox x:Name="GlobalHotkeyBox" Style="{StaticResource SettingsCheckBoxStyle}" Content="{Binding GlobalHotkeyLabel}" IsChecked="{Binding GlobalHotkeyEnabled, Mode=TwoWay}" AutomationProperties.Name="Ctrl+Alt+Q" />
-      <TextBlock Text="{Binding GlobalHotkeyUnavailableReason}" TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource TextTertiaryBrush}">
-        <TextBlock.Style>
-          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
-            <Setter Property="Visibility" Value="Collapsed" />
-            <Style.Triggers><DataTrigger Binding="{Binding HasGlobalHotkeyWarning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
-          </Style>
-        </TextBlock.Style>
-      </TextBlock>
-
-      <TextBlock Text="PROVIDERS" Style="{StaticResource SettingsSectionTextStyle}" />
-      <TextBlock Text="{Binding ProviderPreferencesHintText}" TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
-      <ItemsControl ItemsSource="{Binding ProviderPreferences}" Focusable="False">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <Border BorderBrush="{DynamicResource WidgetCardStrokeBrush}" BorderThickness="0,0,0,1">
-              <Border.Style>
-                <Style TargetType="Border">
-                  <Setter Property="Margin" Value="0,8,0,0" />
-                  <Setter Property="Padding" Value="0,0,0,8" />
-                </Style>
-              </Border.Style>
-              <StackPanel>
-                <Grid>
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                  <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-                  <CheckBox Grid.Column="1" Style="{StaticResource SettingsCheckBoxStyle}" Content="Show" IsChecked="{Binding IsVisible, Mode=TwoWay}" AutomationProperties.Name="{Binding DisplayName, StringFormat=Show {0}}" />
-                  <Button Grid.Column="2" Style="{StaticResource SettingsActionButtonStyle}" Content="Move up" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" AutomationProperties.Name="{Binding DisplayName, StringFormat=Move {0} up}" />
-                  <Button Grid.Column="3" Style="{StaticResource SettingsActionButtonStyle}" Content="Move down" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" AutomationProperties.Name="{Binding DisplayName, StringFormat=Move {0} down}" />
-                </Grid>
-                <TextBlock Text="Check this provider every" Foreground="{DynamicResource TextTertiaryBrush}">
-                  <TextBlock.Style>
-                    <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
-                      <Setter Property="Margin" Value="0,4,0,3" />
-                    </Style>
-                  </TextBlock.Style>
-                </TextBlock>
-                <ItemsControl ItemsSource="{Binding Intervals}" Focusable="False">
-                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <RadioButton Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}">
-                        <AutomationProperties.Name>
-                          <MultiBinding StringFormat="{}{0} {1} interval">
-                            <Binding Path="DataContext.DisplayName" RelativeSource="{RelativeSource AncestorType=ItemsControl, AncestorLevel=2}" />
-                            <Binding Path="Label" />
-                          </MultiBinding>
-                        </AutomationProperties.Name>
-                        <RadioButton.Style>
-                          <Style TargetType="RadioButton" BasedOn="{StaticResource SettingsRadioButtonStyle}">
-                            <Setter Property="Margin" Value="0,0,4,4" />
-                          </Style>
-                        </RadioButton.Style>
-                      </RadioButton>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-              </StackPanel>
-            </Border>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-
-      <TextBlock Text="NOTIFICATIONS" Style="{StaticResource SettingsSectionTextStyle}" />
-      <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Notify on quota milestones and resets" IsChecked="{Binding NotifyOnQuotaEvents, Mode=TwoWay}" AutomationProperties.Name="Notify on quota milestones and resets" />
-
-      <!-- A schedule for notifications that are switched off entirely is a control that does
-           nothing, so the whole block follows the switch above it. -->
-      <StackPanel IsEnabled="{Binding NotifyOnQuotaEvents}">
-        <TextBlock Text="Tell me when a window passes" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-        <ItemsControl ItemsSource="{Binding AlertThresholdChoices}" Margin="0,5,0,0" Focusable="False">
-          <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <TextBlock Text="{Binding AlertThresholdHintText}" TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
-
-        <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Quiet hours" IsChecked="{Binding QuietHoursEnabled, Mode=TwoWay}" AutomationProperties.Name="Quiet hours" />
-        <StackPanel IsEnabled="{Binding QuietHoursEnabled}">
-          <TextBlock Text="From" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-          <ItemsControl ItemsSource="{Binding QuietHoursStarts}" Margin="0,5,0,0" Focusable="False">
-            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock Text="To" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-          <ItemsControl ItemsSource="{Binding QuietHoursEnds}" Margin="0,5,0,0" Focusable="False">
-            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock Text="{Binding QuietHoursSummaryText}" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource TextTertiaryBrush}">
-            <TextBlock.Style>
-              <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
-                <Setter Property="Visibility" Value="Collapsed" />
-                <Style.Triggers><DataTrigger Binding="{Binding QuietHoursEnabled}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
-              </Style>
-            </TextBlock.Style>
-          </TextBlock>
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="18,14,18,18">
+          <TextBlock Text="{Binding SelectedPage.Title}" Margin="0,0,0,10" Style="{StaticResource SubtitleTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
+          <ContentControl Content="{Binding SelectedPage}" ContentTemplateSelector="{StaticResource PageBody}" Focusable="False" />
         </StackPanel>
-      </StackPanel>
+      </ScrollViewer>
 
-      <TextBlock Text="REFRESH" Style="{StaticResource SettingsSectionTextStyle}" />
-      <TextBlock Text="Check providers every" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-      <ItemsControl ItemsSource="{Binding RefreshIntervals}" Margin="0,5,0,0" Focusable="False">
-        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-      <TextBlock Text="Call values stale after" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
-      <ItemsControl ItemsSource="{Binding StaleThresholds}" Margin="0,5,0,0" Focusable="False">
-        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-      <TextBlock Text="{Binding StaleThresholdWarningText}" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource StateWarnBrush}">
-        <TextBlock.Style>
-          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+      <!-- Copy and the logs folder belong to the shell rather than to DiagnosticsPage, so that the
+           copy action can sit on every diagnostics page while the logs folder stays on the one page
+           it is about - and so DiagnosticsPage keeps a DiagnosticSection as its whole world. -->
+      <StackPanel Grid.Row="2" x:Name="DiagnosticsActions" Margin="18,0,18,14">
+        <StackPanel.Style>
+          <Style TargetType="StackPanel">
             <Setter Property="Visibility" Value="Collapsed" />
-            <Style.Triggers><DataTrigger Binding="{Binding HasStaleThresholdWarning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+            <Style.Triggers><DataTrigger Binding="{Binding SelectedPage.IsDiagnostics}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
           </Style>
-        </TextBlock.Style>
-      </TextBlock>
-
-      <TextBlock Text="ACTIONS" Style="{StaticResource SettingsSectionTextStyle}" />
-      <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Open diagnostics" Command="{Binding OpenDiagnosticsCommand}" AutomationProperties.Name="Open diagnostics" />
-      <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Re-check providers" Command="{Binding RecheckProvidersCommand}" AutomationProperties.Name="Re-check providers" />
-      <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Reset window position" Command="{Binding ResetPositionCommand}" AutomationProperties.Name="Reset window position" />
-      <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Open logs folder" Command="{Binding OpenLogsCommand}" AutomationProperties.Name="Open logs folder" />
-
-    </StackPanel>
-  </ScrollViewer>
+        </StackPanel.Style>
+        <TextBlock Text="{Binding Diagnostics.CopyHintText}" TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
+        <StackPanel Orientation="Horizontal">
+          <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Copy all diagnostics" Command="{Binding Diagnostics.CopyCommand}" AutomationProperties.Name="Copy all diagnostics" />
+          <Button Margin="16,0,0,0" Content="Open logs folder" Command="{Binding Diagnostics.OpenLogsCommand}" AutomationProperties.Name="Open logs folder">
+            <!-- No Style attribute here. This button needs BasedOn plus a trigger, so the style is
+                 a property element; setting the Style attribute as well is MC3024 - the property
+                 can be set once. -->
+            <Button.Style>
+              <Style TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers><DataTrigger Binding="{Binding SelectedPage.Kind}" Value="ApplicationDiagnostics"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+              </Style>
+            </Button.Style>
+          </Button>
+        </StackPanel>
+        <TextBlock x:Name="CopyConfirmation" Text="{Binding Diagnostics.CopyConfirmationText}" TextWrapping="Wrap" Foreground="{DynamicResource TextTertiaryBrush}">
+          <TextBlock.Style>
+            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+              <Setter Property="Visibility" Value="Visible" />
+              <Style.Triggers><DataTrigger Binding="{Binding Diagnostics.CopyConfirmationText}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
+            </Style>
+          </TextBlock.Style>
+        </TextBlock>
+      </StackPanel>
+    </Grid>
+  </Grid>
 </Window>
