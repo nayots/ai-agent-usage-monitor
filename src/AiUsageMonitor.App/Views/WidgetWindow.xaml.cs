@@ -81,8 +81,14 @@ public partial class WidgetWindow : Window
         RestorePlacement(settings.Current);
 
         _tick.Tick += OnTick;
-        _poll.Interval = settings.Current.RefreshInterval;
+
+        // A fixed short tick, not the refresh interval. The service decides, per provider, whether
+        // anything is due - which is the only place that can be decided now that a provider may
+        // have its own interval or be hidden entirely. Pushed before the first refresh so a hidden
+        // provider is never polled even once.
+        _poll.Interval = TickCadence.Poll;
         _poll.Tick += (_, _) => _ = _model.RefreshAsync(force: false);
+        ApplyCadence(settings.Current);
         _dismiss.Tick += OnDismissTick;
 
         _settings.Changed += OnSettingsChanged;
@@ -282,20 +288,14 @@ public partial class WidgetWindow : Window
         Dispatcher.BeginInvoke(ClampPlacement);
 
     /// <summary>
-    /// Everything a settings change reaches from here. The poll timer's interval is reassigned
-    /// rather than the timer restarted: DispatcherTimer applies a new interval on its next tick,
-    /// which is the behaviour wanted - a user shortening the interval should not also force an
-    /// immediate provider call.
+    /// Everything a settings change reaches from here. The poll timer's own interval is not among
+    /// them any more: it is a fixed tick that only asks whether anything is due, and the answer -
+    /// shared interval, per-provider override, hidden entirely - lives in the refresh service.
     /// </summary>
     private void OnSettingsChanged(object? sender, AppSettings settings)
     {
         Topmost = settings.AlwaysOnTop;
-        _poll.Interval = settings.RefreshInterval;
-
-        if (_refresh is not null)
-        {
-            _refresh.BaseInterval = settings.RefreshInterval;
-        }
+        ApplyCadence(settings);
 
         _theme?.Apply(settings.Theme);
         _model.ApplySettings(settings);
@@ -304,6 +304,33 @@ public partial class WidgetWindow : Window
             UpdateGlobalHotkeyRegistration(settings);
         }
         UpdateTrayGlyph();
+    }
+
+    /// <summary>
+    /// Hands the refresh service the whole cadence picture in one go: the shared interval, the
+    /// per-provider overrides, and which providers the user has hidden. Replaced wholesale rather
+    /// than patched, so a key removed from the settings file stops applying rather than lingering.
+    /// </summary>
+    private void ApplyCadence(AppSettings settings)
+    {
+        if (_refresh is null)
+        {
+            return;
+        }
+
+        Dictionary<string, TimeSpan> overrides = [];
+
+        foreach (ProviderDescriptor provider in _providers)
+        {
+            if (settings.RefreshSecondsOverrideFor(provider.Key) is not null)
+            {
+                overrides[provider.Key] = settings.RefreshIntervalFor(provider.Key);
+            }
+        }
+
+        _refresh.BaseInterval = settings.RefreshInterval;
+        _refresh.IntervalOverrides = overrides;
+        _refresh.HiddenProviderKeys = settings.HiddenProviders;
     }
 
     /// <summary>Opens the settings window, or focuses the one already open.</summary>

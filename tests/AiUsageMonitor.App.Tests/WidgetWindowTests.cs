@@ -406,4 +406,63 @@ public class WidgetWindowTests(WpfFixture wpf)
         Assert.Equal(28d, ((FrameworkElement)window.FindName("TitleBar")).Height);
         model.Dispose();
     });
+
+    [Fact]
+    public void ThePollTickIsFiveSeconds() => Assert.Equal(TimeSpan.FromSeconds(5), TickCadence.Poll);
+
+    /// <summary>
+    /// The poll timer stopped deciding when a provider is due, so it must stop tracking the refresh
+    /// interval too. A timer still set to the shared interval would gate the service a second time
+    /// and make a fifteen-second per-provider override unreachable under a five-minute shared one.
+    /// </summary>
+    [Fact]
+    public void ThePollTimerHoldsTheFixedTickWhateverTheRefreshIntervalBecomes() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        ProviderRefreshService refresh = new(providers, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(60));
+
+        WidgetWindow window = new(model, settings, refresh, providers: providers);
+
+        DispatcherTimer poll = (DispatcherTimer)typeof(WidgetWindow)
+            .GetField("_poll", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(window)!;
+
+        Assert.Equal(TickCadence.Poll, poll.Interval);
+
+        settings.Update(s => s with { RefreshIntervalSeconds = 300 });
+
+        Assert.Equal(TickCadence.Poll, poll.Interval);
+        Assert.Equal(TimeSpan.FromSeconds(300), refresh.BaseInterval);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// A hidden provider must not be polled even once, so the whole cadence picture is pushed into
+    /// the service before the first refresh rather than on the first settings change.
+    /// </summary>
+    [Fact]
+    public void HiddenProvidersAndPerProviderIntervalsReachTheServiceAtStartup() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        AppSettings configured = AppSettings.Default with
+        {
+            RefreshIntervalSeconds = 300,
+            HiddenProviders = ["codex"],
+            ProviderRefreshSeconds = new Dictionary<string, int> { ["claude-code"] = 15 }
+        };
+
+        MainViewModel model = Model(providers, configured);
+        ProviderRefreshService refresh = new(providers, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(60));
+
+        WidgetWindow window = new(model, Settings(configured), refresh, providers: providers);
+
+        Assert.Contains("codex", refresh.HiddenProviderKeys);
+        Assert.Equal(TimeSpan.FromSeconds(15), refresh.IntervalFor(providers[0]));
+        Assert.Equal(TimeSpan.FromSeconds(300), refresh.IntervalFor(providers[1]));
+
+        model.Dispose();
+    });
 }
