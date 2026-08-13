@@ -5,6 +5,19 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AiUsageMonitor.Infrastructure.Refresh;
 
+/// <summary>
+/// What the service knows about one provider's polling history. PRD §20 requires the last
+/// discovery time, the last successful refresh, and enough about deferral to explain a card
+/// that has not moved. All of it already existed inside this service; none of it was readable.
+/// </summary>
+public sealed record ProviderActivity(
+    DateTimeOffset? LastAttemptStartedAt,
+    DateTimeOffset? LastCompletedAt,
+    DateTimeOffset? LastSuccessAt,
+    DateTimeOffset? NextAttemptAt,
+    int ConsecutiveFailures,
+    bool IsInFlight);
+
 /// <summary>One provider's answer, raised as soon as that provider answers rather than at the end of a cycle.</summary>
 public sealed record ProviderRefreshed(ProviderDescriptor Provider, ProviderSnapshot Snapshot);
 
@@ -62,6 +75,23 @@ public sealed class ProviderRefreshService
         }
     }
 
+    public ProviderActivity ActivityFor(ProviderDescriptor provider, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            _attempts.TryGetValue(provider, out AttemptState? attempts);
+            _backoff.TryGetValue(provider, out Backoff? backoff);
+
+            return new ProviderActivity(
+                attempts?.LastAttemptStartedAt,
+                attempts?.LastCompletedAt,
+                attempts?.LastSuccessAt,
+                NextAttemptFor(provider, now),
+                backoff?.ConsecutiveFailures ?? 0,
+                attempts?.InFlight.Count > 0);
+        }
+    }
+
     /// <summary>
     /// Delay before a provider that has failed <paramref name="consecutiveFailures"/> times in a
     /// row is asked again: doubling, capped at 8x the base interval. PRD §24 requires repeated
@@ -105,6 +135,7 @@ public sealed class ProviderRefreshService
             }
 
             sequence = ++attempts.LastStarted;
+            attempts.LastAttemptStartedAt = now;
             attempts.InFlight.Add(sequence);
         }
 
@@ -265,6 +296,12 @@ public sealed class ProviderRefreshService
             }
 
             attempts.HighestPublished = sequence;
+            attempts.LastCompletedAt = now;
+            if (snapshot.RetrievedAt is not null)
+            {
+                attempts.LastSuccessAt = now;
+            }
+
             Record(provider, snapshot, now);
             return true;
         }
@@ -304,6 +341,12 @@ public sealed class ProviderRefreshService
     private sealed class AttemptState
     {
         public long LastStarted { get; set; }
+
+        public DateTimeOffset? LastAttemptStartedAt { get; set; }
+
+        public DateTimeOffset? LastCompletedAt { get; set; }
+
+        public DateTimeOffset? LastSuccessAt { get; set; }
 
         public long HighestPublished { get; set; }
 

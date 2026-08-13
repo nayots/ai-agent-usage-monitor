@@ -51,6 +51,81 @@ public class ProviderRefreshServiceTests
         new(providers, TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(60));
 
     [Fact]
+    public void ActivityForAnUnprobedProviderIsEmpty()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+
+        ProviderActivity activity = Service(provider).ActivityFor(provider, Now);
+
+        Assert.Null(activity.LastAttemptStartedAt);
+        Assert.Null(activity.LastCompletedAt);
+        Assert.Null(activity.LastSuccessAt);
+        Assert.Null(activity.NextAttemptAt);
+        Assert.Equal(0, activity.ConsecutiveFailures);
+        Assert.False(activity.IsInFlight);
+    }
+
+    [Fact]
+    public async Task ActivityForASuccessfulRefreshRecordsAttemptCompletionAndSuccess()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAllAsync(force: true, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal(Now, activity.LastAttemptStartedAt);
+        Assert.Equal(Now, activity.LastCompletedAt);
+        Assert.Equal(Now, activity.LastSuccessAt);
+        Assert.Equal(0, activity.ConsecutiveFailures);
+    }
+
+    [Fact]
+    public async Task ActivityForAnErrorRefreshRecordsCompletionWithoutSuccess()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Error)));
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAllAsync(force: true, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal(Now, activity.LastCompletedAt);
+        Assert.Null(activity.LastSuccessAt);
+        Assert.Equal(1, activity.ConsecutiveFailures);
+    }
+
+    [Fact]
+    public async Task ActivityForASuccessAfterTwoFailuresClearsFailuresAndMovesSuccess()
+    {
+        ConnectionState state = ConnectionState.Error;
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", state)));
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAllAsync(force: true, Now, CancellationToken.None);
+        await service.RefreshAllAsync(force: true, Now.AddMinutes(1), CancellationToken.None);
+        state = ConnectionState.Connected;
+        DateTimeOffset successAt = Now.AddMinutes(2);
+        await service.RefreshAllAsync(force: true, successAt, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, successAt);
+        Assert.Equal(successAt, activity.LastSuccessAt);
+        Assert.Equal(0, activity.ConsecutiveFailures);
+    }
+
+    [Fact]
+    public async Task AnUnforcedBackoffSkipDoesNotMoveActivityAttemptStart()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Error)));
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+        await service.RefreshAllAsync(force: false, Now.AddSeconds(1), CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now.AddSeconds(1));
+        Assert.Equal(Now, activity.LastAttemptStartedAt);
+    }
+
+    [Fact]
     public async Task RaisesOneEventPerProvider()
     {
         ProviderDescriptor a = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
