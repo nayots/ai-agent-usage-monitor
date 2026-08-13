@@ -24,7 +24,7 @@ public partial class WidgetWindow : Window
     private readonly ProviderRefreshService? _refresh;
     private readonly ThemeManager? _theme;
     private SettingsWindow? _settingsWindow;
-    private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly DispatcherTimer _tick = new() { Interval = TickCadence.Visible };
     private readonly DispatcherTimer _poll = new();
 
     /// <summary>
@@ -455,6 +455,11 @@ public partial class WidgetWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Activate();
+
+        // Hidden-to-tray is the primary operating mode: provider polling continues at full rate so
+        // the glyph and quota notifications remain current. Only unseen presentation work slows.
+        _tick.Interval = TickCadence.For(isVisible: true);
+        OnTick(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -465,6 +470,10 @@ public partial class WidgetWindow : Window
     public void HideToTray()
     {
         Hide();
+
+        // The tray glyph and quota notifications are fed by polling, so their cadence is untouched;
+        // a five-second lag on countdown strings nobody can see costs nothing.
+        _tick.Interval = TickCadence.For(isVisible: false);
 
         if (!_settings.Current.TrayHintShown)
         {
