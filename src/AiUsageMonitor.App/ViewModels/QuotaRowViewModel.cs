@@ -16,10 +16,11 @@ public sealed class QuotaRowViewModel : ObservableObject
     private double? _elapsedFraction;
     private bool _isStale;
 
-    public QuotaRowViewModel(QuotaWindow window, bool colorBarsByUsage)
+    public QuotaRowViewModel(QuotaWindow window, bool colorBarsByUsage, string? mechanism = null)
     {
         _window = window;
         ColorBarsByUsage = colorBarsByUsage;
+        DetailText = BuildDetailText(mechanism);
     }
 
     public string Label => QuotaOrdering.DisplayLabel(_window);
@@ -39,8 +40,10 @@ public sealed class QuotaRowViewModel : ObservableObject
     /// </summary>
     public string Id => _window.Id;
 
-    /// <summary>The provider's identifier stays reachable for every window, resolved or not.</summary>
-    public string IdentifierTooltip => $"identifier: {_window.Id}";
+    /// <summary>The row's full detail, one fact per line, for the tooltip. Never null.</summary>
+    public string DetailText { get; }
+
+    public bool IsPartial => _window.IsPartial;
 
     public double? UsedPercent => _window.UsedPercent;
 
@@ -69,8 +72,46 @@ public sealed class QuotaRowViewModel : ObservableObject
         {
             string usage = UsedText is null ? "usage not reported" : UsedText + " used";
             string reset = CountdownText is null ? "no reset time reported" : "resets in " + CountdownText;
-            return $"{Label}, {usage}, {reset}";
+            string exactReset = _window.ResetsAt is DateTimeOffset resetsAt
+                ? ", resets at " + resetsAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
+                : string.Empty;
+            string partial = IsPartial ? ", partial data" : string.Empty;
+            return $"{Label}, {usage}, {reset}{partial}{exactReset}";
         }
+    }
+
+    private string BuildDetailText(string? mechanism)
+    {
+        List<string> lines = [$"identifier: {_window.Id}"];
+
+        if (!string.IsNullOrWhiteSpace(mechanism))
+        {
+            lines.Add($"mechanism: {mechanism}");
+        }
+
+        if (_window.ResetsAt is DateTimeOffset resetsAt)
+        {
+            lines.Add($"resets at: {resetsAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)}");
+        }
+
+        if (_window.WindowDuration is not null)
+        {
+            lines.Add($"window duration: {QuotaFormatting.FormatCountdown(_window.WindowDuration)}");
+        }
+
+        if (IsPartial)
+        {
+            lines.Add("partial data: the provider did not supply a reset time or a window duration");
+        }
+
+        // Extra is safe to render only because every key and value is app-selected. Do not add
+        // unreviewed provider data here: this tooltip would become a disclosure path.
+        foreach ((string key, string value) in _window.Extra)
+        {
+            lines.Add($"{key}: {value}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     /// <summary>

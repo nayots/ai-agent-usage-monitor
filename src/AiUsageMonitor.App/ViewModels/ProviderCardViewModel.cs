@@ -215,7 +215,7 @@ public sealed class ProviderCardViewModel : ObservableObject
 
         foreach (QuotaWindow window in QuotaOrdering.InProviderOrder(_rows))
         {
-            Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage) { IsStale = RowsAreStale });
+            Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage, _snapshot?.Mechanism) { IsStale = RowsAreStale });
         }
 
         Raise(nameof(HasWindows));

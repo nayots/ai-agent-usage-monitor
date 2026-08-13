@@ -13,7 +13,8 @@ public class QuotaRowViewModelTests
         double? usedPercent = 47,
         DateTimeOffset? resetsAt = null,
         TimeSpan? duration = null,
-        bool labelIsProviderToken = false) => new(
+        bool labelIsProviderToken = false,
+        IReadOnlyDictionary<string, string>? extra = null) => new(
             Id: id,
             Label: label,
             UsedPercent: usedPercent,
@@ -21,7 +22,7 @@ public class QuotaRowViewModelTests
             WindowDuration: duration,
             Order: 0,
             IsPartial: resetsAt is null || duration is null,
-            Extra: new Dictionary<string, string>(),
+            Extra: extra ?? new Dictionary<string, string>(),
             LabelIsProviderToken: labelIsProviderToken);
 
     private static QuotaRowViewModel Row(QuotaWindow window, bool colorBarsByUsage = true)
@@ -63,11 +64,68 @@ public class QuotaRowViewModelTests
     }
 
     [Fact]
-    public void TheProviderIdentifierIsAlwaysReachable()
+    public void TheRowDetailListsEveryKnownFactInDisplayOrder()
     {
-        QuotaRowViewModel row = Row(Window(id: "nimbus_quill", label: "nimbus_quill", labelIsProviderToken: true));
+        DateTimeOffset resetsAt = new(2026, 8, 11, 18, 30, 0, TimeSpan.Zero);
+        QuotaRowViewModel row = new(
+            Window(
+                id: "five_hour",
+                resetsAt: resetsAt,
+                duration: TimeSpan.FromHours(5),
+                extra: new Dictionary<string, string>
+                {
+                    ["source"] = "response",
+                    ["slot"] = "primary"
+                }),
+            colorBarsByUsage: true,
+            mechanism: "Codex CLI");
 
-        Assert.Equal("identifier: nimbus_quill", row.IdentifierTooltip);
+        Assert.Equal(
+            string.Join(
+                Environment.NewLine,
+                "identifier: five_hour",
+                "mechanism: Codex CLI",
+                $"resets at: {resetsAt.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture)}",
+                "window duration: 5h 00m",
+                "source: response",
+                "slot: primary"),
+            row.DetailText);
+    }
+
+    [Fact]
+    public void TheRowDetailOmitsMissingValuesAndExplainsPartialData()
+    {
+        QuotaRowViewModel partial = Row(Window(
+            id: "nimbus_quill",
+            label: "nimbus_quill",
+            usedPercent: null,
+            extra: new Dictionary<string, string>()));
+        QuotaRowViewModel complete = Row(Window(
+            resetsAt: Now.AddHours(1),
+            duration: TimeSpan.FromHours(5)));
+
+        Assert.Equal(
+            string.Join(Environment.NewLine,
+                "identifier: nimbus_quill",
+                "partial data: the provider did not supply a reset time or a window duration"),
+            partial.DetailText);
+        Assert.DoesNotContain("resets at", partial.DetailText);
+        Assert.DoesNotContain("null", partial.DetailText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\n0\n", partial.DetailText);
+        Assert.DoesNotContain(": " + Environment.NewLine, partial.DetailText);
+        Assert.DoesNotContain("partial data", complete.DetailText);
+        Assert.DoesNotContain("mechanism:", partial.DetailText);
+    }
+
+    [Fact]
+    public void TheAccessibleNameIncludesPartialDataAndTheExactResetInstant()
+    {
+        DateTimeOffset resetsAt = Now.AddHours(1);
+        QuotaRowViewModel row = Row(Window(resetsAt: resetsAt, duration: null));
+
+        Assert.Equal(
+            $"5-hour window, 47% used, resets in 1h 00m, partial data, resets at {resetsAt.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture)}",
+            row.AccessibleName);
     }
 
     [Fact]
@@ -100,7 +158,9 @@ public class QuotaRowViewModelTests
     {
         QuotaRowViewModel row = Row(Window(resetsAt: Now.AddMinutes(295), duration: TimeSpan.FromHours(5)));
 
-        Assert.Equal("5-hour window, 47% used, resets in 4h 55m", row.AccessibleName);
+        Assert.Equal(
+            $"5-hour window, 47% used, resets in 4h 55m, resets at {Now.AddMinutes(295).ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture)}",
+            row.AccessibleName);
     }
 
     [Fact]
@@ -108,6 +168,6 @@ public class QuotaRowViewModelTests
     {
         QuotaRowViewModel row = Row(Window(id: "nimbus_quill", label: "nimbus_quill", usedPercent: null, labelIsProviderToken: true));
 
-        Assert.Equal("nimbus_quill, usage not reported, no reset time reported", row.AccessibleName);
+        Assert.Equal("nimbus_quill, usage not reported, no reset time reported, partial data", row.AccessibleName);
     }
 }
