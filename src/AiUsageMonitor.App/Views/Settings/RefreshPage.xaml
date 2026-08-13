@@ -1,0 +1,32 @@
+<UserControl x:Class="AiUsageMonitor.App.Views.Settings.RefreshPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel>
+    <TextBlock Text="Check providers every" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
+    <ItemsControl ItemsSource="{Binding RefreshIntervals}" Margin="0,5,0,0" Focusable="False">
+      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <TextBlock Text="Call values stale after" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
+    <ItemsControl ItemsSource="{Binding StaleThresholds}" Margin="0,5,0,0" Focusable="False">
+      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Margin="0,0,4,4" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <TextBlock Text="{Binding StaleThresholdWarningText}" TextWrapping="Wrap" Margin="0,4,0,0" Foreground="{DynamicResource StateWarnBrush}">
+      <TextBlock.Style>
+        <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+          <Setter Property="Visibility" Value="Collapsed" />
+          <Style.Triggers><DataTrigger Binding="{Binding HasStaleThresholdWarning}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+        </Style>
+      </TextBlock.Style>
+    </TextBlock>
+  </StackPanel>
+</UserControl>
