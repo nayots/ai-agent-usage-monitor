@@ -38,8 +38,6 @@ public class SettingsViewModelTests
             new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null),
             resetPosition: () => { },
             recheckProviders: () => { },
-            openLogs: () => { },
-            openDiagnostics: () => { },
             providers: Providers,
             globalHotkeyUnavailable: globalHotkeyUnavailable);
     }
@@ -210,25 +208,19 @@ public class SettingsViewModelTests
     {
         string path = Path.Combine(Path.GetTempPath(), "aium-vm-" + Guid.NewGuid().ToString("N"), "settings.json");
         SettingsService service = new(new AppSettingsStore(path), AppSettings.Default);
-        int reset = 0, recheck = 0, logs = 0, diagnostics = 0;
+        int reset = 0, recheck = 0;
         SettingsViewModel model = new(
             service,
             new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null),
             resetPosition: () => reset++,
             recheckProviders: () => recheck++,
-            openLogs: () => logs++,
-            openDiagnostics: () => diagnostics++,
             providers: Providers);
 
         model.ResetPositionCommand.Execute(null);
         model.RecheckProvidersCommand.Execute(null);
-        model.OpenLogsCommand.Execute(null);
-        model.OpenDiagnosticsCommand.Execute(null);
 
         Assert.Equal(1, reset);
         Assert.Equal(1, recheck);
-        Assert.Equal(1, logs);
-        Assert.Equal(1, diagnostics);
     }
 
     [Fact]
@@ -256,7 +248,7 @@ public class SettingsViewModelTests
         string path = Path.Combine(Path.GetTempPath(), "aium-vm-" + Guid.NewGuid().ToString("N"), "settings.json");
         Directory.CreateDirectory(path);
         SettingsService service = new(new AppSettingsStore(path), AppSettings.Default);
-        SettingsViewModel model = new(service, new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null), () => { }, () => { }, () => { }, () => { }, Providers);
+        SettingsViewModel model = new(service, new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null), () => { }, () => { }, Providers);
 
         model.ColorBarsByUsage = false;
 

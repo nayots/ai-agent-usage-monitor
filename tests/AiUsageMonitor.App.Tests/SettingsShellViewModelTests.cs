@@ -45,8 +45,6 @@ public class SettingsShellViewModelTests(WpfFixture wpf)
             new StartupRegistration(@"Software\AiUsageMonitor\tests\Shell", "AiUsageMonitorTest", null),
             resetPosition: () => { },
             recheckProviders: () => { },
-            openLogs: () => { },
-            openDiagnostics: () => { },
             providers: providers);
 
         diagnostics = new DiagnosticsViewModel(

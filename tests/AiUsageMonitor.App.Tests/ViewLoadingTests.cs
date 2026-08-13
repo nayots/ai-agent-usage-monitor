@@ -545,8 +545,6 @@ public class ViewLoadingTests(WpfFixture wpf)
             new StartupRegistration(@"Software\AiUsageMonitor\tests\ViewLoading", "AiUsageMonitorTest", null),
             resetPosition: () => { },
             recheckProviders: () => { },
-            openLogs: () => { },
-            openDiagnostics: () => { },
             providers: providers);
 
         DiagnosticsViewModel diagnostics = new(

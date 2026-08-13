@@ -389,8 +389,6 @@ public partial class WidgetWindow : Window
             StartupRegistration.ForThisProcess(),
             resetPosition: ResetPlacement,
             recheckProviders: () => _ = _model.RefreshAsync(force: true),
-            openLogs: OpenLogsFolder,
-            openDiagnostics: ShowDiagnostics,
             providers: _providers,
             globalHotkeyUnavailable: _globalHotkeyUnavailable);
 

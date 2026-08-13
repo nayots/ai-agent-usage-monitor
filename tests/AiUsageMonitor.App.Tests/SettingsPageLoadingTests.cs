@@ -37,8 +37,6 @@ public class SettingsPageLoadingTests(WpfFixture wpf)
             new StartupRegistration(@"Software\AiUsageMonitor\tests\Pages", "AiUsageMonitorTest", null),
             resetPosition: () => { },
             recheckProviders: () => { },
-            openLogs: () => { },
-            openDiagnostics: () => { },
             providers:
             [
                 new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),

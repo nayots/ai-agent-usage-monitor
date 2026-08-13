@@ -127,8 +127,6 @@ public class ProviderPreferenceViewModelTests
             new StartupRegistration(ScratchKey, "AiUsageMonitorTest", null),
             resetPosition: () => { },
             recheckProviders: () => { },
-            openLogs: () => { },
-            openDiagnostics: () => { },
             providers: providers);
     }
 }

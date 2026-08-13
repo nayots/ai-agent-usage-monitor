@@ -31,8 +31,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         StartupRegistration startup,
         Action resetPosition,
         Action recheckProviders,
-        Action openLogs,
-        Action openDiagnostics,
         IReadOnlyList<ProviderDescriptor> providers,
         bool globalHotkeyUnavailable = false)
     {
@@ -88,10 +86,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
         UpdateProviderMoveAvailability();
 
+        // No OpenLogsCommand or OpenDiagnosticsCommand. Diagnostics is a page of the settings shell
+        // now rather than a window this view model can open, and the logs folder is offered on that
+        // shell's application diagnostics page, against DiagnosticsViewModel.OpenLogsCommand.
         ResetPositionCommand = new RelayCommand(resetPosition);
         RecheckProvidersCommand = new RelayCommand(recheckProviders);
-        OpenLogsCommand = new RelayCommand(openLogs);
-        OpenDiagnosticsCommand = new RelayCommand(openDiagnostics);
 
         _settings.Changed += OnSettingsChanged;
         _settings.PersistenceStateChanged += OnPersistenceStateChanged;
@@ -215,10 +214,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand ResetPositionCommand { get; }
 
     public RelayCommand RecheckProvidersCommand { get; }
-
-    public RelayCommand OpenLogsCommand { get; }
-
-    public RelayCommand OpenDiagnosticsCommand { get; }
 
     public void Dispose()
     {
