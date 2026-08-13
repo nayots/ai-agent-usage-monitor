@@ -65,7 +65,7 @@ public class ViewLoadingTests(WpfFixture wpf)
     [Fact]
     public void DiagnosticsWindowLoadsWithAPopulatedViewModel() => wpf.Invoke(() =>
     {
-        ProviderDescriptor provider = new("Claude Code", "CC", new SilentProbe("Claude Code"));
+        ProviderDescriptor provider = new("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code"));
         ProviderCardViewModel card = new(provider, colorBarsByUsage: true, _ => { });
         card.Apply(Snapshot(ConnectionState.Connected, [Window(47d, false, true)]), Now, FreshnessPolicy.Default);
         DiagnosticsViewModel model = new(
@@ -145,7 +145,7 @@ public class ViewLoadingTests(WpfFixture wpf)
     [Fact]
     public void TrayMenuContainsDiagnostics() => wpf.Invoke(() =>
     {
-        ProviderDescriptor provider = new("Claude Code", "CC", new SilentProbe("Claude Code"));
+        ProviderDescriptor provider = new("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code"));
         ProviderRefreshService refresh = new([provider], TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1));
         string path = Path.Combine(Path.GetTempPath(), "aium-tray-" + Guid.NewGuid().ToString("N"), "settings.json");
         SettingsService settings = new(new AppSettingsStore(path), AppSettings.Default);
@@ -167,7 +167,7 @@ public class ViewLoadingTests(WpfFixture wpf)
     public void EveryCardStateRendersWithoutThrowing(ConnectionState state) => wpf.Invoke(() =>
     {
         ProviderCardViewModel card = new(
-            new ProviderDescriptor("Claude Code", "CC", new SilentProbe("Claude Code")),
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
             colorBarsByUsage: true,
             _ => { });
         card.Apply(Snapshot(state, [Window(47, false, true), Window(34, true, false)]), Now, FreshnessPolicy.Default);
@@ -182,7 +182,7 @@ public class ViewLoadingTests(WpfFixture wpf)
         // regardless would leave a dangling "Not installed ·" - and on a machine where one of the
         // two providers simply is not present, that is the first thing the user ever sees.
         ProviderCardViewModel card = new(
-            new ProviderDescriptor("Codex", "CX", new SilentProbe("Codex")),
+            new ProviderDescriptor("codex", "Codex", "CX", new SilentProbe("Codex")),
             colorBarsByUsage: true,
             _ => { });
         card.Apply(Snapshot(ConnectionState.NotInstalled, []), Now, FreshnessPolicy.Default);
@@ -196,7 +196,7 @@ public class ViewLoadingTests(WpfFixture wpf)
     public void TheTimestampLineKeepsItsSeparatorWhenThereIsATimestamp() => wpf.Invoke(() =>
     {
         ProviderCardViewModel card = new(
-            new ProviderDescriptor("Claude Code", "CC", new SilentProbe("Claude Code")),
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
             colorBarsByUsage: true,
             _ => { });
         card.Apply(Snapshot(ConnectionState.Connected, [Window(47d, false, true)]), Now, FreshnessPolicy.Default);
@@ -276,7 +276,7 @@ public class ViewLoadingTests(WpfFixture wpf)
     public void ACardWithNoWindowsStillRenders() => wpf.Invoke(() =>
     {
         ProviderCardViewModel card = new(
-            new ProviderDescriptor("Codex", "CX", new SilentProbe("Codex")),
+            new ProviderDescriptor("codex", "Codex", "CX", new SilentProbe("Codex")),
             colorBarsByUsage: false,
             _ => { });
         card.Apply(Snapshot(ConnectionState.Connected, []), Now, FreshnessPolicy.Default);
@@ -433,7 +433,7 @@ public class ViewLoadingTests(WpfFixture wpf)
     private static ProviderCardViewModel Card(ConnectionState state, bool compact)
     {
         ProviderCardViewModel card = new(
-            new ProviderDescriptor("Claude Code", "CC", new SilentProbe("Claude Code")),
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
             colorBarsByUsage: true,
             _ => { })
         {

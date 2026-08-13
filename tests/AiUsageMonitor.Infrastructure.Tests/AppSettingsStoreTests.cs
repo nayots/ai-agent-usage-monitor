@@ -86,8 +86,15 @@ public class AppSettingsStoreTests
 
         store.Save(written);
 
-        Assert.Equal(written, store.Load().Settings);
-        Assert.True(store.Load().Settings.TrayHintShown);
+        AppSettings loaded = store.Load().Settings;
+        Assert.Equal(written.Theme, loaded.Theme);
+        Assert.Equal(written.ColorBarsByUsage, loaded.ColorBarsByUsage);
+        Assert.Equal(written.StartWithWindows, loaded.StartWithWindows);
+        Assert.Equal(written.GlobalHotkeyEnabled, loaded.GlobalHotkeyEnabled);
+        Assert.Equal(written.Density, loaded.Density);
+        Assert.Equal(written.ShowUnavailableProviders, loaded.ShowUnavailableProviders);
+        Assert.Equal(written.StaleAfterSeconds, loaded.StaleAfterSeconds);
+        Assert.True(loaded.TrayHintShown);
     }
 
     [Fact]
@@ -186,6 +193,77 @@ public class AppSettingsStoreTests
         AppSettings settings = AppSettings.Default with { RefreshIntervalSeconds = configured };
 
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), settings.RefreshInterval);
+    }
+
+    [Theory]
+    [InlineData("unknown", null, 60)]
+    [InlineData("codex", 0, 60)]
+    [InlineData("codex", 5, 15)]
+    [InlineData("codex", 99999, 3600)]
+    public void ProviderRefreshIntervalsUseTheOverrideOnlyWhenItIsNonZero(string key, int? overrideSeconds, int expectedSeconds)
+    {
+        IReadOnlyDictionary<string, int> overrides = overrideSeconds is null
+            ? new Dictionary<string, int>()
+            : new Dictionary<string, int> { ["Codex"] = overrideSeconds.Value };
+        AppSettings settings = AppSettings.Default with { ProviderRefreshSeconds = overrides };
+
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), settings.RefreshIntervalFor(key));
+    }
+
+    [Fact]
+    public void HiddenProvidersMatchKeysCaseInsensitively()
+    {
+        AppSettings settings = AppSettings.Default with { HiddenProviders = ["Codex"] };
+
+        Assert.True(settings.IsProviderHidden("codex"));
+    }
+
+    [Fact]
+    public void ProviderPreferencesRoundTripThroughTheStore()
+    {
+        using TempDirectory dir = new();
+        AppSettingsStore store = new(dir.File("settings.json"));
+        AppSettings written = AppSettings.Default with
+        {
+            ProviderOrder = ["codex", "claude-code"],
+            HiddenProviders = ["claude-code"],
+            ProviderRefreshSeconds = new Dictionary<string, int> { ["codex"] = 120 }
+        };
+
+        store.Save(written);
+
+        AppSettings loaded = store.Load().Settings;
+        Assert.Equal(written.ProviderOrder, loaded.ProviderOrder);
+        Assert.Equal(written.HiddenProviders, loaded.HiddenProviders);
+        Assert.Equal(written.ProviderRefreshSeconds, loaded.ProviderRefreshSeconds);
+    }
+
+    [Fact]
+    public void SavingDefaultsDoesNotWriteAnEmptyProviderOrder()
+    {
+        using TempDirectory dir = new();
+        AppSettingsStore store = new(dir.File("settings.json"));
+
+        store.Save(AppSettings.Default);
+
+        Assert.DoesNotContain("ProviderOrder", File.ReadAllText(dir.File("settings.json")));
+    }
+
+    [Fact]
+    public void NullProviderPreferencesInAHandEditedFileLoadAsEmptyCollections()
+    {
+        using TempDirectory dir = new();
+        string path = dir.File("settings.json");
+        File.WriteAllText(path, """{ "ProviderOrder": null, "HiddenProviders": null, "ProviderRefreshSeconds": null }""");
+
+        AppSettings settings = new AppSettingsStore(path).Load().Settings;
+
+        Assert.Empty(settings.ProviderOrder);
+        Assert.Empty(settings.HiddenProviders);
+        Assert.Empty(settings.ProviderRefreshSeconds);
+        Assert.False(settings.IsProviderHidden("codex"));
+        Assert.Null(settings.RefreshSecondsOverrideFor("codex"));
+        Assert.Equal(settings.RefreshInterval, settings.RefreshIntervalFor("codex"));
     }
 
     [Fact]

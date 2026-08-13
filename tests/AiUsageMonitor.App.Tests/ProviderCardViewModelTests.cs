@@ -19,7 +19,7 @@ public class ProviderCardViewModelTests
     }
 
     private static ProviderCardViewModel Card() =>
-        new(new ProviderDescriptor("Claude Code", "CC", new SilentProbe()), colorBarsByUsage: true, _ => { });
+        new(new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe()), colorBarsByUsage: true, _ => { });
 
     private static ProviderSnapshot Snapshot(
         ConnectionState state = ConnectionState.Connected,
@@ -491,7 +491,7 @@ public class ProviderCardViewModelTests
     {
         List<string> retried = [];
         ProviderCardViewModel card = new(
-            new ProviderDescriptor("Claude Code", "CC", new SilentProbe()),
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe()),
             colorBarsByUsage: true,
             descriptor => retried.Add(descriptor.DisplayName));
 

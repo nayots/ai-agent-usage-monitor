@@ -8,7 +8,7 @@ public static class ProviderRegistry
 {
     public static IReadOnlyList<ProviderDescriptor> CreateDefault() =>
     [
-        new("Claude Code", "CC", new ClaudeOAuthUsageProbe()),
-        new("Codex", "CX", new CodexProbe())
+        new("claude-code", "Claude Code", "CC", new ClaudeOAuthUsageProbe()),
+        new("codex", "Codex", "CX", new CodexProbe())
     ];
 }

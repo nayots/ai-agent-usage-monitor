@@ -8,4 +8,4 @@ namespace AiUsageMonitor.Infrastructure.Providers;
 /// approved design uses "CX". Adding a provider is one entry in <see cref="ProviderRegistry"/>
 /// plus its probe - no change to any view or view model (PRD §21).
 /// </summary>
-public sealed record ProviderDescriptor(string DisplayName, string Monogram, IProviderProbe Probe);
+public sealed record ProviderDescriptor(string Key, string DisplayName, string Monogram, IProviderProbe Probe);

@@ -90,6 +90,34 @@ public sealed record AppSettings
     [JsonIgnore]
     public TimeSpan RefreshInterval => TimeSpan.FromSeconds(Math.Clamp(RefreshIntervalSeconds, 15, 3600));
 
+    public IReadOnlyList<string> ProviderOrder { get; init; } = [];
+
+    public IReadOnlyList<string> HiddenProviders { get; init; } = [];
+
+    public IReadOnlyDictionary<string, int> ProviderRefreshSeconds { get; init; } =
+        new Dictionary<string, int>();
+
+    public bool IsProviderHidden(string providerKey) =>
+        HiddenProviders.Contains(providerKey, StringComparer.OrdinalIgnoreCase);
+
+    public int? RefreshSecondsOverrideFor(string providerKey)
+    {
+        foreach ((string key, int seconds) in ProviderRefreshSeconds)
+        {
+            if (StringComparer.OrdinalIgnoreCase.Equals(key, providerKey))
+            {
+                return seconds == 0 ? null : seconds;
+            }
+        }
+
+        return null;
+    }
+
+    public TimeSpan RefreshIntervalFor(string providerKey) =>
+        RefreshSecondsOverrideFor(providerKey) is int seconds
+            ? TimeSpan.FromSeconds(Math.Clamp(seconds, 15, 3600))
+            : RefreshInterval;
+
     /// <summary>
     /// Last known window position, or null on a first run. Null rather than 0: a widget that has
     /// never been placed must be centred, and 0,0 is a real position a user could have chosen

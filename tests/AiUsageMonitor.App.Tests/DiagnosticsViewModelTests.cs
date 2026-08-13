@@ -15,8 +15,8 @@ public class DiagnosticsViewModelTests
     {
         TestProbe reported = new("Reported", MechanismTier.Official);
         TestProbe silent = new("Silent", MechanismTier.Unofficial);
-        ProviderDescriptor first = new("Reported", "R", reported);
-        ProviderDescriptor second = new("Silent", "S", silent);
+        ProviderDescriptor first = new("reported", "Reported", "R", reported);
+        ProviderDescriptor second = new("silent", "Silent", "S", silent);
         ProviderCardViewModel card = Card(first);
         card.Apply(Snapshot("Reported", reported, windows: []), Now, FreshnessPolicy.Default);
 
@@ -33,7 +33,7 @@ public class DiagnosticsViewModelTests
     public void WindowLinesOmitUnknownPercentAndResetSegments()
     {
         TestProbe probe = new("Provider", MechanismTier.Official);
-        ProviderDescriptor descriptor = new("Provider", "P", probe);
+        ProviderDescriptor descriptor = new("provider", "Provider", "P", probe);
         ProviderCardViewModel card = Card(descriptor);
         QuotaWindow window = new("daily", "Daily", null, null, null, 0, false, new Dictionary<string, string>(), false);
         card.Apply(Snapshot("Provider", probe, windows: [window]), Now, FreshnessPolicy.Default);
@@ -50,8 +50,8 @@ public class DiagnosticsViewModelTests
     {
         TestProbe official = new("Official", MechanismTier.Official);
         TestProbe unofficial = new("Unofficial", MechanismTier.Unofficial, makesFirstPartyNetworkCall: true);
-        ProviderDescriptor first = new("Official", "O", official);
-        ProviderDescriptor second = new("Unofficial", "U", unofficial);
+        ProviderDescriptor first = new("official", "Official", "O", official);
+        ProviderDescriptor second = new("unofficial", "Unofficial", "U", unofficial);
 
         DiagnosticsViewModel viewModel = ViewModel([Card(first), Card(second)], [first, second]);
 
@@ -64,7 +64,7 @@ public class DiagnosticsViewModelTests
     public void BundleIsRedactedOnlyAfterAllLinesAreRendered()
     {
         TestProbe probe = new("Provider", MechanismTier.Official);
-        ProviderDescriptor descriptor = new("Provider", "P", probe);
+        ProviderDescriptor descriptor = new("provider", "Provider", "P", probe);
         ProviderCardViewModel card = Card(descriptor);
         string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         card.Apply(Snapshot("Provider", probe, notes: [$"Credential location: {profile}\\.provider"]), Now, FreshnessPolicy.Default);
@@ -93,7 +93,7 @@ public class DiagnosticsViewModelTests
     public void RebuildProjectsTheCardCurrentState()
     {
         TestProbe probe = new("Provider", MechanismTier.Official);
-        ProviderDescriptor descriptor = new("Provider", "P", probe);
+        ProviderDescriptor descriptor = new("provider", "Provider", "P", probe);
         ProviderCardViewModel card = Card(descriptor);
         DiagnosticsViewModel viewModel = ViewModel([card], [descriptor]);
 

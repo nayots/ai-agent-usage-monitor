@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace AiUsageMonitor.Infrastructure.Settings;
 
@@ -15,11 +16,27 @@ public sealed record SettingsLoadResult(AppSettings Settings, string? CorruptBac
 /// </summary>
 public sealed class AppSettingsStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    private static readonly JsonSerializerOptions SerializerOptions = CreateSerializerOptions();
+
+    private static JsonSerializerOptions CreateSerializerOptions()
     {
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() }
-    };
+        DefaultJsonTypeInfoResolver resolver = new();
+        resolver.Modifiers.Add(typeInfo =>
+        {
+            if (typeInfo.Type == typeof(AppSettings))
+            {
+                JsonPropertyInfo providerOrder = typeInfo.Properties.Single(property => property.Name == nameof(AppSettings.ProviderOrder));
+                providerOrder.ShouldSerialize = (_, value) => value is IReadOnlyCollection<string> { Count: > 0 };
+            }
+        });
+
+        return new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            TypeInfoResolver = resolver,
+            Converters = { new JsonStringEnumConverter() }
+        };
+    }
 
     private readonly string _path;
 
@@ -47,7 +64,7 @@ public sealed class AppSettingsStore
             AppSettings? settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions);
             return settings is null
                 ? QuarantineAndDefault()
-                : new SettingsLoadResult(settings, null);
+                : new SettingsLoadResult(NormalizeProviderPreferences(settings), null);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -83,4 +100,11 @@ public sealed class AppSettingsStore
 
         return new SettingsLoadResult(AppSettings.Default, backup);
     }
+
+    private static AppSettings NormalizeProviderPreferences(AppSettings settings) => settings with
+    {
+        ProviderOrder = settings.ProviderOrder ?? [],
+        HiddenProviders = settings.HiddenProviders ?? [],
+        ProviderRefreshSeconds = settings.ProviderRefreshSeconds ?? new Dictionary<string, int>()
+    };
 }

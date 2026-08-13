@@ -45,7 +45,7 @@ public class ProviderRefreshServiceTests
         Func<CancellationToken, Task<ProviderSnapshot>> behaviour,
         string mechanism = "fake",
         MechanismTier tier = MechanismTier.Official) =>
-        new(name, name[..1], new FakeProbe(name, behaviour, mechanism, tier));
+        new(name.ToLowerInvariant(), name, name[..1], new FakeProbe(name, behaviour, mechanism, tier));
 
     private static ProviderRefreshService Service(params ProviderDescriptor[] providers) =>
         new(providers, TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(60));
@@ -281,7 +281,7 @@ public class ProviderRefreshServiceTests
     public async Task AFailingProviderIsSkippedUntilItsBackoffExpires()
     {
         FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Error)));
-        ProviderDescriptor descriptor = new("Alpha", "A", probe);
+        ProviderDescriptor descriptor = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(descriptor);
 
         await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
@@ -298,7 +298,7 @@ public class ProviderRefreshServiceTests
     public async Task AManualRefreshIgnoresBackoff()
     {
         FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Error)));
-        ProviderDescriptor descriptor = new("Alpha", "A", probe);
+        ProviderDescriptor descriptor = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(descriptor);
 
         await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
@@ -312,7 +312,7 @@ public class ProviderRefreshServiceTests
     {
         ConnectionState next = ConnectionState.Error;
         FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", next)));
-        ProviderDescriptor descriptor = new("Alpha", "A", probe);
+        ProviderDescriptor descriptor = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(descriptor);
 
         await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
@@ -353,7 +353,7 @@ public class ProviderRefreshServiceTests
             2 => second.Task,
             _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)),
         });
-        ProviderDescriptor provider = new("Alpha", "A", probe);
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(provider);
         List<ProviderSnapshot> raised = [];
         service.Refreshed += (_, e) => raised.Add(e.Snapshot);
@@ -379,7 +379,7 @@ public class ProviderRefreshServiceTests
     {
         var pending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
         FakeProbe probe = new("Alpha", _ => pending.Task);
-        ProviderDescriptor provider = new("Alpha", "A", probe);
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(provider);
 
         Task inFlight = service.RefreshAllAsync(force: true, Now, CancellationToken.None);
@@ -397,7 +397,7 @@ public class ProviderRefreshServiceTests
         var second = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
         int attempt = 0;
         FakeProbe probe = new("Alpha", _ => ++attempt == 1 ? first.Task : second.Task);
-        ProviderDescriptor provider = new("Alpha", "A", probe);
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(provider);
 
         Task initial = service.RefreshAllAsync(force: true, Now, CancellationToken.None);
@@ -417,7 +417,7 @@ public class ProviderRefreshServiceTests
         FakeProbe probe = new("Alpha", _ => ++attempt == 1
             ? pending.Task
             : Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
-        ProviderDescriptor provider = new("Alpha", "A", probe);
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(provider);
         using CancellationTokenSource cts = new();
 
@@ -436,8 +436,8 @@ public class ProviderRefreshServiceTests
         var betaPending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
         FakeProbe alphaProbe = new("Alpha", _ => alphaPending.Task);
         FakeProbe betaProbe = new("Beta", _ => betaPending.Task);
-        ProviderDescriptor alpha = new("Alpha", "A", alphaProbe);
-        ProviderDescriptor beta = new("Beta", "B", betaProbe);
+        ProviderDescriptor alpha = new("alpha", "Alpha", "A", alphaProbe);
+        ProviderDescriptor beta = new("beta", "Beta", "B", betaProbe);
         ProviderRefreshService service = Service(alpha, beta);
 
         Task cycle = service.RefreshAllAsync(force: true, Now, CancellationToken.None);

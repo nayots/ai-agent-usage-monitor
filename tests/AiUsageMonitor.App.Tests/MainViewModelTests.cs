@@ -47,8 +47,8 @@ public class MainViewModelTests
     public void ACardExistsForEveryProviderBeforeAnythingHasBeenProbed()
     {
         (MainViewModel model, _) = Build(
-            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
-            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
 
         Assert.Equal(["Claude Code", "Codex"], model.Providers.Select(p => p.DisplayName));
     }
@@ -56,12 +56,12 @@ public class MainViewModelTests
     [Fact]
     public void TheFooterCountsProvidersAndAgreesWithItself()
     {
-        (MainViewModel one, _) = Build(new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+        (MainViewModel one, _) = Build(new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
         Assert.Equal("1 provider", one.FooterText);
 
         (MainViewModel two, _) = Build(
-            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
-            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
         Assert.Equal("2 providers", two.FooterText);
     }
 
@@ -69,8 +69,8 @@ public class MainViewModelTests
     public async Task ARefreshRoutesEachSnapshotToItsOwnCard()
     {
         (MainViewModel model, _) = Build(
-            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
-            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
 
         await model.RefreshAsync(force: true);
 
@@ -84,7 +84,7 @@ public class MainViewModelTests
     public async Task RefreshIsNotReentrant()
     {
         (MainViewModel model, _) = Build(
-            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
 
         Assert.True(model.RefreshCommand.CanExecute(null));
 
@@ -99,7 +99,7 @@ public class MainViewModelTests
     public async Task TickAdvancesEveryCardWithoutProbingAgain()
     {
         StubProbe probe = new("Codex", ConnectionState.Connected, [Window()]);
-        (MainViewModel model, _) = Build(new ProviderDescriptor("Codex", "CX", probe));
+        (MainViewModel model, _) = Build(new ProviderDescriptor("codex", "Codex", "CX", probe));
 
         await model.RefreshAsync(force: true);
         string? before = model.Providers[0].Windows[0].CountdownText;
@@ -114,7 +114,7 @@ public class MainViewModelTests
     public async Task DisposingCancelsInFlightWorkAndStopsRoutingSnapshots()
     {
         (MainViewModel model, _) = Build(
-            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [Window()])));
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [Window()])));
 
         model.Dispose();
 
@@ -127,7 +127,7 @@ public class MainViewModelTests
     public async Task ASettingsChangeReachesTheRowsThatRenderIt()
     {
         (MainViewModel model, _) = Build(
-            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [Window()])));
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [Window()])));
         await model.RefreshAsync(force: true);
 
         Assert.True(model.Providers[0].Windows[0].ColorBarsByUsage);
@@ -142,8 +142,8 @@ public class MainViewModelTests
     public async Task HidingUnavailableProvidersDropsThemFromTheFooterCount()
     {
         (MainViewModel model, _) = Build(
-            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
-            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
         await model.RefreshAsync(force: true);
 
         Assert.Equal("2 providers", model.FooterText);
@@ -159,8 +159,8 @@ public class MainViewModelTests
     {
         ProviderDescriptor[] providers =
         [
-            new("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
-            new("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, []))
+            new("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
+            new("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, []))
         ];
         ProviderRefreshService service = new(providers, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
         MainViewModel model = new(
@@ -179,8 +179,8 @@ public class MainViewModelTests
     public void ADensityChangeMadeLaterReachesEveryCardToo()
     {
         (MainViewModel model, _) = Build(
-            new ProviderDescriptor("Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
-            new ProviderDescriptor("Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
 
         Assert.False(model.IsCompact);
 

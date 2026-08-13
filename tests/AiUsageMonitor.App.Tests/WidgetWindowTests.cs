@@ -29,8 +29,8 @@ public class WidgetWindowTests(WpfFixture wpf)
 
     private static IReadOnlyList<ProviderDescriptor> Providers() =>
     [
-        new("Claude Code", "CC", new SilentProbe("Claude Code")),
-        new("Codex", "CX", new SilentProbe("Codex"))
+        new("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
+        new("codex", "Codex", "CX", new SilentProbe("Codex"))
     ];
 
     private static MainViewModel Model(IReadOnlyList<ProviderDescriptor> providers, AppSettings settings)

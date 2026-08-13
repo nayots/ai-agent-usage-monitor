@@ -21,7 +21,7 @@ public class TrayGlyphStateTests
     }
 
     private static ProviderCardViewModel Card(string name = "Claude Code", bool colorBarsByUsage = true) =>
-        new(new ProviderDescriptor(name, name[..2], new SilentProbe(name)), colorBarsByUsage, _ => { });
+        new(new ProviderDescriptor(name.ToLowerInvariant(), name, name[..2], new SilentProbe(name)), colorBarsByUsage, _ => { });
 
     private static ProviderSnapshot Snapshot(
         ConnectionState state = ConnectionState.Connected,

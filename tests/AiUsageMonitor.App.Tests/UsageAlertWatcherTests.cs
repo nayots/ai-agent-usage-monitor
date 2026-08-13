@@ -215,7 +215,7 @@ public class UsageAlertWatcherTests
 
     private static ProviderCardViewModel Card(string name, ProviderSnapshot snapshot)
     {
-        ProviderCardViewModel card = new(new ProviderDescriptor(name, name[..2], new SilentProbe(name)), colorBarsByUsage: true, _ => { });
+        ProviderCardViewModel card = new(new ProviderDescriptor(name.ToLowerInvariant(), name, name[..2], new SilentProbe(name)), colorBarsByUsage: true, _ => { });
         card.Apply(snapshot, Now, Policy);
         return card;
     }
