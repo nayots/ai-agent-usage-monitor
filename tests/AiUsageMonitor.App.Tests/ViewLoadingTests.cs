@@ -234,23 +234,104 @@ public class ViewLoadingTests(WpfFixture wpf)
         Assert.Contains(Texts(content), text => text.StartsWith("Pinning is on the widget's title bar", StringComparison.Ordinal));
     });
 
+    /// <summary>
+    /// Everything this window offers fits in it, on any screen with the room. A settings window is
+    /// short enough to read at a glance or it is not worth having, and it was not: a cap written
+    /// into the markup put a scrollbar over the last two sections on a screen with hundreds of
+    /// spare pixels. The escape clause is the screen genuinely too short to hold the content, where
+    /// the window is at its cap and the ScrollViewer is doing the only thing left to do.
+    /// </summary>
+    [Fact]
+    public void TheSettingsWindowShowsEverySettingWithoutScrolling() => wpf.Invoke(() =>
+    {
+        SettingsWindow window = Shown();
+
+        try
+        {
+            ScrollViewer viewer = (ScrollViewer)window.Content;
+
+            Assert.True(
+                viewer.ScrollableHeight == 0 || window.ActualHeight >= window.MaxHeight,
+                $"{viewer.ExtentHeight} of content in a viewport of {viewer.ViewportHeight}: the "
+                    + $"window is {window.ActualHeight} tall against a cap of {window.MaxHeight}");
+        }
+        finally
+        {
+            window.Close();
+        }
+    });
+
+    /// <summary>
+    /// A window tall enough to show everything is also tall enough to hang off the bottom of the
+    /// screen, and CenterOwner will happily put it there when the widget it centres on is parked
+    /// near an edge. Settings the user cannot reach are no better than settings behind a scrollbar.
+    /// </summary>
+    [Fact]
+    public void TheSettingsWindowIsNudgedBackInsideTheScreen() => wpf.Invoke(() =>
+    {
+        Rect screen = SystemParameters.WorkArea;
+        SettingsWindow window = Shown(left: screen.Right - 40, top: screen.Bottom - 40);
+
+        try
+        {
+            Assert.True(
+                window.Top + window.ActualHeight <= screen.Bottom + 0.5,
+                $"the window runs from {window.Top} to {window.Top + window.ActualHeight}, past {screen.Bottom}");
+            Assert.True(
+                window.Left + window.ActualWidth <= screen.Right + 0.5,
+                $"the window runs from {window.Left} to {window.Left + window.ActualWidth}, past {screen.Right}");
+        }
+        finally
+        {
+            window.Close();
+        }
+    });
+
+    /// <summary>
+    /// The settings window on screen, which is the only way to ask it how tall it ended up: a WPF
+    /// window measures to nothing until it has a handle, and the scrollbar these tests are about
+    /// exists only once the ScrollViewer has a real viewport to compare its content against.
+    /// Transparent and unactivated, so a test run neither flashes a window at whoever is at the
+    /// machine nor takes the focus off what they were doing.
+    /// </summary>
+    private static SettingsWindow Shown(double left = -4000, double top = -4000)
+    {
+        SettingsWindow window = new(SettingsModel())
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = left,
+            Top = top,
+            Opacity = 0,
+            ShowActivated = false
+        };
+
+        window.Show();
+        window.UpdateLayout();
+        return window;
+    }
+
     private static FrameworkElement SettingsContent()
     {
-        string path = Path.Combine(Path.GetTempPath(), "aium-view-" + Guid.NewGuid().ToString("N"), "settings.json");
-        SettingsViewModel model = new(
-            new SettingsService(new AppSettingsStore(path), AppSettings.Default),
-            new StartupRegistration(@"Software\AiUsageMonitor\tests\ViewLoading", "AiUsageMonitorTest", null),
-            resetPosition: () => { },
-            recheckProviders: () => { },
-            openLogs: () => { });
-
-        SettingsWindow window = new(model);
+        SettingsWindow window = new(SettingsModel());
         FrameworkElement content = (FrameworkElement)window.Content;
         content.Measure(new Size(380, 640));
         content.Arrange(new Rect(0, 0, 380, 640));
         content.UpdateLayout();
         return content;
     }
+
+    private static SettingsViewModel SettingsModel()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "aium-view-" + Guid.NewGuid().ToString("N"), "settings.json");
+
+        return new SettingsViewModel(
+            new SettingsService(new AppSettingsStore(path), AppSettings.Default),
+            new StartupRegistration(@"Software\AiUsageMonitor\tests\ViewLoading", "AiUsageMonitorTest", null),
+            resetPosition: () => { },
+            recheckProviders: () => { },
+            openLogs: () => { });
+    }
+
     private static ProviderCardViewModel Card(ConnectionState state, bool compact)
     {
         ProviderCardViewModel card = new(

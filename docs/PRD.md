@@ -579,6 +579,8 @@ The settings experience must support:
 - Restore backed-up provider configuration when the application has made an approved change.
 - Reset application settings without modifying provider configuration.
 
+The settings window must be tall enough to show every setting it offers at once, on any screen with the room for it. It sizes itself to its content, capped by the work area of the screen it opens on and kept inside that screen; scrolling is the fallback for a screen too short to hold the content, not the normal case.
+
 Settings must clearly distinguish application-owned settings from provider-owned settings.
 
 Changes that may affect provider integration must explain the impact before taking effect and must be reversible where practical.
