@@ -363,5 +363,5 @@ Expected: `0 Warning(s)`, `0 Error(s)`, every existing test still passing plus t
 ## Out of scope
 
 - The zero-provider home state (X12, §3.2) — hiding every provider leaves the existing empty body and `0 providers` footer. Not a regression this plan introduces, and not this plan's job to fix.
-- Drag-to-reorder. C14 says "drag"; this delivers move up/down buttons instead, because they are keyboard-reachable and screen-reader-nameable, which drag is not, and the list is two rows long. Record the substitution in the decision table when this lands.
+- Drag-to-reorder. C14 says "drag"; this delivers move up/down buttons instead, because they are keyboard-reachable and screen-reader-nameable, which drag is not, and the list is two rows long. *(Recording that substitution in `docs/specs/2026-08-13-feature-inventory-and-ideas.md` §4 is Claude's job after the increment lands — it is not a task in this plan, and no task may edit that file.)*
 - Any change to what either probe reads, or to the shared refresh/stale settings themselves.
