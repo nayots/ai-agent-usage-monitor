@@ -1,7 +1,11 @@
 # Feature inventory and ideas
 
-**Status:** open — §1 and §2 describe commit `4ef5f12`; the six defects marked **Done** in §4 have
-since been fixed, so §1.2's and §1.3's descriptions of failure behaviour are now understated.
+**Status:** §2.1 and §3.1 are fully implemented; §2.2 and §3.2 remain open. §1, §2 and §3 still
+describe commit `4ef5f12` and are **deliberately not updated** — they are the record of two
+independent readings, and editing them after the fact would destroy what this document is for.
+They are therefore now out of date in several places: §1.2 and §1.3 understate failure behaviour,
+freshness, placement recovery and keyboard reach, and §1.6's test count of 391 is now 497. §4 is
+the current record of what shipped.
 **Written:** 2026-08-13, against commit `4ef5f12`.
 
 ## Why this document exists
@@ -244,13 +248,52 @@ which is precisely what `RebuildWindows` does with a failure snapshot's empty wi
 
 For Stoyan. Nothing above is scheduled until it appears here.
 
+**Everything in §2.1 and §3.1 is now implemented.** What remains open is §2.2 and §3.2 — new
+features — plus the two proposals deliberately rejected below.
+
+### 4.1 The defect fixes (2026-08-13, first increment)
+
 | Idea | Source | Verdict | Notes |
 |---|---|---|---|
 | X1 — retain the last good rows through a failure | Codex | **Done** | `342c9ff`. Rows survive an Error/Unavailable read, render stale, and are still cleared by a *successful* empty read. No expiry — see X13/X14. |
 | X2 — single-flight, latest-wins refresh | Codex | **Done** | `5e11612`. A superseded completion raises nothing and touches no backoff state. |
 | X3 — stable tier and mechanism on failures | Codex | **Done** | `7358a62`. `IProviderProbe` now carries both; a timeout can no longer relabel Codex Unofficial. |
-| X5 — bounded, app-authored error copy | Codex | **Done** | `c251366`, `c00bbf6`. Raw JSON-RPC error objects and framework exception messages no longer reach a card. C6's "Details" affordance is *not* done. |
+| X5 — bounded, app-authored error copy | Codex | **Done** | `c251366`, `c00bbf6`. Raw JSON-RPC error objects and framework exception messages no longer reach a card. |
 | X9 — say when a change is session-only | Codex | **Done** | `646470c`. |
 | X23 — never launch the npm shim | Codex | **Done** | `ebac34a`. PATH resolution now finds the vendored executable behind a shim, or reports `NotInstalled`. |
-| X6 — contract tests for the real adapters | Codex | **Partial** | The testable slices the fixes above needed were extracted (`CodexExecutableLocator`, `CodexProtocol`, `ProviderErrorText`). Injectable HTTP/process boundaries for the full probes remain open. |
-| X4, X7/X18, X8/X21, X10–X15, C1–C19 | both | *open* | Untouched. The fix increment was scoped to defects only. |
+
+### 4.2 The §2.1 / §3.1 improvements (2026-08-13, three increments)
+
+Planned as `docs/plans/2026-08-13-provider-boundaries-and-idle-cost.md`,
+`-cadence-and-alerts.md` and `-row-detail-and-window-reach.md`. Overlapping proposals were merged;
+where a merge changed what was delivered, the row says so.
+
+| Idea | Source | Verdict | Notes |
+|---|---|---|---|
+| X6 — contract tests for the real adapters | Codex | **Done** | `2616439`, `e0251b0`, `bfe9760`. `IProcessRunner` plus an injectable `HttpMessageHandler`, locator and credentials path. Both probes now have direct contract tests: absent install, malformed JSONL, interleaved notifications, sanitized protocol errors, cancellation, partial windows, and a test asserting a sentinel token reaches only the `Authorization` header. |
+| C1 — stop spawning `--version` every poll | Claude | **Done** | `724cac0`. `ProviderVersionCache`, keyed on path *and* last-write time. A failed read is never cached, so a transient failure cannot become permanent. |
+| C3 / X8 — lifecycle-aware work | both | **Done, half rejected** | `256fdf1` slows the presentation tick to 5 s while hidden; `4f030d5` forces a refresh on resume and unlock. **The polling half of C3 was rejected** on X21's argument — see §4.3. |
+| C2 — say when a check is being skipped | Claude | **Done** | `05a29b4`. `ProviderRefreshService.NextAttemptFor`, surfaced as "Next check in …" — only on a failing card, so a healthy one grows no countdown to its own routine poll. |
+| C4 — reconcile the two duration settings | Claude | **Done** | `434a670`. Settings warns when the stale threshold is at or below the refresh interval. Chosen over deriving a floor: the settings file is hand-editable by design and a typed value must not be silently replaced. |
+| C7 — coalesce a burst of alerts | Claude | **Done** | `e08b0a5`. `AlertBatch` passes every `LimitReached` through individually — they are the only sounding alert — and merges two or more of the remainder into one silent balloon. |
+| C8 — the tray glyph at 100% | Claude | **Done** | `2eda220`. A reading at or above 100 now renders `100`; the renderer already compressed three digits. A reading *below* 100 that rounds to 100 still renders `99`, preserving the original objection. |
+| X4 + C5 — row detail | both | **Done, reshaped** | `2a1c82f`. Identifier, mechanism, exact local reset instant, window duration, a written partial marker and the `Extra` keys, in the row tooltip and the accessible name. **Delivered as a tooltip, not C5's per-row expander** — the widget is 360 px wide and compact density already sacrifices metadata to fit. |
+| C6 — keep the detail one click away | Claude | **Done** | `a1f18e9`. The notice carries the untruncated reason as a tooltip when the body was bounded; truncation no longer splits a surrogate pair. |
+| X7 / X18 — real monitor work areas | Codex | **Done** | `495f7c4`. `PlacementClamp.Fit` moves the whole window into the actual monitor work area, re-applied on display and DPI changes. The `VirtualScreen` bounding-box test is deleted, not kept alongside. |
+| C9 — a keyboard path | Claude | **Done** | `9cf727e`, `54293e4`. Ctrl+Alt+Q toggles the widget, switchable, and reports honestly when another application owns the chord. `Esc` dismisses unless pinned; focus lands on Refresh when shown. The window moved from `DockPanel` to a three-row `Grid` so tab order follows visual order rather than declaration order. |
+
+### 4.3 Rejected, with the argument
+
+| Idea | Verdict | Why |
+|---|---|---|
+| C3's "poll less often when hidden" | **Rejected** | X21's argument, accepted: hidden-to-tray is the primary operating mode, and the tray glyph and quota notifications — the whole product in that mode — are fed by polling. §16.2 exists precisely because the widget spends most of its life hidden. The presentation tick slows; the data does not. |
+| C11's exhaustion forecast | **Rejected** | X22: PRD §16 forbids claiming when quota will run out. The history half survives as X14. Reopening needs a deliberate PRD change first. |
+
+### 4.4 Still open
+
+| Idea | Source | Verdict | Notes |
+|---|---|---|---|
+| C10–C19, X10–X15 | both | *open* | All §2.2 / §3.2 new features. Includes the diagnostics view (C10/X10), local history (C11/X14), reset application data (X11), the zero-provider home state (X12), restored snapshots (X13), localization (X15), and release/versioning/README (C17). |
+
+The pre-existing PRD backlog is unchanged: diagnostics (§20), reset application settings (§19),
+then release and packaging (§27) last.
