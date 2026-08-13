@@ -42,7 +42,20 @@
         <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate><DataTemplate><RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" /></DataTemplate></ItemsControl.ItemTemplate>
       </ItemsControl>
-      <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Color bars by usage" IsChecked="{Binding ColorBarsByUsage, Mode=TwoWay}" AutomationProperties.Name="Color bars by usage" />
+      <!-- Mini mode is not compact density. Density shrinks this same window; mini mode replaces
+           it with a different presentation of the same model, which is why it sits after the
+           density group rather than inside it. -->
+      <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Mini mode" IsChecked="{Binding MiniMode, Mode=TwoWay}" AutomationProperties.Name="Mini mode" />
+      <TextBlock Text="{Binding MiniModeHintText}" TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
+      <StackPanel IsEnabled="{Binding MiniMode}">
+        <TextBlock Text="Dock" Margin="0,8,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <ItemsControl ItemsSource="{Binding MiniDocks}" Margin="0,5,0,0" Focusable="False">
+          <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate><DataTemplate><RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" /></DataTemplate></ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Color bars by usage" IsChecked="{Binding ColorBarsByUsage, Mode=TwoWay}" AutomationProperties.Name="Color bars by usage" />
 
       <TextBlock Text="WINDOW" Style="{StaticResource SettingsSectionTextStyle}" />
       <!-- No "Always on top" here. Pinning is session state and belongs to the title bar's pin

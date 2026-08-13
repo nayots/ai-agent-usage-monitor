@@ -268,6 +268,44 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public void MiniModeWritesThroughToTheService()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        Assert.False(model.MiniMode);
+        model.MiniMode = true;
+
+        Assert.True(service.Current.MiniMode);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void SelectingTheBottomEdgeWritesIt()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        model.MiniDocks.Single(choice => choice.Label == "Bottom").IsSelected = true;
+
+        Assert.Equal(MiniDock.Bottom, service.Current.MiniDock);
+        model.Dispose();
+    }
+
+    /// <summary>
+    /// The mode can be entered from the tray menu or from a click on the strip, so this window has
+    /// to follow a change it did not make.
+    /// </summary>
+    [Fact]
+    public void TheDockChoicesFollowAnExternallyChangedSetting()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        service.Update(s => s with { MiniDock = MiniDock.Bottom });
+
+        Assert.Equal("Bottom", model.MiniDocks.Single(choice => choice.IsSelected).Label);
+        model.Dispose();
+    }
+
+    [Fact]
     public void TheFullLadderIsSelectedByDefault()
     {
         SettingsViewModel model = Model(out _);

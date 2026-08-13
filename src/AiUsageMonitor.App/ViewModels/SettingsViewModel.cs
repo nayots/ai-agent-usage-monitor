@@ -54,6 +54,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             Density("Compact", WidgetDensity.Compact)
         ];
 
+        MiniDocks =
+        [
+            Dock("Top", MiniDock.Top),
+            Dock("Bottom", MiniDock.Bottom)
+        ];
+
         RefreshIntervals = Durations(
             "refresh",
             RefreshPresets,
@@ -114,6 +120,15 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     }
 
     public string AlertThresholdHintText => "100% always notifies, and is the only alert that makes a sound.";
+
+    public bool MiniMode
+    {
+        get => _settings.Current.MiniMode;
+        set => _settings.Update(s => s with { MiniMode = value });
+    }
+
+    public string MiniModeHintText =>
+        "A one-line strip pinned to a screen edge, above other windows. Click it to bring the full widget back.";
 
     public string QuietHoursSummaryText =>
         $"Milestone alerts are held back between {TimeLabel(_settings.Current.QuietHoursStartMinutes)} "
@@ -181,6 +196,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<ChoiceViewModel> Densities { get; }
 
+    public IReadOnlyList<ChoiceViewModel> MiniDocks { get; }
+
     public ObservableCollection<ChoiceViewModel> RefreshIntervals { get; }
 
     public ObservableCollection<ChoiceViewModel> StaleThresholds { get; }
@@ -215,6 +232,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         "theme",
         () => (int)_settings.Current.Theme,
         value => _settings.Update(s => s with { Theme = (ThemePreference)value }));
+
+    private ChoiceViewModel Dock(string label, MiniDock dock) => new(
+        label,
+        (int)dock,
+        "mini-dock",
+        () => (int)_settings.Current.MiniDock,
+        value => _settings.Update(s => s with { MiniDock = (MiniDock)value }));
 
     private ChoiceViewModel Density(string label, WidgetDensity density) => new(
         label,
@@ -363,6 +387,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         foreach (ChoiceViewModel choice in Themes
             .Concat(Densities)
+            .Concat(MiniDocks)
             .Concat(RefreshIntervals)
             .Concat(StaleThresholds)
             .Concat(QuietHoursStarts)

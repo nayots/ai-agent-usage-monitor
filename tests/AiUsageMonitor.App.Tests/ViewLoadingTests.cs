@@ -332,6 +332,36 @@ public class ViewLoadingTests(WpfFixture wpf)
         Assert.Contains(Texts(content), text => text.StartsWith("Pinning is on the widget's title bar", StringComparison.Ordinal));
     });
 
+    /// <summary>
+    /// The dock choices are only meaningful once mini mode is on, and the enabling chain has to
+    /// actually resolve at run time for that to be true on screen.
+    /// </summary>
+    [Fact]
+    public void TheSettingsWindowLoadsMiniModeWithItsDockFollowingIt() => wpf.Invoke(() =>
+    {
+        SettingsViewModel model = SettingsModel();
+        SettingsWindow window = new(model);
+        FrameworkElement content = (FrameworkElement)window.Content;
+        content.Measure(new Size(380, 640));
+        content.UpdateLayout();
+
+        Assert.Contains(
+            Descendants(content).OfType<CheckBox>(),
+            box => AutomationProperties.GetName(box) == "Mini mode");
+        Assert.Contains("A one-line strip pinned to a screen edge, above other windows. Click it to bring the full widget back.", Texts(content));
+
+        RadioButton bottom = Descendants(content).OfType<RadioButton>()
+            .First(button => button.GroupName == "mini-dock" && AutomationProperties.GetName(button) == "Bottom");
+
+        Assert.False(bottom.IsEnabled);
+
+        model.MiniMode = true;
+        content.UpdateLayout();
+        Assert.True(bottom.IsEnabled);
+
+        model.Dispose();
+    });
+
     [Fact]
     public void TheSettingsWindowLoadsTheNotificationControls() => wpf.Invoke(() =>
     {
