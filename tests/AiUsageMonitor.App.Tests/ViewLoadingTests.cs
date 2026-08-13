@@ -102,6 +102,47 @@ public class ViewLoadingTests(WpfFixture wpf)
     });
 
     [Fact]
+    public void DiagnosticsCopyConfirmationAppearsOnlyAfterCopying() => wpf.Invoke(() =>
+    {
+        DiagnosticsViewModel model = new(
+            [],
+            [],
+            new ProviderRefreshService([], TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1)),
+            new EnvironmentReport("1.0", ".NET", "Windows", "C:\\logs", true, false),
+            new StartupReport(Now, null),
+            "System",
+            "100%",
+            () => Now,
+            _ => { },
+            () => { });
+        DiagnosticsWindow window = new(model)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -4000,
+            Top = -4000,
+            Opacity = 0,
+            ShowActivated = false
+        };
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            TextBlock confirmation = (TextBlock)window.FindName("CopyConfirmation");
+            Assert.Equal(Visibility.Collapsed, confirmation.Visibility);
+
+            model.CopyCommand.Execute(null);
+            window.UpdateLayout();
+
+            Assert.Equal(Visibility.Visible, confirmation.Visibility);
+        }
+        finally
+        {
+            window.Close();
+        }
+    });
+
+    [Fact]
     public void TrayMenuContainsDiagnostics() => wpf.Invoke(() =>
     {
         ProviderDescriptor provider = new("Claude Code", "CC", new SilentProbe("Claude Code"));

@@ -44,8 +44,8 @@
         <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Copy diagnostics" Command="{Binding CopyCommand}" AutomationProperties.Name="Copy diagnostics" />
         <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Open logs folder" Command="{Binding OpenLogsCommand}" AutomationProperties.Name="Open logs folder" />
       </StackPanel>
-      <TextBlock Text="{Binding CopyConfirmationText}" TextWrapping="Wrap" Foreground="{DynamicResource TextTertiaryBrush}">
-        <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding CopyConfirmationText}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+      <TextBlock x:Name="CopyConfirmation" Text="{Binding CopyConfirmationText}" TextWrapping="Wrap" Foreground="{DynamicResource TextTertiaryBrush}">
+        <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding CopyConfirmationText}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
       </TextBlock>
     </StackPanel>
   </ScrollViewer>
