@@ -16,6 +16,13 @@ public sealed class CodexProbe : IProviderProbe
     public string Mechanism => MechanismText;
     public MechanismTier Tier => MechanismTier.Official;
 
+    /// <summary>
+    /// False because this application launches a local process. The codex app-server call reaches
+    /// the network on OpenAI's side, but this application makes no network call; the field answers
+    /// what this application does.
+    /// </summary>
+    public bool MakesFirstPartyNetworkCall => false;
+
     private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RateLimitsTimeout = TimeSpan.FromSeconds(10);
 

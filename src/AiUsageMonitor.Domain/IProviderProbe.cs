@@ -17,5 +17,13 @@ public interface IProviderProbe
     /// <summary>Official or Unofficial. A property of the mechanism, never of the last call.</summary>
     MechanismTier Tier { get; }
 
+    /// <summary>
+    /// Whether reading usage through this mechanism contacts the provider's own first-party host
+    /// (PRD §20). A property of the mechanism, never of the last call. Defaults to false so a probe
+    /// that touches nothing but the local machine needs no ceremony; a probe that makes a network
+    /// call MUST override this, and both shipped probes state it explicitly either way.
+    /// </summary>
+    bool MakesFirstPartyNetworkCall => false;
+
     Task<ProviderSnapshot> ProbeAsync(CancellationToken ct);
 }

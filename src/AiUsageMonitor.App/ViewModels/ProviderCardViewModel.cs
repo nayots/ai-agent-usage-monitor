@@ -40,6 +40,13 @@ public sealed class ProviderCardViewModel : ObservableObject
 
     public RelayCommand RetryCommand { get; }
 
+    /// <summary>
+    /// The snapshot behind everything else on this card, for the diagnostics screen alone. Nothing
+    /// in the widget binds to it: it carries <see cref="ProviderSnapshot.Notes"/>, which may contain
+    /// a local credentials path and must never appear on an always-visible card.
+    /// </summary>
+    public ProviderSnapshot? LatestSnapshot => _snapshot;
+
     public ObservableCollection<QuotaRowViewModel> Windows { get; } = [];
 
     public bool HasWindows => Windows.Count > 0;

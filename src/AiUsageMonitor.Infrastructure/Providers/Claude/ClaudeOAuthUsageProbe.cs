@@ -29,6 +29,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     public string Name => "Claude Code";
     public string Mechanism => MechanismText;
     public MechanismTier Tier => MechanismTier.Unofficial;
+    public bool MakesFirstPartyNetworkCall => true;
 
     // Hard constraint: this is the ONLY network destination this probe (or the whole program) may
     // reach. It is hardcoded, never derived from configuration, a redirect, or provider input.

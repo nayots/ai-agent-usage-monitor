@@ -54,6 +54,19 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
+    public void LatestSnapshotIsNullUntilApplyThenExposesTheAppliedSnapshot()
+    {
+        ProviderCardViewModel card = Card();
+
+        Assert.Null(card.LatestSnapshot);
+
+        ProviderSnapshot snapshot = Snapshot(retrievedAt: Now);
+        card.Apply(snapshot, Now, Policy);
+
+        Assert.Same(snapshot, card.LatestSnapshot);
+    }
+
+    [Fact]
     public void VersionIsPrefixedOnlyWhenTheProviderReportedOne()
     {
         ProviderCardViewModel card = Card();
