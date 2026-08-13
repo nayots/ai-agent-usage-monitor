@@ -15,6 +15,7 @@
       <MenuItem Header="Open" Click="TrayOpen_Click" />
       <MenuItem Header="Refresh all providers" Click="TrayRefresh_Click" />
       <MenuItem Header="Settings" Click="TraySettings_Click" />
+      <MenuItem Header="Diagnostics" Click="TrayDiagnostics_Click" />
       <Separator />
       <MenuItem Header="Exit" Click="TrayExit_Click" />
     </ContextMenu>

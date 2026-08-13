@@ -103,6 +103,7 @@
       </TextBlock>
 
       <TextBlock Text="ACTIONS" Style="{StaticResource SettingsSectionTextStyle}" />
+      <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Open diagnostics" Command="{Binding OpenDiagnosticsCommand}" AutomationProperties.Name="Open diagnostics" />
       <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Re-check providers" Command="{Binding RecheckProvidersCommand}" AutomationProperties.Name="Re-check providers" />
       <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Reset window position" Command="{Binding ResetPositionCommand}" AutomationProperties.Name="Reset window position" />
       <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Open logs folder" Command="{Binding OpenLogsCommand}" AutomationProperties.Name="Open logs folder" />

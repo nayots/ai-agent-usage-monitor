@@ -8,6 +8,8 @@ using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.App.Views;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
+using AiUsageMonitor.Infrastructure.Diagnostics;
+using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
 
 namespace AiUsageMonitor.App.Tests;
@@ -58,6 +60,58 @@ public class ViewLoadingTests(WpfFixture wpf)
         row.Tick(Now);
 
         ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+    });
+
+    [Fact]
+    public void DiagnosticsWindowLoadsWithAPopulatedViewModel() => wpf.Invoke(() =>
+    {
+        ProviderDescriptor provider = new("Claude Code", "CC", new SilentProbe("Claude Code"));
+        ProviderCardViewModel card = new(provider, colorBarsByUsage: true, _ => { });
+        card.Apply(Snapshot(ConnectionState.Connected, [Window(47d, false, true)]), Now, FreshnessPolicy.Default);
+        DiagnosticsViewModel model = new(
+            [card],
+            [provider],
+            new ProviderRefreshService([provider], TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1)),
+            new EnvironmentReport("1.0", ".NET", "Windows", "C:\\logs", true, false),
+            new StartupReport(Now, null),
+            "System",
+            "100%",
+            () => Now,
+            _ => { },
+            () => { });
+
+        DiagnosticsWindow window = new(model)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -4000,
+            Top = -4000,
+            Opacity = 0,
+            ShowActivated = false
+        };
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            Assert.True(window.ActualHeight > 0);
+        }
+        finally
+        {
+            window.Close();
+        }
+    });
+
+    [Fact]
+    public void TrayMenuContainsDiagnostics() => wpf.Invoke(() =>
+    {
+        ProviderDescriptor provider = new("Claude Code", "CC", new SilentProbe("Claude Code"));
+        ProviderRefreshService refresh = new([provider], TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1));
+        string path = Path.Combine(Path.GetTempPath(), "aium-tray-" + Guid.NewGuid().ToString("N"), "settings.json");
+        SettingsService settings = new(new AppSettingsStore(path), AppSettings.Default);
+        WidgetWindow window = new(new MainViewModel(refresh, [provider], settings.Current, () => Now), settings, refresh);
+
+        ContextMenu menu = Assert.IsType<ContextMenu>(window.Resources["TrayMenu"]);
+        Assert.Contains(menu.Items.OfType<MenuItem>(), item => Equals(item.Header, "Diagnostics"));
     });
 
     [Theory]
@@ -331,7 +385,8 @@ public class ViewLoadingTests(WpfFixture wpf)
             new StartupRegistration(@"Software\AiUsageMonitor\tests\ViewLoading", "AiUsageMonitorTest", null),
             resetPosition: () => { },
             recheckProviders: () => { },
-            openLogs: () => { });
+            openLogs: () => { },
+            openDiagnostics: () => { });
     }
 
     private static ProviderCardViewModel Card(ConnectionState state, bool compact)

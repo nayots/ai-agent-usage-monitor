@@ -5,12 +5,15 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.App.Notifications;
 using AiUsageMonitor.App.Theming;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.Infrastructure.Logging;
+using AiUsageMonitor.Infrastructure.Diagnostics;
+using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
 using AiUsageMonitor.Infrastructure.Theming;
@@ -24,7 +27,11 @@ public partial class WidgetWindow : Window
     private readonly SettingsService _settings;
     private readonly ProviderRefreshService? _refresh;
     private readonly ThemeManager? _theme;
+    private readonly IReadOnlyList<ProviderDescriptor> _providers;
+    private readonly EnvironmentReport _environment;
+    private readonly StartupReport _startup;
     private SettingsWindow? _settingsWindow;
+    private DiagnosticsWindow? _diagnosticsWindow;
     private readonly DispatcherTimer _tick = new() { Interval = TickCadence.Visible };
     private readonly DispatcherTimer _poll = new();
 
@@ -49,12 +56,22 @@ public partial class WidgetWindow : Window
     private bool _globalHotkeyUnavailable;
     private bool _shuttingDown;
 
-    public WidgetWindow(MainViewModel model, SettingsService settings, ProviderRefreshService? refresh = null, ThemeManager? theme = null)
+    public WidgetWindow(
+        MainViewModel model,
+        SettingsService settings,
+        ProviderRefreshService? refresh = null,
+        ThemeManager? theme = null,
+        IReadOnlyList<ProviderDescriptor>? providers = null,
+        EnvironmentReport? environment = null,
+        StartupReport? startup = null)
     {
         _model = model;
         _settings = settings;
         _refresh = refresh;
         _theme = theme;
+        _providers = providers ?? [];
+        _environment = environment ?? EnvironmentReport.Capture();
+        _startup = startup ?? new StartupReport(DateTimeOffset.Now, null);
 
         InitializeComponent();
         DataContext = model;
@@ -304,6 +321,7 @@ public partial class WidgetWindow : Window
             resetPosition: ResetPlacement,
             recheckProviders: () => _ = _model.RefreshAsync(force: true),
             openLogs: OpenLogsFolder,
+            openDiagnostics: ShowDiagnostics,
             globalHotkeyUnavailable: _globalHotkeyUnavailable);
 
         _settingsWindow = new SettingsWindow(model) { Owner = this };
@@ -317,6 +335,61 @@ public partial class WidgetWindow : Window
         _settingsWindow.Activated += (_, _) => _dismiss.Stop();
 
         _settingsWindow.Show();
+    }
+
+    /// <summary>Opens diagnostics, or focuses the one already open.</summary>
+    public void ShowDiagnostics()
+    {
+        if (_diagnosticsWindow is not null)
+        {
+            _diagnosticsWindow.Activate();
+            return;
+        }
+
+        DiagnosticsViewModel model = new(
+            _model.Providers,
+            _providers,
+            _refresh ?? new ProviderRefreshService(_providers, TimeSpan.Zero, TimeSpan.Zero),
+            _environment,
+            _startup,
+            ThemeDescription(),
+            DisplayScalingDescription(),
+            clock: () => DateTimeOffset.Now,
+            copyToClipboard: CopyToClipboard,
+            openLogs: OpenLogsFolder);
+
+        _diagnosticsWindow = new DiagnosticsWindow(model) { Owner = this };
+        _diagnosticsWindow.Closed += (_, _) => _diagnosticsWindow = null;
+        _diagnosticsWindow.Deactivated += (_, _) => _dismiss.Start();
+        _diagnosticsWindow.Activated += (_, _) => _dismiss.Stop();
+        _diagnosticsWindow.Show();
+    }
+
+    private string ThemeDescription() => _theme is null
+        ? _settings.Current.Theme.ToString()
+        : $"{_settings.Current.Theme} · resolved {_theme.Current}";
+
+    private string DisplayScalingDescription()
+    {
+        if (PresentationSource.FromVisual(this) is null)
+        {
+            return DiagnosticsViewModel.EmptyValue;
+        }
+
+        double percentage = VisualTreeHelper.GetDpi(this).DpiScaleX * 100;
+        return percentage.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    }
+
+    private static void CopyToClipboard(string text)
+    {
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // The clipboard belongs to another process for the moment. Diagnostics remains open.
+        }
     }
 
     private void ResetPlacement()
@@ -583,6 +656,12 @@ public partial class WidgetWindow : Window
     {
         ShowFromTray();
         ShowSettings();
+    }
+
+    private void TrayDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        ShowFromTray();
+        ShowDiagnostics();
     }
 
     private void TrayExit_Click(object sender, RoutedEventArgs e) => ExitApplication();

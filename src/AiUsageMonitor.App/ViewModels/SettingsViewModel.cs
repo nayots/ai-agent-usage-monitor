@@ -24,6 +24,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         Action resetPosition,
         Action recheckProviders,
         Action openLogs,
+        Action openDiagnostics,
         bool globalHotkeyUnavailable = false)
     {
         _settings = settings;
@@ -60,6 +61,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ResetPositionCommand = new RelayCommand(resetPosition);
         RecheckProvidersCommand = new RelayCommand(recheckProviders);
         OpenLogsCommand = new RelayCommand(openLogs);
+        OpenDiagnosticsCommand = new RelayCommand(openDiagnostics);
 
         _settings.Changed += OnSettingsChanged;
         _settings.PersistenceStateChanged += OnPersistenceStateChanged;
@@ -152,6 +154,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand RecheckProvidersCommand { get; }
 
     public RelayCommand OpenLogsCommand { get; }
+
+    public RelayCommand OpenDiagnosticsCommand { get; }
 
     public void Dispose()
     {

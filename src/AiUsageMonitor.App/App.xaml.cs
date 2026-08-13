@@ -5,6 +5,7 @@ using AiUsageMonitor.App.Theming;
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.App.Views;
 using AiUsageMonitor.Infrastructure.Logging;
+using AiUsageMonitor.Infrastructure.Diagnostics;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
@@ -43,6 +44,8 @@ public partial class App : Application
         ServiceCollection services = new();
         services.AddSingleton(store);
         services.AddSingleton(loaded.Settings);
+        services.AddSingleton(EnvironmentReport.Capture());
+        services.AddSingleton(new StartupReport(DateTimeOffset.Now, loaded.CorruptBackupPath));
         services.AddSingleton(provider => new SettingsService(
             provider.GetRequiredService<AppSettingsStore>(),
             loaded.Settings,
@@ -91,7 +94,10 @@ public partial class App : Application
                 model,
                 _services.GetRequiredService<SettingsService>(),
                 _services.GetRequiredService<ProviderRefreshService>(),
-                _services.GetRequiredService<ThemeManager>()).Show();
+                _services.GetRequiredService<ThemeManager>(),
+                _services.GetRequiredService<IReadOnlyList<ProviderDescriptor>>(),
+                _services.GetRequiredService<EnvironmentReport>(),
+                _services.GetRequiredService<StartupReport>()).Show();
         }
         catch (Exception ex)
         {
