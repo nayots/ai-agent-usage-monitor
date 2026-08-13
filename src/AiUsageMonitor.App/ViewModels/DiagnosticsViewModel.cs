@@ -10,6 +10,13 @@ namespace AiUsageMonitor.App.ViewModels;
 /// <summary>Projects provider and application facts into the diagnostics screen and clipboard bundle.</summary>
 public sealed class DiagnosticsViewModel : ObservableObject
 {
+    /// <summary>
+    /// The title of the section that is about this application rather than about a provider. Named
+    /// rather than repeated as a literal because the settings shell keys a page kind off it: the
+    /// application page is the only one that offers the logs folder.
+    /// </summary>
+    public const string ApplicationSectionTitle = "Application";
+
     public const string EmptyValue = "—";
 
     private readonly IReadOnlyList<ProviderCardViewModel> _cards;
@@ -166,7 +173,7 @@ public sealed class DiagnosticsViewModel : ObservableObject
         }
 
         return new DiagnosticSection(
-            "Application",
+            ApplicationSectionTitle,
             "This application never requests administrator rights.",
             [
                 new("Application version", _environment.ApplicationVersion),
