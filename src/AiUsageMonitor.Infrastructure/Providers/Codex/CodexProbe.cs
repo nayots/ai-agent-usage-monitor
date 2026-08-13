@@ -14,11 +14,13 @@ namespace AiUsageMonitor.Infrastructure.Providers.Codex;
 public sealed class CodexProbe : IProviderProbe
 {
     public string Name => "Codex";
+    public string Mechanism => MechanismText;
+    public MechanismTier Tier => MechanismTier.Official;
 
     private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RateLimitsTimeout = TimeSpan.FromSeconds(10);
 
-    private const string Mechanism = "codex app-server (JSON-RPC over stdio, JSONL) - account/rateLimits/read";
+    private const string MechanismText = "codex app-server (JSON-RPC over stdio, JSONL) - account/rateLimits/read";
 
     public async Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
     {
@@ -64,7 +66,7 @@ public sealed class CodexProbe : IProviderProbe
                 ExecutablePath: exePath,
                 State: ConnectionState.Connected,
                 Mechanism: Mechanism,
-                Tier: MechanismTier.Official,
+                Tier: Tier,
                 UpdateModel: "pull (poll)",
                 Windows: windows,
                 RetrievedAt: DateTimeOffset.UtcNow,
@@ -80,7 +82,7 @@ public sealed class CodexProbe : IProviderProbe
                 ExecutablePath: exePath,
                 State: ConnectionState.Error,
                 Mechanism: Mechanism,
-                Tier: MechanismTier.Official,
+                Tier: Tier,
                 UpdateModel: "pull (poll)",
                 Windows: [],
                 RetrievedAt: null,
@@ -96,7 +98,7 @@ public sealed class CodexProbe : IProviderProbe
                 ExecutablePath: exePath,
                 State: ConnectionState.Error,
                 Mechanism: Mechanism,
-                Tier: MechanismTier.Official,
+                Tier: Tier,
                 UpdateModel: "pull (poll)",
                 Windows: [],
                 RetrievedAt: null,

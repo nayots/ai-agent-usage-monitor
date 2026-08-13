@@ -13,6 +13,8 @@ public class MainViewModelTests
     private sealed class StubProbe(string name, ConnectionState state, IReadOnlyList<QuotaWindow> windows) : IProviderProbe
     {
         public string Name => name;
+        public string Mechanism => "stub";
+        public MechanismTier Tier => MechanismTier.Official;
 
         public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => Task.FromResult(new ProviderSnapshot(
             ProviderName: name,

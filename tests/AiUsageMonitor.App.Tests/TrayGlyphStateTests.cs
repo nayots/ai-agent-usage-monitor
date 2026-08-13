@@ -14,6 +14,8 @@ public class TrayGlyphStateTests
     private sealed class SilentProbe(string name) : IProviderProbe
     {
         public string Name => name;
+        public string Mechanism => "fake";
+        public MechanismTier Tier => MechanismTier.Official;
 
         public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => throw new NotSupportedException();
     }

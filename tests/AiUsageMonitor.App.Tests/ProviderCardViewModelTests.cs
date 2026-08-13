@@ -12,6 +12,8 @@ public class ProviderCardViewModelTests
     private sealed class SilentProbe : IProviderProbe
     {
         public string Name => "Claude Code";
+        public string Mechanism => "fake";
+        public MechanismTier Tier => MechanismTier.Official;
 
         public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => throw new NotSupportedException();
     }

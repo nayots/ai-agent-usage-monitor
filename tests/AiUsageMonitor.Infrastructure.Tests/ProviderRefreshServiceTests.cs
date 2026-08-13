@@ -8,10 +8,16 @@ public class ProviderRefreshServiceTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
 
-    private sealed class FakeProbe(string name, Func<CancellationToken, Task<ProviderSnapshot>> behaviour) : IProviderProbe
+    private sealed class FakeProbe(
+        string name,
+        Func<CancellationToken, Task<ProviderSnapshot>> behaviour,
+        string mechanism = "fake",
+        MechanismTier tier = MechanismTier.Official) : IProviderProbe
     {
         public int Calls { get; private set; }
         public string Name => name;
+        public string Mechanism => mechanism;
+        public MechanismTier Tier => tier;
 
         public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
         {
@@ -34,8 +40,12 @@ public class ProviderRefreshServiceTests
         Error: null,
         Notes: []);
 
-    private static ProviderDescriptor Descriptor(string name, Func<CancellationToken, Task<ProviderSnapshot>> behaviour) =>
-        new(name, name[..1], new FakeProbe(name, behaviour));
+    private static ProviderDescriptor Descriptor(
+        string name,
+        Func<CancellationToken, Task<ProviderSnapshot>> behaviour,
+        string mechanism = "fake",
+        MechanismTier tier = MechanismTier.Official) =>
+        new(name, name[..1], new FakeProbe(name, behaviour, mechanism, tier));
 
     private static ProviderRefreshService Service(params ProviderDescriptor[] providers) =>
         new(providers, TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(60));
@@ -80,6 +90,24 @@ public class ProviderRefreshServiceTests
     }
 
     [Fact]
+    public async Task ServiceAuthoredFailureKeepsTheProbeMechanismAndTier()
+    {
+        ProviderDescriptor provider = Descriptor(
+            "Alpha",
+            _ => throw new InvalidOperationException("boom"),
+            mechanism: "m",
+            tier: MechanismTier.Official);
+        ProviderRefreshService service = Service(provider);
+        ProviderSnapshot? result = null;
+        service.Refreshed += (_, e) => result = e.Snapshot;
+
+        await service.RefreshAsync(provider, Now, CancellationToken.None);
+
+        Assert.Equal("m", result!.Mechanism);
+        Assert.Equal(MechanismTier.Official, result.Tier);
+    }
+
+    [Fact]
     public async Task AHangingProbeIsCutOffAndReportedAsAnError()
     {
         ProviderDescriptor hanging = Descriptor("Alpha", async ct =>
@@ -96,6 +124,8 @@ public class ProviderRefreshServiceTests
 
         Assert.Equal(ConnectionState.Error, result!.State);
         Assert.Contains("Timed out", result.Error);
+        Assert.Equal("fake", result.Mechanism);
+        Assert.Equal(MechanismTier.Official, result.Tier);
     }
 
     [Fact]

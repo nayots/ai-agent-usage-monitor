@@ -26,6 +26,8 @@ namespace AiUsageMonitor.Infrastructure.Providers.Claude;
 public sealed class ClaudeOAuthUsageProbe : IProviderProbe
 {
     public string Name => "Claude Code";
+    public string Mechanism => MechanismText;
+    public MechanismTier Tier => MechanismTier.Unofficial;
 
     // Hard constraint: this is the ONLY network destination this probe (or the whole program) may
     // reach. It is hardcoded, never derived from configuration, a redirect, or provider input.
@@ -33,7 +35,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private const string UserAgent = "ai-agent-usage-monitor-poc/0.1";
     private const string AnthropicBetaHeaderValue = "oauth-2025-04-20";
 
-    private const string Mechanism = "Anthropic OAuth usage endpoint (UNOFFICIAL/undocumented)";
+    private const string MechanismText = "Anthropic OAuth usage endpoint (UNOFFICIAL/undocumented)";
     private const string UpdateModel = "pull (poll)";
 
     private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
@@ -225,7 +227,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             ExecutablePath: executablePath,
             State: state,
             Mechanism: Mechanism,
-            Tier: MechanismTier.Unofficial,
+            Tier: Tier,
             UpdateModel: UpdateModel,
             Windows: windows,
             RetrievedAt: retrievedAt,
