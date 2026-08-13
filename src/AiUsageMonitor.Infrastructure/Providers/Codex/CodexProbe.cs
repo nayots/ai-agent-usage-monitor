@@ -24,7 +24,7 @@ public sealed class CodexProbe : IProviderProbe
 
     public async Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
     {
-        string? exePath = DiscoverExecutable();
+        string? exePath = CodexExecutableLocator.Locate();
 
         if (exePath is null)
         {
@@ -42,8 +42,8 @@ public sealed class CodexProbe : IProviderProbe
                 Error: null,
                 Notes:
                 [
-                    "Checked (in order): %APPDATA%\\npm\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe; " +
-                    "a glob over codex-win32-*\\vendor\\*\\bin\\codex.exe; codex.cmd on PATH."
+                    "Checked (in order): vendored codex.exe under %APPDATA%\\npm; codex.exe on PATH; " +
+                    "vendored codex.exe under PATH directories that hold a codex.cmd or codex.ps1 shim."
                 ]);
         }
 
@@ -105,86 +105,6 @@ public sealed class CodexProbe : IProviderProbe
                 Error: ex.Message,
                 Notes: notes);
         }
-    }
-
-    // ----- Executable discovery -----------------------------------------------------------------
-
-    private static string? DiscoverExecutable()
-    {
-        string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-
-        string primary = Path.Combine(
-            appData, "npm", "node_modules", "@openai", "codex", "node_modules", "@openai",
-            "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe");
-        if (File.Exists(primary))
-        {
-            return primary;
-        }
-
-        string searchRoot = Path.Combine(appData, "npm", "node_modules", "@openai", "codex", "node_modules", "@openai");
-        if (Directory.Exists(searchRoot))
-        {
-            foreach (string archDir in SafeEnumerateDirectories(searchRoot, "codex-win32-*"))
-            {
-                string vendorDir = Path.Combine(archDir, "vendor");
-                if (!Directory.Exists(vendorDir))
-                {
-                    continue;
-                }
-
-                foreach (string tripleDir in SafeEnumerateDirectories(vendorDir, "*"))
-                {
-                    string candidate = Path.Combine(tripleDir, "bin", "codex.exe");
-                    if (File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-                }
-            }
-        }
-
-        return FindOnPath("codex.cmd");
-    }
-
-    private static IEnumerable<string> SafeEnumerateDirectories(string path, string pattern)
-    {
-        try
-        {
-            return Directory.EnumerateDirectories(path, pattern);
-        }
-        catch (IOException)
-        {
-            return [];
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return [];
-        }
-    }
-
-    private static string? FindOnPath(string fileName)
-    {
-        string? pathEnv = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrEmpty(pathEnv))
-        {
-            return null;
-        }
-
-        foreach (string dir in pathEnv.Split(Path.PathSeparator))
-        {
-            if (string.IsNullOrWhiteSpace(dir))
-            {
-                continue;
-            }
-
-            string candidate = Path.Combine(dir.Trim(), fileName);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
     }
 
     // ----- Version ---------------------------------------------------------------------------------
