@@ -572,9 +572,12 @@ public partial class WidgetWindow : Window
             return;
         }
 
-        // The settings window first: it is owned by the widget, and hiding an owner leaves an owned
-        // window on screen as the only thing left of an application that has just gone away.
+        // The owned windows first: they are owned by the widget, and hiding an owner leaves an owned
+        // window on screen as the only thing left of an application that has just gone away. Both of
+        // them, not just the settings one - diagnostics is the larger window and would be the more
+        // conspicuous thing left behind.
         _settingsWindow?.Close();
+        _diagnosticsWindow?.Close();
         HideToTray();
     }
 

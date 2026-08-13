@@ -180,6 +180,32 @@ public class WidgetWindowTests(WpfFixture wpf)
         model.Dispose();
     });
 
+    /// <summary>
+    /// The dismissal has to take the owned windows with it. A widget that hides while its
+    /// diagnostics window stays up leaves the largest window this application owns on screen with
+    /// nothing behind it - the exact state the settings window is already closed to prevent.
+    /// </summary>
+    [Fact]
+    public void DismissalClosesTheDiagnosticsWindowToo() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+        window.Show();
+        window.ShowDiagnostics();
+
+        Assert.Contains(Application.Current.Windows.OfType<DiagnosticsWindow>(), _ => true);
+
+        window.DismissIfFocusLeftTheApplication(focusStayedInTheApplication: false);
+
+        Assert.Empty(Application.Current.Windows.OfType<DiagnosticsWindow>());
+        Assert.Equal(Visibility.Hidden, window.Visibility);
+
+        window.Close();
+        model.Dispose();
+    });
+
     [Fact]
     public void FocusMovingBetweenTheApplicationsOwnWindowsLeavesTheWidgetAlone() => wpf.Invoke(() =>
     {
