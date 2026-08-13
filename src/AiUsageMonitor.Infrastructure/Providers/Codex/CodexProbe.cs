@@ -102,7 +102,7 @@ public sealed class CodexProbe : IProviderProbe
                 UpdateModel: "pull (poll)",
                 Windows: [],
                 RetrievedAt: null,
-                Error: ex.Message,
+                Error: ProviderErrorText.For(ex),
                 Notes: notes);
         }
     }

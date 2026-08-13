@@ -71,6 +71,17 @@ public static class ProviderNoticeSelector
     /// screen. Age has one home on a card, and it is the header.
     /// </para>
     /// </summary>
-    private static string Compose(string lead, string? reason) =>
-        string.IsNullOrWhiteSpace(reason) ? lead : lead + " " + reason;
+    private static string Compose(string lead, string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return lead;
+        }
+
+        const int maxReasonLength = 200;
+        string bounded = reason.Length <= maxReasonLength
+            ? reason
+            : reason[..maxReasonLength] + "…";
+        return lead + " " + bounded;
+    }
 }

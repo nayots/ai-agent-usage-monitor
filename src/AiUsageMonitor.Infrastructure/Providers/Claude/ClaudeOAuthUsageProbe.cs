@@ -173,9 +173,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         }
         catch (HttpRequestException ex)
         {
-            // HttpRequestException messages describe connection/TLS/DNS failures only - they never
-            // echo request headers, so the token cannot leak through this path.
-            return Snapshot(true, version, exePath, ConnectionState.Error, [], null, $"HTTP request failed: {ex.Message}", notes);
+            return Snapshot(true, version, exePath, ConnectionState.Error, [], null, ProviderErrorText.For(ex), notes);
         }
     }
 
