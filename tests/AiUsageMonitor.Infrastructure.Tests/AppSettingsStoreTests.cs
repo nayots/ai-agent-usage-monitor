@@ -31,6 +31,41 @@ public class AppSettingsStoreTests
         Assert.False(File.Exists(dir.File("settings.json")));
     }
 
+    /// <summary>
+    /// Pinning is what someone does while watching a quota drain, not how they want the widget to
+    /// behave forever. It is the one property here that must not come back - which also means the
+    /// round-trip test above cannot cover it, since equality would fail on it either way.
+    /// </summary>
+    [Fact]
+    public void PinningIsSessionStateAndDoesNotSurviveASave()
+    {
+        using TempDirectory dir = new();
+        AppSettingsStore store = new(dir.File("settings.json"));
+
+        store.Save(AppSettings.Default with { AlwaysOnTop = true });
+
+        Assert.False(store.Load().Settings.AlwaysOnTop);
+        Assert.DoesNotContain("AlwaysOnTop", File.ReadAllText(dir.File("settings.json")));
+    }
+
+    /// <summary>
+    /// A settings file written before pinning stopped being persisted, or edited by hand. The key
+    /// is not an error and must not trip the corrupt-file path - it is simply ignored.
+    /// </summary>
+    [Fact]
+    public void APinLeftInAnOlderSettingsFileIsIgnoredRatherThanHonoured()
+    {
+        using TempDirectory dir = new();
+        string path = dir.File("settings.json");
+        File.WriteAllText(path, """{ "AlwaysOnTop": true, "StaleAfterSeconds": 90 }""");
+
+        SettingsLoadResult result = new AppSettingsStore(path).Load();
+
+        Assert.False(result.Settings.AlwaysOnTop);
+        Assert.Equal(90, result.Settings.StaleAfterSeconds);
+        Assert.Null(result.CorruptBackupPath);
+    }
+
     [Fact]
     public void RoundTripsEveryProperty()
     {
@@ -40,7 +75,6 @@ public class AppSettingsStoreTests
         {
             Theme = ThemePreference.Dark,
             ColorBarsByUsage = false,
-            AlwaysOnTop = true,
             StartWithWindows = true,
             Density = WidgetDensity.Compact,
             ShowUnavailableProviders = false,

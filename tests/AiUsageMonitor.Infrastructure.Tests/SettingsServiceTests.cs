@@ -15,12 +15,14 @@ public class SettingsServiceTests
         AppSettings? raised = null;
         service.Changed += (_, settings) => raised = settings;
 
-        service.Update(s => s with { AlwaysOnTop = true });
+        // Deliberately not AlwaysOnTop: that one is session state and never reaches the file, so it
+        // cannot stand for persistence here.
+        service.Update(s => s with { ColorBarsByUsage = false });
 
-        Assert.True(service.Current.AlwaysOnTop);
+        Assert.False(service.Current.ColorBarsByUsage);
         Assert.NotNull(raised);
-        Assert.True(raised!.AlwaysOnTop);
-        Assert.True(new AppSettingsStore(dir.File("settings.json")).Load().Settings.AlwaysOnTop);
+        Assert.False(raised!.ColorBarsByUsage);
+        Assert.False(new AppSettingsStore(dir.File("settings.json")).Load().Settings.ColorBarsByUsage);
     }
 
     [Fact]

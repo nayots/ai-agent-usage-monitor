@@ -35,7 +35,7 @@
       <!-- The same switch as the title bar's pin, and the caption is where its second effect is
            spelled out: without it, a widget that vanishes on a click elsewhere looks like a bug
            rather than a setting. -->
-      <TextBlock Text="Also keeps the widget open when you click another window" TextWrapping="Wrap" Margin="0,0,0,4" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
+      <TextBlock Text="Also keeps the widget open when you click another window. Not remembered between runs." TextWrapping="Wrap" Margin="0,0,0,4" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
       <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Content="Show providers that are not installed" IsChecked="{Binding ShowUnavailableProviders, Mode=TwoWay}" AutomationProperties.Name="Show providers that are not installed" />
       <CheckBox x:Name="StartWithWindowsBox" Style="{StaticResource SettingsCheckBoxStyle}" Content="Start with Windows" IsChecked="{Binding StartWithWindows, Mode=TwoWay}" IsEnabled="{Binding CanStartWithWindows}" AutomationProperties.Name="Start with Windows" />
       <!-- Style is set only as a property element here. Setting the Style attribute as well and

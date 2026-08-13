@@ -42,6 +42,19 @@ public sealed record AppSettings
     /// </summary>
     public bool NotifyOnQuotaEvents { get; init; } = true;
 
+    /// <summary>
+    /// Whether the widget stays above other windows, and with it the exemption from the focus-loss
+    /// dismissal in PRD §17.
+    /// <para>
+    /// Deliberately not persisted. It is the only setting here that answers "what am I doing right
+    /// now" rather than "how do I want this to work": pinning is what someone does while watching a
+    /// quota drain during a long run, and a pin that outlived the run would leave the widget on top
+    /// of everything the next day, with no memory of having asked for it. It is still carried on
+    /// this record rather than held beside it, so the title bar's pin and the settings window's
+    /// checkbox stay two views of one value.
+    /// </para>
+    /// </summary>
+    [JsonIgnore]
     public bool AlwaysOnTop { get; init; }
 
     public bool StartWithWindows { get; init; }

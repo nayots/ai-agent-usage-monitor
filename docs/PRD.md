@@ -564,7 +564,7 @@ Settings must be stored separately from provider configuration.
 The settings experience must support:
 
 - Start with Windows.
-- Always on top, which is also the exemption from the focus-loss dismissal in §17.
+- Always on top, which is also the exemption from the focus-loss dismissal in §17. This one is session state rather than a stored preference: the widget starts unpinned every time, because pinning answers what the user is doing now and not how they want the widget to behave from here on.
 - Compact or expanded default mode.
 - Light, dark, or system theme.
 - Color bars by usage, on by default, bounded by §16.1.
