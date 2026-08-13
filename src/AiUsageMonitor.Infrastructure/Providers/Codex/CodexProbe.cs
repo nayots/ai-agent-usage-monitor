@@ -1,7 +1,6 @@
-using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
 using AiUsageMonitor.Domain;
+using AiUsageMonitor.Infrastructure.Providers;
 
 namespace AiUsageMonitor.Infrastructure.Providers.Codex;
 
@@ -22,9 +21,19 @@ public sealed class CodexProbe : IProviderProbe
 
     private const string MechanismText = "codex app-server (JSON-RPC over stdio, JSONL) - account/rateLimits/read";
 
+    private readonly IProcessRunner _processes;
+    private readonly Func<string?> _locateExecutable;
+
+    public CodexProbe(IProcessRunner? processes = null, Func<string?>? locateExecutable = null)
+    {
+        _processes = processes ?? DefaultProcessRunner.Instance;
+        _locateExecutable = locateExecutable ?? CodexExecutableLocator.Locate;
+    }
+
     public async Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
     {
-        string? exePath = CodexExecutableLocator.Locate();
+        ct.ThrowIfCancellationRequested();
+        string? exePath = _locateExecutable();
 
         if (exePath is null)
         {
@@ -73,7 +82,7 @@ public sealed class CodexProbe : IProviderProbe
                 Error: null,
                 Notes: notes);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             return new ProviderSnapshot(
                 ProviderName: Name,
@@ -109,12 +118,12 @@ public sealed class CodexProbe : IProviderProbe
 
     // ----- Version ---------------------------------------------------------------------------------
 
-    private static async Task<string?> TryGetVersionAsync(string exePath, CancellationToken ct, List<string> notes)
+    private async Task<string?> TryGetVersionAsync(string exePath, CancellationToken ct, List<string> notes)
     {
         try
         {
             (int exitCode, string stdOut, string stdErr) =
-                await ProcessRunner.RunCapturedAsync(exePath, "--version", VersionTimeout, ct).ConfigureAwait(false);
+                await _processes.RunCapturedAsync(exePath, "--version", VersionTimeout, ct).ConfigureAwait(false);
 
             string text = stdOut.Trim();
             if (text.Length == 0)
@@ -130,7 +139,12 @@ public sealed class CodexProbe : IProviderProbe
 
             return text;
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            notes.Add($"codex --version did not complete within {VersionTimeout.TotalSeconds:0}s.");
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             notes.Add($"codex --version failed: {ex.Message}");
             return null;
@@ -139,74 +153,51 @@ public sealed class CodexProbe : IProviderProbe
 
     // ----- account/rateLimits/read over app-server (JSONL over stdio) --------------------------
 
-    private static async Task<(IReadOnlyList<QuotaWindow> Windows, List<string> Notes)> ReadRateLimitsAsync(
+    private async Task<(IReadOnlyList<QuotaWindow> Windows, List<string> Notes)> ReadRateLimitsAsync(
         string exePath, CancellationToken ct)
     {
         var notes = new List<string>();
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = exePath,
-            Arguments = "app-server",
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = new UTF8Encoding(false),
-            StandardErrorEncoding = new UTF8Encoding(false),
-            StandardInputEncoding = new UTF8Encoding(false),
-            CreateNoWindow = true,
-        };
-
-        using var process = new Process { StartInfo = psi };
+        using IProcessSession process = _processes.Start(exePath, "app-server");
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(RateLimitsTimeout);
 
-        try
+        // Pipelining is safe per the verified protocol: write both requests, flush once, then read.
+        await process.StandardInput.WriteAsync(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"ai-agent-usage-monitor\",\"title\":null,\"version\":\"0.1.0\"}}}\n"
+                .AsMemory(),
+            cts.Token).ConfigureAwait(false);
+        await process.StandardInput.WriteAsync(
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"account/rateLimits/read\"}\n".AsMemory(),
+            cts.Token).ConfigureAwait(false);
+        await process.StandardInput.FlushAsync(cts.Token).ConfigureAwait(false);
+
+        JsonElement? result = null;
+        while (result is null)
         {
-            process.Start();
-
-            // Pipelining is safe per the verified protocol: write both requests, flush once, then read.
-            await process.StandardInput.WriteAsync(
-                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"clientInfo\":{\"name\":\"ai-agent-usage-monitor\",\"title\":null,\"version\":\"0.1.0\"}}}\n"
-                    .AsMemory(),
-                cts.Token).ConfigureAwait(false);
-            await process.StandardInput.WriteAsync(
-                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"account/rateLimits/read\"}\n".AsMemory(),
-                cts.Token).ConfigureAwait(false);
-            await process.StandardInput.FlushAsync(cts.Token).ConfigureAwait(false);
-
-            JsonElement? result = null;
-            while (result is null)
+            string? line = await process.StandardOutput.ReadLineAsync(cts.Token).ConfigureAwait(false);
+            if (line is null)
             {
-                string? line = await process.StandardOutput.ReadLineAsync(cts.Token).ConfigureAwait(false);
-                if (line is null)
-                {
-                    break; // stdout closed before we saw an id:2 response
-                }
-
-                if (CodexProtocol.TryReadResult(line, notes, out JsonElement response))
-                {
-                    result = response;
-                }
+                break; // stdout closed before we saw an id:2 response
             }
 
-            if (result is null)
+            if (CodexProtocol.TryReadResult(line, notes, out JsonElement response))
             {
-                throw new ProviderMechanismException("codex app-server closed stdout before an id:2 response was observed.");
+                result = response;
             }
-
-            // Close stdin now that we have what we need - verified behaviour: exits code 0 in ~25ms.
-            process.StandardInput.Close();
-            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-
-            List<QuotaWindow> windows = MapRateLimits(result.Value);
-            return (windows, notes);
         }
-        finally
+
+        if (result is null)
         {
-            ProcessRunner.TryKill(process);
+            throw new ProviderMechanismException("codex app-server closed stdout before an id:2 response was observed.");
         }
+
+        // Close stdin now that we have what we need - verified behaviour: exits code 0 in ~25ms.
+        process.StandardInput.Close();
+        await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+
+        List<QuotaWindow> windows = MapRateLimits(result.Value);
+        return (windows, notes);
     }
 
     // ----- Response mapping (exact, verified schema - not duck-typed) --------------------------
