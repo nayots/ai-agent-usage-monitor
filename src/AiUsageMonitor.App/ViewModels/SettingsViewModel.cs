@@ -315,16 +315,38 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The custom entry has to appear and disappear as the ladder changes, which no amount of
-    /// refreshing an existing list can do. The other collections are refreshed rather than rebuilt
-    /// because their contents are fixed.
+    /// refreshing an existing list can do - so this list, alone among the choice collections, can
+    /// need rebuilding.
+    /// <para>
+    /// Rebuilt only when that entry actually differs, never on every settings change. Clearing the
+    /// collection tears down the radio buttons in it, and a settings change can come from anywhere
+    /// - including from the radio button being clicked at that moment, and from a theme toggle
+    /// that has nothing to do with this list.
+    /// </para>
     /// </summary>
-    private void RebuildAlertThresholdChoices()
+    private void RefreshAlertThresholdChoices()
     {
-        AlertThresholdChoices.Clear();
+        IReadOnlyList<int> current = _settings.Current.EffectiveAlertThresholds;
+        string? wanted = AlertThresholdPresets.IdFor(current) < 0
+            ? AlertThresholdPresets.CustomLabel(current)
+            : null;
+        ChoiceViewModel? custom = AlertThresholdChoices.FirstOrDefault(choice => choice.Value == -1);
 
-        foreach (ChoiceViewModel choice in BuildAlertThresholdChoices())
+        if (custom?.Label != wanted)
         {
-            AlertThresholdChoices.Add(choice);
+            AlertThresholdChoices.Clear();
+
+            foreach (ChoiceViewModel choice in BuildAlertThresholdChoices())
+            {
+                AlertThresholdChoices.Add(choice);
+            }
+
+            return;
+        }
+
+        foreach (ChoiceViewModel choice in AlertThresholdChoices)
+        {
+            choice.Refresh();
         }
     }
 
@@ -337,7 +359,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         Raise(null);
 
-        RebuildAlertThresholdChoices();
+        RefreshAlertThresholdChoices();
 
         foreach (ChoiceViewModel choice in Themes
             .Concat(Densities)
