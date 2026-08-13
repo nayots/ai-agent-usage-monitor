@@ -49,6 +49,20 @@ public sealed class ProviderRefreshService
     public TimeSpan BaseInterval { get; set; }
 
     /// <summary>
+    /// When this provider is next eligible for an unforced attempt, or null when it is not being
+    /// deferred. A manual retry ignores this entirely.
+    /// </summary>
+    public DateTimeOffset? NextAttemptFor(ProviderDescriptor provider, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            return _backoff.TryGetValue(provider, out Backoff? state) && state.NextAttempt > now
+                ? state.NextAttempt
+                : null;
+        }
+    }
+
+    /// <summary>
     /// Delay before a provider that has failed <paramref name="consecutiveFailures"/> times in a
     /// row is asked again: doubling, capped at 8x the base interval. PRD §24 requires repeated
     /// failures to stop aggressive retries while leaving manual refresh available.

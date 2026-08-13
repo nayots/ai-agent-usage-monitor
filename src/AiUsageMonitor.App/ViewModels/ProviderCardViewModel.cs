@@ -23,6 +23,8 @@ public sealed class ProviderCardViewModel : ObservableObject
     private MechanismTier _tier = MechanismTier.Unofficial;
     private string? _versionText;
     private string? _timestampText;
+    private DateTimeOffset? _nextAttempt;
+    private string? _nextCheckText;
     private ProviderNotice? _notice;
 
     public ProviderCardViewModel(ProviderDescriptor descriptor, bool colorBarsByUsage, Action<ProviderDescriptor> retry)
@@ -131,9 +133,15 @@ public sealed class ProviderCardViewModel : ObservableObject
 
     /// <summary>
     /// The card's one statement of time - either how old the rows are, or how long the provider has
-    /// been failing. See <see cref="TimestampLine"/> for which, and why they share a line.
+    /// been failing. See <see cref="TimestampLine"/> for which, and why they share a line. A next
+    /// check is a separate statement about the future, shown only while a failing provider is
+    /// deliberately deferred because age alone otherwise reads as a bug.
     /// </summary>
     public string? TimestampText { get => _timestampText; private set { if (Set(ref _timestampText, value)) { Raise(nameof(HasTimestampText)); } } }
+
+    public string? NextCheckText { get => _nextCheckText; private set { if (Set(ref _nextCheckText, value)) { Raise(nameof(HasNextCheckText)); } } }
+
+    public bool HasNextCheckText => NextCheckText is not null;
 
     /// <summary>
     /// False when there is nothing truthful to say: nothing retrieved yet and no failure to date
@@ -199,6 +207,8 @@ public sealed class ProviderCardViewModel : ObservableObject
         Tick(now);
     }
 
+    public void SetNextAttempt(DateTimeOffset? nextAttempt) => _nextAttempt = nextAttempt;
+
     private void RebuildWindows()
     {
         Windows.Clear();
@@ -252,6 +262,11 @@ public sealed class ProviderCardViewModel : ObservableObject
             _freshness.Evaluate(snapshot.RetrievedAt, now));
 
         TimestampText = TimestampLine(snapshot, State, now);
+        NextCheckText = _nextAttempt is DateTimeOffset nextAttempt
+            && nextAttempt > now
+            && State is ConnectionState.Error or ConnectionState.Unavailable
+            ? "Next check in " + QuotaFormatting.FormatCountdown(nextAttempt - now)
+            : null;
         Notice = ProviderNoticeSelector.For(snapshot, State);
 
         foreach (QuotaRowViewModel window in Windows)
@@ -262,8 +277,10 @@ public sealed class ProviderCardViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The one line on a card that states a time, and which of two facts it states depends on
-    /// whether the card is showing anything.
+    /// The card's one statement of age or past time, and which of two facts it states depends on
+    /// whether the card is showing anything. A deferred next check is separate future-facing copy:
+    /// it appears only while a failure is being deliberately skipped, because age alone reads as
+    /// a bug in that case.
     /// <para>
     /// A card with rows reports how old those rows are, including rows retained through an Error or
     /// Unavailable snapshot. A card whose rows are gone reports how long it has been failing

@@ -249,6 +249,24 @@ public class ProviderRefreshServiceTests
     }
 
     [Fact]
+    public async Task NextAttemptForReportsOnlyAnActiveFailureBackoff()
+    {
+        ConnectionState next = ConnectionState.Error;
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", next)));
+        ProviderRefreshService service = Service(provider);
+
+        Assert.Null(service.NextAttemptFor(provider, Now));
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+        Assert.Equal(Now.AddMinutes(1), service.NextAttemptFor(provider, Now));
+        Assert.Null(service.NextAttemptFor(provider, Now.AddMinutes(1)));
+
+        next = ConnectionState.Connected;
+        await service.RefreshAllAsync(force: true, Now.AddSeconds(1), CancellationToken.None);
+        Assert.Null(service.NextAttemptFor(provider, Now.AddSeconds(2)));
+    }
+
+    [Fact]
     public async Task ANewerCompletionSupersedesAnOlderFailureAndLeavesNoBackoff()
     {
         var first = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -132,8 +132,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         DateTimeOffset now = _clock();
 
-        foreach (ProviderCardViewModel card in Providers)
+        foreach ((ProviderDescriptor provider, ProviderCardViewModel card) in _cards)
         {
+            card.SetNextAttempt(_refresh.NextAttemptFor(provider, now));
             card.Tick(now);
         }
     }

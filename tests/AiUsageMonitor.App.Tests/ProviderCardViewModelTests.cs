@@ -198,6 +198,37 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
+    public void AFailingCardSaysWhenItsNextAttemptWillBe()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: Now, error: "boom"), Now, Policy);
+
+        card.SetNextAttempt(Now.AddMinutes(5));
+        card.Tick(Now);
+
+        Assert.Equal("Next check in 5m 00s", card.NextCheckText);
+        Assert.True(card.HasNextCheckText);
+
+        card.Apply(Snapshot(state: ConnectionState.Connected, retrievedAt: Now), Now, Policy);
+
+        Assert.Null(card.NextCheckText);
+        Assert.False(card.HasNextCheckText);
+    }
+
+    [Fact]
+    public void ACardWithNoDeferredAttemptSaysNothingAboutTheNextCheck()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: Now, error: "boom"), Now, Policy);
+
+        card.SetNextAttempt(null);
+        card.Tick(Now);
+
+        Assert.Null(card.NextCheckText);
+        Assert.False(card.HasNextCheckText);
+    }
+
+    [Fact]
     public void ConnectedWithWindowsShowsNoNotice()
     {
         ProviderCardViewModel card = Card();
