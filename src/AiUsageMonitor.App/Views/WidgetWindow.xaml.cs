@@ -55,6 +55,7 @@ public partial class WidgetWindow : Window
 
         InitializeComponent();
         DataContext = model;
+        DpiChanged += (_, _) => ClampPlacement();
 
         Topmost = settings.Current.AlwaysOnTop;
         RestorePlacement(settings.Current);
@@ -92,6 +93,7 @@ public partial class WidgetWindow : Window
         {
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             _systemEventsSubscribed = true;
         }
         catch (Exception ex)
@@ -99,12 +101,15 @@ public partial class WidgetWindow : Window
             Trace.TraceWarning("Unable to subscribe to system events ({0}); continuing without lifecycle refreshes.", ex.GetType().Name);
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         }
     }
 
     protected override void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
+
+        ClampPlacement();
 
         _tick.Start();
         _poll.Start();
@@ -135,6 +140,7 @@ public partial class WidgetWindow : Window
         {
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             _systemEventsSubscribed = false;
         }
 
@@ -248,6 +254,9 @@ public partial class WidgetWindow : Window
         _ = _model.RefreshAsync(force: true);
         OnTick(this, EventArgs.Empty);
     }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e) =>
+        Dispatcher.BeginInvoke(ClampPlacement);
 
     /// <summary>
     /// Everything a settings change reaches from here. The poll timer's interval is reassigned
@@ -572,25 +581,26 @@ public partial class WidgetWindow : Window
             return;
         }
 
-        // A saved position on a monitor that has since been unplugged would put the window
-        // somewhere the user cannot reach it (PRD §17). Fall back to centring rather than trusting it.
-        Rect desktop = new(
-            SystemParameters.VirtualScreenLeft,
-            SystemParameters.VirtualScreenTop,
-            SystemParameters.VirtualScreenWidth,
-            SystemParameters.VirtualScreenHeight);
-
-        Rect proposed = new(left, top, Width, 100);
-
-        if (!desktop.IntersectsWith(proposed))
-        {
-            WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            return;
-        }
-
         WindowStartupLocation = WindowStartupLocation.Manual;
         Left = left;
         Top = top;
+    }
+
+    private void ClampPlacement()
+    {
+        Rect fitted = PlacementClamp.Fit(
+            new Rect(Left, Top, ActualWidth, ActualHeight),
+            ScreenBounds.WorkAreaFor(this));
+
+        if (fitted.Left != Left)
+        {
+            Left = fitted.Left;
+        }
+
+        if (fitted.Top != Top)
+        {
+            Top = fitted.Top;
+        }
     }
 
     private void SavePlacement() =>

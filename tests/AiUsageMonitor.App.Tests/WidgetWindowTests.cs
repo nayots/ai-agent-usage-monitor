@@ -117,22 +117,6 @@ public class WidgetWindowTests(WpfFixture wpf)
         model.Dispose();
     });
 
-    [Fact]
-    public void APlacementOnAMonitorThatIsNoLongerThereFallsBackToCentring() => wpf.Invoke(() =>
-    {
-        // A position saved against a monitor that has since been unplugged would otherwise put the
-        // window somewhere with no way to drag it back (PRD §17).
-        AppSettings offscreen = AppSettings.Default with { WindowLeft = -30000, WindowTop = -30000 };
-        IReadOnlyList<ProviderDescriptor> providers = Providers();
-        MainViewModel model = Model(providers, offscreen);
-
-        WidgetWindow window = new(model, Settings(offscreen));
-
-        Assert.Equal(WindowStartupLocation.CenterScreen, window.WindowStartupLocation);
-
-        model.Dispose();
-    });
-
     /// <summary>
     /// The title bar's pin writes the setting and reads the window's Topmost back, so this covers
     /// both halves at once: the settings window and the tray can move it too, and the pin has to
