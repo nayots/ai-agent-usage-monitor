@@ -11,6 +11,8 @@
 ## Global Constraints
 
 - `dotnet build` treats warnings as errors. Every task must end with a clean build.
+- **Run `dotnet build` and `dotnet test` as two separate shell calls, never chained.** Every "Run:" step below that names both means two invocations. A chained `build && test` spends one per-command time budget on both, and a suite killed mid-run discards the result of a build that already succeeded.
+- The per-task TDD cycle is yours to enforce, not something this plan re-specifies. Where a task gives literal test code, that is the acceptance criterion written out — write it, watch it fail, then implement.
 - Windows-only. Primary shell is PowerShell 5.1 — **no `&&`, no ternary, no `??`**. Chain with `;` or `if ($?) { }`.
 - No new `PackageReference` in any project.
 - `src/AiUsageMonitor.Domain` must gain no dependency and no WPF type.
