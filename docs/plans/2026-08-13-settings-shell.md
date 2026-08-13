@@ -1291,7 +1291,11 @@ Replace `src/AiUsageMonitor.App/Views/SettingsWindow.xaml` entirely:
         <TextBlock Text="{Binding Diagnostics.CopyHintText}" TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
         <StackPanel Orientation="Horizontal">
           <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Copy all diagnostics" Command="{Binding Diagnostics.CopyCommand}" AutomationProperties.Name="Copy all diagnostics" />
-          <Button Margin="16,0,0,0" Style="{StaticResource SettingsActionButtonStyle}" Content="Open logs folder" Command="{Binding Diagnostics.OpenLogsCommand}" AutomationProperties.Name="Open logs folder">
+          <Button Margin="16,0,0,0" Content="Open logs folder" Command="{Binding Diagnostics.OpenLogsCommand}" AutomationProperties.Name="Open logs folder">
+            <!-- No Style attribute here. This button needs BasedOn plus a trigger, so the style is
+                 a property element; setting the Style attribute as well is MC3024 - the property
+                 can be set once. Same reason the two warning TextBlocks in the old settings markup
+                 declared their styles this way. -->
             <Button.Style>
               <Style TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
                 <Setter Property="Visibility" Value="Collapsed" />
