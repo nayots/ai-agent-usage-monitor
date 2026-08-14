@@ -30,8 +30,16 @@ under `docs/plans/` before delegating code changes.
   instruction. A server-provided 15-minute value is not the application's fallback.
 - Only one request may be in flight per provider. Claude and Codex must remain concurrent with each
   other.
+- Scheduled provider polling should pause while Windows reports that the workstation is locked and
+  resume with one immediate refresh after unlock. Keyboard or mouse inactivity alone must not pause
+  polling.
 - Resume and Unlock refreshes should be coalesced so a normal wake-and-unlock sequence starts one
   refresh, not two.
+- Claude usage responses may contain model-scoped quota windows in a `limits` array. Normalize that
+  provider-specific shape before the shared extractor so those windows receive stable identities
+  without duplicating existing top-level windows.
+- A refresh shortly after a known quota reset is a useful follow-up improvement, but is not required
+  for the first rate-limit increment.
 
 ## 1. Current request inventory
 
@@ -42,6 +50,7 @@ under `docs/plans/` before delegating code changes.
 | Startup refresh | Forced refresh of every visible provider | Widget content rendered | Once per application start | One read per visible provider |
 | Resume refresh | Forced refresh of every visible provider | Windows `PowerModes.Resume` | Once per event | One read per visible provider |
 | Unlock refresh | Forced refresh of every visible provider | Windows `SessionUnlock` | Once per event | One read per visible provider |
+| Workstation lock | No explicit scheduling change | Windows `SessionLock` is not currently handled as a polling state | Scheduled cadence continues while locked | The same provider traffic continues until unlock |
 | Global manual refresh | Forced refresh of every visible provider | Footer, tray, or Settings action | Every activation | One read per visible provider |
 | Card retry | Forced refresh of one provider | `Retry now` | Every activation | One read for that provider |
 | Due-check timer | Asks the refresh service whether providers are eligible | Every 5 seconds | 720 checks/hour | Local only when nothing is due |
@@ -112,6 +121,8 @@ settings, but the exact historical number and cause of requests cannot currently
 | Medium | 15-second and 30-second presets permit 5,760 or 2,880 Claude requests per day | Those choices are disproportionately aggressive for an unofficial quota endpoint |
 | Medium | Manual retry bypasses rate-limit backoff | User interaction can unintentionally prolong a rate-limit incident |
 | Medium | Request history lacks safe operational evidence | Future diagnosis relies on inference rather than recorded attempt timing and status |
+| Medium | Scheduled polling continues while the workstation is locked | Provider reads continue while the user cannot see the result, even though unlock already requests fresh data |
+| Medium | An observed Claude response shape carries model-scoped quotas in a `limits` array using `percent` rather than `utilization` | The shared extractor walks the array but does not recognize `percent`; adding that key alone would produce unstable IDs such as `limits[2]` and could duplicate top-level windows |
 | Good | Ordinary scheduled polls do not overlap in-flight work | The 5-second timer is not the source of request bursts |
 | Good | Provider failures are isolated and old completions cannot overwrite newer published state | Cross-provider responsiveness and latest-result correctness are already protected |
 | Good | Hidden providers are not polled | A provider the user does not consume creates no background provider traffic |
@@ -179,14 +190,57 @@ This restriction is per provider only:
 - A manual retry for Claude must not refresh Codex, and a manual retry for Codex must not refresh
   Claude.
 
-### 4.5 Lifecycle refresh coalescing
+### 4.5 Workstation lock and lifecycle refresh coalescing
+
+Pause scheduled provider polling while Windows explicitly reports that the workstation is locked.
+This is a lifecycle state, not an inactivity heuristic:
+
+- do not infer a lock from elapsed keyboard or mouse inactivity;
+- do not pause merely because the widget is hidden;
+- do not cancel a provider request that was already in flight when the lock event arrived;
+- do not start later scheduled provider requests until unlock;
+- leave the normal 60-second healthy cadence unchanged while the workstation is unlocked.
+
+On unlock, request one immediate refresh so the display catches up. That refresh remains subject to
+the same-provider single-flight gate and any active server-provided `Retry-After` instant. If the
+provider is still cooling down, update the truthful next-check state but do not issue an early
+network request.
 
 Resume and Unlock frequently describe one user action. Coalesce system-triggered forced refreshes
 that occur within a short window, proposed as 10-15 seconds. The coalescing scope should apply to
 lifecycle triggers only; it must not silently swallow a deliberate later manual refresh, subject to
-the single-flight and rate-limit rules above.
+the single-flight and rate-limit rules above. Lock state must not create a queued burst: multiple
+missed scheduled ticks while locked still produce at most one eligible refresh after unlock.
 
-### 4.6 Credential-safe diagnostics
+### 4.6 Claude model-scoped quota normalization
+
+The Claude adapter should tolerate an observed response shape in which model-scoped quota windows
+are listed under a top-level `limits` array. Relevant entries can carry a percentage, reset instant,
+group or period identity, and optional model scope rather than using the established top-level
+`five_hour` or `seven_day` object shape.
+
+Do not solve this by adding `percent` to the shared duck-typed key list alone. Array-position IDs are
+not stable provider identities, and walking both the top-level fields and unnormalized array can
+produce duplicate quota windows. Instead, normalize the Claude-specific representation inside the
+Claude adapter before invoking the provider-neutral extractor:
+
+- derive a stable window ID from a verified period or group and the scoped model identity;
+- preserve an existing top-level window when it already represents the same quota;
+- expose explicitly reported zero usage as zero, but never manufacture zero for a missing value;
+- retain a missing reset as missing rather than inventing a reset instant;
+- surface an inactive or partial scoped entry only when it has enough stable scope and period
+  identity to remain understandable across refreshes;
+- never copy raw response content into diagnostics, logs, UI error text, or generic provider state.
+
+Fixture tests should cover active scoped limits, explicit zero usage, missing reset data, malformed
+entries, duplicate top-level and scoped representations, multiple models, stable ordering, and
+non-mutation of the parsed source data.
+
+This normalization is independent of the 429 scheduler change and may be planned as a separate
+implementation effort. Provider-specific field names and matching rules must remain inside the
+Claude infrastructure adapter rather than leaking into shared domain, refresh, or UI layers.
+
+### 4.7 Credential-safe diagnostics
 
 Add enough evidence to explain request volume and backoff without expanding the credential surface.
 Useful fields include:
@@ -212,7 +266,27 @@ The implementation plan should decide whether these facts belong only in Diagnos
 local logs, or in both. Diagnostics should remain useful even when normal informational logging is
 quiet.
 
-## 5. Lower-priority improvement
+## 5. Lower-priority improvements
+
+### 5.1 Reset-aligned refresh
+
+When a successful provider response supplies a trustworthy future reset instant, the scheduler may
+request one refresh shortly after that instant so the new quota period appears promptly. A small
+positive buffer avoids reading during the provider's reset transition.
+
+This must be an alignment of one otherwise useful read, not a second high-frequency polling loop:
+
+- use the earliest relevant future reset for that provider;
+- retain the 60-second healthy minimum between successful provider calls;
+- obey same-provider single-flight and active `Retry-After` cooldowns;
+- collapse near-identical reset instants into one provider refresh;
+- discard or recompute the schedule when a newer successful response changes the reset instant;
+- tolerate clock changes without creating a burst or a long-lived stale schedule.
+
+Reset alignment should be a separate follow-up slice after the first rate-limit increment. Its value
+is improved reset-time freshness, not mitigation of HTTP 429 responses.
+
+### 5.2 Persistent Codex app-server
 
 Codex currently starts a fresh `codex.exe app-server` process for every scheduled read. Reusing a
 longer-lived process could reduce local process overhead, but it does not contribute to the Claude
@@ -230,12 +304,16 @@ turn accepted slices into a normal Superpowers plan with exact paths, tests, and
 | B. Rate-limit advice | Parse safe `Retry-After` metadata and carry provider-neutral retry advice without exposing response content | `ClaudeOAuthUsageProbe`, domain/provider contracts, Claude probe tests |
 | C. Scheduler policy | Implement 2/4/8 consecutive-429 fallback, honor server `not before`, reset on success | `ProviderRefreshService`, refresh-service tests |
 | D. Single-flight and actions | Prevent same-provider overlap and make retry availability reflect in-flight/cooldown state | `ProviderRefreshService`, `MainViewModel`, provider card/view-model tests |
-| E. Lifecycle coalescing | Merge closely spaced Resume and Unlock refreshes without swallowing deliberate manual action | `WidgetWindow`, WPF tests |
-| F. Safe observability | Surface trigger, result, rate-limit, and next-attempt evidence without secrets or raw payloads | refresh activity/diagnostics/logging and their tests |
+| E. Lock-aware lifecycle scheduling | Pause scheduled polling on explicit workstation lock, perform one eligible refresh on unlock, and merge closely spaced Resume and Unlock triggers without swallowing deliberate manual action | `WidgetWindow`, `MainViewModel`, refresh scheduling, WPF tests |
+| F. Claude scoped-limit normalization | Normalize stable model-scoped quota windows before shared extraction without duplicates, invented values, or provider-specific leakage | `ClaudeOAuthUsageProbe`, Claude fixtures/probe tests, targeted domain tests only if the shared contract changes |
+| G. Safe observability | Surface trigger, result, rate-limit, and next-attempt evidence without secrets or raw payloads | refresh activity/diagnostics/logging and their tests |
+| H. Reset-aligned follow-up | Schedule one guarded refresh just after a trustworthy reset instant without increasing the global healthy cadence | refresh scheduling and deterministic clock-based tests |
 
 Slices B and C are coupled through the retry-advice contract and should be designed together even if
 implemented as separate serial tasks. Slices C and D both touch `ProviderRefreshService` and must not
-be delegated in parallel in the shared working tree.
+be delegated in parallel in the shared working tree. Slice H is explicitly lower priority and should
+not delay completion of the first rate-limit increment. Slice F can be planned independently because
+it changes response interpretation rather than request scheduling.
 
 ## 7. Acceptance criteria for a future plan
 
@@ -257,6 +335,15 @@ be delegated in parallel in the shared working tree.
     bodies, or unsafe provider-controlled text.
 13. Existing retained-row, freshness, hidden-provider, timeout, and provider-isolation behavior
     remains intact.
+14. No scheduled provider request starts while the workstation is explicitly locked; an attempt
+    already in flight may complete normally.
+15. Unlock requests at most one eligible refresh, does not create a burst from missed ticks, and
+    still respects single-flight and `Retry-After`.
+16. Keyboard or mouse inactivity and widget visibility do not alter provider polling cadence.
+17. Active model-scoped Claude limits receive stable IDs and are not duplicated by equivalent
+    top-level windows.
+18. Missing scoped-limit usage or reset values are preserved as missing rather than converted into
+    invented zeroes or timestamps.
 
 ## 8. Non-goals
 
@@ -265,5 +352,9 @@ be delegated in parallel in the shared working tree.
 - No credential refresh, rewrite, persistence, or token lifecycle management.
 - No five-minute default healthy cadence.
 - No 15-minute application-authored starting fallback.
+- No keyboard or mouse idle heuristic; only the explicit workstation-lock lifecycle state pauses
+  scheduled polling.
 - No serialization of Claude and Codex behind one global refresh lock.
+- No Claude profile request, multi-account management, user-agent impersonation, or forced bypass of
+  an active rate-limit cooldown.
 - No persistent Codex app-server work in the first rate-limit increment without separate evidence.
