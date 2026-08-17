@@ -92,16 +92,26 @@ public class ProviderPreferenceViewModelTests
     }
 
     [Fact]
-    public void AHandEditedProviderIntervalIsAppendedAndSorted()
+    public void AHandEditedSubFloorProviderIntervalSelectsTheFloorChoice()
     {
         SettingsViewModel model = Model(out _, AppSettings.Default with
         {
-            ProviderRefreshSeconds = new Dictionary<string, int> { ["claude-code"] = 45 }
+            ProviderRefreshSeconds = new Dictionary<string, int> { ["claude-code"] = 30 }
         });
         ProviderPreferenceViewModel claude = model.ProviderPreferences.Single(provider => provider.Key == "claude-code");
 
-        Assert.Equal([0, 15, 30, 45, 60, 120, 300, 600], claude.Intervals.Select(choice => choice.Value));
-        Assert.Equal("45s", claude.Intervals.Single(choice => choice.Value == 45).Label);
+        Assert.Equal([0, 60, 120, 300, 600], claude.Intervals.Select(choice => choice.Value));
+        Assert.Equal(60, claude.Intervals.Single(choice => choice.IsSelected).Value);
+    }
+
+    [Fact]
+    public void NoOfferedProviderIntervalIsBelowTheFloor()
+    {
+        SettingsViewModel model = Model(out _);
+
+        Assert.All(
+            model.ProviderPreferences.SelectMany(provider => provider.Intervals).Where(choice => choice.Value != 0),
+            choice => Assert.True(choice.Value >= AppSettings.MinimumRefreshSeconds));
     }
 
     [Fact]

@@ -204,10 +204,12 @@ public class AppSettingsStoreTests
         Assert.Equal(TimeSpan.FromMinutes(1), AppSettings.Default.RefreshInterval);
 
     [Theory]
-    [InlineData(0, 15)]
-    [InlineData(-5, 15)]
-    [InlineData(14, 15)]
-    [InlineData(15, 15)]
+    [InlineData(0, 60)]
+    [InlineData(-5, 60)]
+    [InlineData(14, 60)]
+    [InlineData(15, 60)]
+    [InlineData(30, 60)]
+    [InlineData(60, 60)]
     [InlineData(90, 90)]
     [InlineData(3600, 3600)]
     [InlineData(99999, 3600)]
@@ -223,7 +225,8 @@ public class AppSettingsStoreTests
     [Theory]
     [InlineData("unknown", null, 60)]
     [InlineData("codex", 0, 60)]
-    [InlineData("codex", 5, 15)]
+    [InlineData("codex", 5, 60)]
+    [InlineData("codex", 15, 60)]
     [InlineData("codex", 99999, 3600)]
     public void ProviderRefreshIntervalsUseTheOverrideOnlyWhenItIsNonZero(string key, int? overrideSeconds, int expectedSeconds)
     {
@@ -233,6 +236,21 @@ public class AppSettingsStoreTests
         AppSettings settings = AppSettings.Default with { ProviderRefreshSeconds = overrides };
 
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), settings.RefreshIntervalFor(key));
+    }
+
+    [Fact]
+    public void AnIntervalBelowTheFloorIsNotRewrittenToDisk()
+    {
+        using TempDirectory dir = new();
+        string path = dir.File("settings.json");
+        File.WriteAllText(path, """{ "RefreshIntervalSeconds": 15 }""");
+        AppSettingsStore store = new(path);
+
+        AppSettings loaded = store.Load().Settings;
+        store.Save(loaded with { Theme = ThemePreference.Dark });
+
+        Assert.Equal(TimeSpan.FromSeconds(60), loaded.RefreshInterval);
+        Assert.Contains("\"RefreshIntervalSeconds\": 15", File.ReadAllText(path));
     }
 
     [Fact]

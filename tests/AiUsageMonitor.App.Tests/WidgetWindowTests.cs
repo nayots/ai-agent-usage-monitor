@@ -460,7 +460,7 @@ public class WidgetWindowTests(WpfFixture wpf)
         WidgetWindow window = new(model, Settings(configured), refresh, providers: providers);
 
         Assert.Contains("codex", refresh.HiddenProviderKeys);
-        Assert.Equal(TimeSpan.FromSeconds(15), refresh.IntervalFor(providers[0]));
+        Assert.Equal(TimeSpan.FromSeconds(60), refresh.IntervalFor(providers[0]));
         Assert.Equal(TimeSpan.FromSeconds(300), refresh.IntervalFor(providers[1]));
 
         model.Dispose();

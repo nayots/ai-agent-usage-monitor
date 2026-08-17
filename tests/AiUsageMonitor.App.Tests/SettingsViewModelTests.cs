@@ -173,13 +173,22 @@ public class SettingsViewModelTests
     }
 
     [Fact]
-    public void AHandEditedValueOutsideThePresetsSurvivesAsItsOwnChoice()
+    public void AHandEditedSubFloorIntervalSelectsTheFloorChoice()
     {
-        SettingsViewModel model = Model(out _, AppSettings.Default with { RefreshIntervalSeconds = 45 });
+        SettingsViewModel model = Model(out _, AppSettings.Default with { RefreshIntervalSeconds = 30 });
 
         ChoiceViewModel selected = model.RefreshIntervals.Single(c => c.IsSelected);
 
-        Assert.Equal(45, selected.Value);
+        Assert.Equal(60, selected.Value);
+        Assert.DoesNotContain(model.RefreshIntervals, choice => choice.Value == 30);
+    }
+
+    [Fact]
+    public void NoOfferedGlobalIntervalIsBelowTheFloor()
+    {
+        SettingsViewModel model = Model(out _);
+
+        Assert.All(model.RefreshIntervals, choice => Assert.True(choice.Value >= AppSettings.MinimumRefreshSeconds));
     }
 
     [Fact]

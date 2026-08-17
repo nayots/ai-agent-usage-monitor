@@ -13,7 +13,7 @@ namespace AiUsageMonitor.App.ViewModels;
 /// </summary>
 public sealed class SettingsViewModel : ObservableObject, IDisposable
 {
-    private static readonly int[] RefreshPresets = [15, 30, 60, 120, 300, 600];
+    private static readonly int[] RefreshPresets = [60, 120, 300, 600];
     private static readonly int[] StalePresets = [60, 120, 300, 600, 1800, 3600];
 
     // Evening and morning, an hour apart. Deliberately not the full 24: a schedule offering 03:00
@@ -61,9 +61,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         RefreshIntervals = Durations(
             "refresh",
             RefreshPresets,
-            settings.Current.RefreshIntervalSeconds,
+            (int)settings.Current.RefreshInterval.TotalSeconds,
             seconds => _settings.Update(s => s with { RefreshIntervalSeconds = seconds }),
-            () => _settings.Current.RefreshIntervalSeconds);
+            () => (int)_settings.Current.RefreshInterval.TotalSeconds);
 
         StaleThresholds = Durations(
             "stale",

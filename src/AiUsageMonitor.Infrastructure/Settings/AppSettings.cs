@@ -31,6 +31,13 @@ public enum MiniDock
 /// </summary>
 public sealed record AppSettings
 {
+    /// <summary>
+    /// The floor for every effective refresh interval, global or per-provider. 60 seconds because the
+    /// Claude Code mechanism is an undocumented first-party endpoint (CLAUDE.md) and the 15- and
+    /// 30-second choices this replaces permitted 5,760 and 2,880 requests a day against it.
+    /// </summary>
+    public const int MinimumRefreshSeconds = 60;
+
     public ThemePreference Theme { get; init; } = ThemePreference.System;
 
     /// <summary>
@@ -111,7 +118,7 @@ public sealed record AppSettings
     /// interval would poll a provider in a tight loop.
     /// </summary>
     [JsonIgnore]
-    public TimeSpan RefreshInterval => TimeSpan.FromSeconds(Math.Clamp(RefreshIntervalSeconds, 15, 3600));
+    public TimeSpan RefreshInterval => TimeSpan.FromSeconds(Math.Clamp(RefreshIntervalSeconds, MinimumRefreshSeconds, 3600));
 
     /// <summary>
     /// The percentages worth a balloon. Persisted as a plain array of numbers so the file stays
@@ -167,7 +174,7 @@ public sealed record AppSettings
 
     public TimeSpan RefreshIntervalFor(string providerKey) =>
         RefreshSecondsOverrideFor(providerKey) is int seconds
-            ? TimeSpan.FromSeconds(Math.Clamp(seconds, 15, 3600))
+            ? TimeSpan.FromSeconds(Math.Clamp(seconds, MinimumRefreshSeconds, 3600))
             : RefreshInterval;
 
     /// <summary>

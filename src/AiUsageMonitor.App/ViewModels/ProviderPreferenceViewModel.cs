@@ -6,7 +6,7 @@ namespace AiUsageMonitor.App.ViewModels;
 
 public sealed class ProviderPreferenceViewModel : ObservableObject
 {
-    private static readonly int[] IntervalPresets = [0, 15, 30, 60, 120, 300, 600];
+    private static readonly int[] IntervalPresets = [0, 60, 120, 300, 600];
 
     private readonly SettingsService _settings;
     private readonly Action<ProviderPreferenceViewModel, int> _move;
@@ -21,12 +21,16 @@ public sealed class ProviderPreferenceViewModel : ObservableObject
         _settings = settings;
         _move = move;
 
-        int current = settings.Current.RefreshSecondsOverrideFor(Key) ?? 0;
+        int current = settings.Current.RefreshSecondsOverrideFor(Key) is int seconds
+            ? Math.Clamp(seconds, AppSettings.MinimumRefreshSeconds, 3600)
+            : 0;
         Intervals = Durations(
             $"interval-{Key}",
             current,
             seconds => SetInterval(seconds),
-            () => _settings.Current.RefreshSecondsOverrideFor(Key) ?? 0);
+            () => _settings.Current.RefreshSecondsOverrideFor(Key) is int value
+                ? Math.Clamp(value, AppSettings.MinimumRefreshSeconds, 3600)
+                : 0);
 
         MoveUpCommand = new RelayCommand(() => _move(this, -1), () => CanMoveUp);
         MoveDownCommand = new RelayCommand(() => _move(this, 1), () => CanMoveDown);
