@@ -358,3 +358,74 @@ it changes response interpretation rather than request scheduling.
 - No Claude profile request, multi-account management, user-agent impersonation, or forced bypass of
   an active rate-limit cooldown.
 - No persistent Codex app-server work in the first rate-limit increment without separate evidence.
+
+---
+
+## Appendix A — Observed Claude usage response (captured 2026-08-17)
+
+Added during plan review. §4.6 described the `limits` array from prose; this appendix records what
+the endpoint actually returned, so slice F is designed against evidence rather than a hypothesis.
+
+Captured with a throwaway script outside the repository that read the local OAuth token, issued the
+same `GET /api/oauth/usage` the application issues, and printed **key paths and value types only**.
+Percentages, dollar amounts, and the token itself were never printed, stored, or committed.
+
+### A.1 Response shape
+
+```text
+root.five_hour            : { utilization: number, resets_at: date-string,
+                              limit_dollars: null, used_dollars: null, remaining_dollars: null }
+root.seven_day            : { …same shape… }
+root.seven_day_oauth_apps : null      root.seven_day_opus  : null
+root.seven_day_sonnet     : null      root.seven_day_cowork: null
+root.seven_day_omelette   : null      root.tangelo         : null
+root.iguana_necktie       : null      root.omelette_promotional : null
+root.cinder_cove          : null      root.amber_ladder    : null
+root.nimbus_quill         : { utilization: number, resets_at: null, …dollars: null }
+root.extra_usage          : { is_enabled: bool, used_credits: number, utilization: null,
+                              currency: string, decimal_places: number, disabled_reason: string,
+                              user_disabled: bool, spend_limit_reached: bool,
+                              credits_ever_enabled: bool, daily: null, weekly: null }
+root.limits               : array[2] of
+                            { kind: string, group: string, percent: number, severity: string,
+                              resets_at: date-string, scope: null, is_active: bool }
+root.spend                : { used: { amount_minor, currency, exponent }, limit: null,
+                              percent: number, severity: string, enabled: bool,
+                              disabled_reason: string, cap: null, balance: null,
+                              auto_reload: null, disclaimer: string,
+                              can_purchase_credits: bool, can_toggle: bool }
+root.member_dashboard_available : bool
+```
+
+No `Retry-After` header was present on the observed **200** response, which says nothing about what
+accompanies a 429. The 429 path must therefore stay defensive rather than assume a header shape.
+
+### A.2 The finding that changes slice F
+
+The two `limits[]` entries are a **byte-identical re-presentation of the two top-level windows**,
+not additional data:
+
+| `limits[]` entry | `kind` | `group` | `scope` | `is_active` | Equals top-level |
+|---|---|---|---|---|---|
+| `limits[0]` | `session` | `session` | `null` | `true` | `five_hour` — `percent` == `utilization` **and** `resets_at` identical |
+| `limits[1]` | `weekly_all` | `weekly` | `null` | `false` | `seven_day` — `percent` == `utilization` **and** `resets_at` identical |
+
+Consequences that the prose in §4.6 could not have known:
+
+1. **The first correct behaviour is suppression, not surfacing.** Adding `percent` to the shared
+   duck-typed key list would not reveal new windows — it would render every window twice. §4.6
+   predicted this trap; the capture confirms it is the actual, present-day outcome rather than a
+   theoretical one.
+2. **`scope` is null on the observed account**, so a model-scoped entry is unverified. Normalization
+   must be written so that a scoped entry *would* be surfaced correctly, while never inventing one.
+3. **`is_active: false` is not a hide signal.** `weekly_all` reports inactive while `seven_day` is
+   still published top-level and still carries a real utilization and reset. Suppressing a window
+   because a `limits[]` twin says `is_active: false` would blank a live quota.
+4. **The `group`/`kind` vocabulary does not match the top-level key names** (`session` vs
+   `five_hour`, `weekly` vs `seven_day`), so duplicate detection cannot be a name comparison. Reset
+   instant plus percentage is the only observed reliable correspondence.
+5. **`root.spend` carries `percent` with no reset key**, and `root.spend.used` is an object rather
+   than a number. Both are correctly ignored by the shared extractor today, and must stay ignored.
+6. **`root.nimbus_quill` already produces a window** — `utilization` present, `resets_at` present
+   but null — exercising the "preserve unrecognised provider tokens verbatim" rule against live
+   data. It is a partial window, not a defect.
