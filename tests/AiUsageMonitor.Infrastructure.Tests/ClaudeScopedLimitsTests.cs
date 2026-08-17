@@ -131,6 +131,93 @@ public sealed class ClaudeScopedLimitsTests
         Assert.Empty(ClaudeScopedLimits.Normalize(nonArray.RootElement, []));
     }
 
+    [Fact]
+    public void ACandidateMatchingATopLevelWindowIsSuppressed()
+    {
+        IReadOnlyList<QuotaWindow> windows = Normalize([ExtractedWindow("five_hour")]);
+
+        Assert.DoesNotContain(windows, window => window.Id == "session");
+    }
+
+    [Fact]
+    public void ADuplicateIsSuppressedDespiteADifferentName()
+    {
+        QuotaWindow fiveHour = ExtractedWindow("five_hour");
+
+        Assert.NotEqual("session", fiveHour.Id);
+        Assert.DoesNotContain(Normalize([fiveHour]), window => window.Id == "session");
+    }
+
+    [Fact]
+    public void AnInactiveDuplicateIsAlsoSuppressed()
+    {
+        IReadOnlyList<QuotaWindow> windows = Normalize([ExtractedWindow("seven_day")]);
+
+        Assert.DoesNotContain(windows, window => window.Id == "weekly_all");
+    }
+
+    [Fact]
+    public void AGenuinelyNewScopedCandidateSurvives()
+    {
+        IReadOnlyList<QuotaWindow> windows = Normalize([ExtractedWindow("seven_day")]);
+
+        Assert.Contains(windows, window => window.Id == "weekly_scoped_opus");
+    }
+
+    [Fact]
+    public void ACandidateWithAnUnknownResetIsNeverTreatedAsADuplicate()
+    {
+        IReadOnlyList<QuotaWindow> windows = Normalize(ExtractedWindows());
+
+        Assert.Contains(windows, window => window.Id == "monthly_scoped_haiku");
+    }
+
+    [Fact]
+    public void SuppressionNeverRemovesAnAlreadyFoundWindow()
+    {
+        IReadOnlyList<QuotaWindow> alreadyFound = ExtractedWindows();
+        QuotaWindow[] before = alreadyFound.ToArray();
+
+        _ = Normalize(alreadyFound);
+
+        Assert.Equal(before, alreadyFound);
+    }
+
+    [Fact]
+    public void SurvivorsAreNumberedContiguouslyAfterTheExistingWindows()
+    {
+        using JsonDocument document = JsonDocument.Parse(
+            """
+            {
+              "limits": [
+                { "kind": "duplicate", "percent": 1, "resets_at": "2026-08-17T20:50:00Z" },
+                { "kind": "new_one", "percent": 2, "resets_at": "2026-08-17T21:50:00Z" },
+                { "kind": "new_two", "percent": 3, "resets_at": null }
+              ]
+            }
+            """);
+        IReadOnlyList<QuotaWindow> alreadyFound =
+        [
+            Window("duplicate", 1.0, new DateTimeOffset(2026, 8, 17, 20, 50, 0, TimeSpan.Zero), 0),
+            Window("existing_one", 4.0, null, 1),
+            Window("existing_two", 5.0, null, 2),
+        ];
+
+        IReadOnlyList<QuotaWindow> windows = ClaudeScopedLimits.Normalize(document.RootElement, alreadyFound);
+
+        Assert.Equal([3, 4], windows.Select(window => window.Order));
+    }
+
+    [Fact]
+    public void TheOrderOfSurvivorsFollowsTheArrayOrder()
+    {
+        IReadOnlyList<QuotaWindow> first = Normalize(ExtractedWindows());
+        IReadOnlyList<QuotaWindow> second = Normalize(ExtractedWindows());
+
+        Assert.Equal(first.Select(window => window.Id), second.Select(window => window.Id));
+        Assert.Equal(["weekly_scoped_opus", "weekly_scoped_sonnet", "monthly_scoped_haiku"], first.Select(window => window.Id));
+    }
+
     private static IReadOnlyList<QuotaWindow> Normalize(IReadOnlyList<QuotaWindow>? alreadyFound = null)
     {
         using JsonDocument document = JsonDocument.Parse(File.ReadAllText(FixturePath));
@@ -138,17 +225,27 @@ public sealed class ClaudeScopedLimitsTests
     }
 
     private static IReadOnlyList<QuotaWindow> ExistingWindows(int count) => Enumerable.Range(0, count)
-        .Select(index => new QuotaWindow(
-            $"existing_{index}",
-            $"existing_{index}",
-            1.0,
-            null,
-            null,
-            index,
-            true,
-            new Dictionary<string, string>(),
-            true))
+        .Select(index => Window($"existing_{index}", 1.0, null, index))
         .ToList();
+
+    private static IReadOnlyList<QuotaWindow> ExtractedWindows()
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(FixturePath));
+        return DuckTypedQuotaExtractor.Extract(document.RootElement);
+    }
+
+    private static QuotaWindow ExtractedWindow(string id) => Assert.Single(ExtractedWindows(), window => window.Id == id);
+
+    private static QuotaWindow Window(string id, double usedPercent, DateTimeOffset? resetsAt, int order) => new(
+        id,
+        id,
+        usedPercent,
+        resetsAt,
+        null,
+        order,
+        true,
+        new Dictionary<string, string>(),
+        true);
 
     private static string FixturePath => Path.Combine(AppContext.BaseDirectory, "Fixtures", "claude-usage-limits-sample.json");
 }

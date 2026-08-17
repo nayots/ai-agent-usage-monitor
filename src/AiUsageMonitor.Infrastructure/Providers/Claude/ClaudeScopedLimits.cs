@@ -75,7 +75,17 @@ public static class ClaudeScopedLimits
                 LabelIsProviderToken: labelIsProviderToken));
         }
 
-        return candidates;
+        var survivors = new List<QuotaWindow>();
+        int survivorOrder = alreadyFound.Count;
+        foreach (QuotaWindow candidate in candidates)
+        {
+            if (!DuplicatesAnExistingWindow(candidate, alreadyFound))
+            {
+                survivors.Add(candidate with { Order = survivorOrder++ });
+            }
+        }
+
+        return survivors;
     }
 
     /// <summary>
@@ -114,5 +124,33 @@ public static class ClaudeScopedLimits
             out DateTimeOffset resetsAt)
             ? resetsAt
             : null;
+    }
+
+    /// <summary>
+    /// Whether this candidate is the same quota the shared extractor already found under a top-level
+    /// key. Matching is on reset instant plus percentage, NOT on name: the array uses a different
+    /// vocabulary from the top-level keys - "session" for "five_hour", "weekly" for "seven_day" - so a
+    /// name comparison would miss every real duplicate. A candidate with an unknown reset or unknown
+    /// usage can never be proven to be a duplicate and is therefore kept.
+    /// </summary>
+    private static bool DuplicatesAnExistingWindow(QuotaWindow candidate, IReadOnlyList<QuotaWindow> alreadyFound)
+    {
+        if (candidate.ResetsAt is not DateTimeOffset candidateReset || candidate.UsedPercent is not double candidatePercent)
+        {
+            return false;
+        }
+
+        foreach (QuotaWindow existing in alreadyFound)
+        {
+            if (existing.ResetsAt is DateTimeOffset existingReset
+                && existing.UsedPercent is double existingPercent
+                && existingReset.ToUnixTimeSeconds() == candidateReset.ToUnixTimeSeconds()
+                && Math.Abs(existingPercent - candidatePercent) < 0.0001)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
