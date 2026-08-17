@@ -145,7 +145,16 @@ public sealed class DiagnosticsViewModel : ObservableObject
             new("Next attempt", card?.IsHiddenByUser == true
                 ? "Not scheduled — hidden by the user"
                 : NextAttempt(activity.NextAttemptAt, now)),
+            new("Last attempt trigger", activity.LastTrigger?.ToString() ?? EmptyValue),
+            new("Last outcome", activity.LastOutcome ?? EmptyValue),
+            new("Last attempt duration", activity.LastDuration is TimeSpan duration
+                ? $"{duration.TotalMilliseconds:0} ms"
+                : EmptyValue),
             new("Consecutive failures", activity.ConsecutiveFailures.ToString(CultureInfo.InvariantCulture)),
+            new("Consecutive throttles", activity.ConsecutiveThrottles.ToString(CultureInfo.InvariantCulture)),
+            new("Next attempt reason", NextAttemptReason(activity.NextAttemptSource)),
+            new("Requests joined or suppressed", activity.SuppressedRequests.ToString(CultureInfo.InvariantCulture)),
+            new("Lifecycle refreshes coalesced", activity.CoalescedLifecycleRefreshes.ToString(CultureInfo.InvariantCulture)),
             new("In flight", YesNo(activity.IsInFlight)),
             new("Last error", snapshot?.Error ?? "None"),
             new("Quota windows", snapshot is null ? "None reported" : snapshot.Windows.Count == 0 ? "None reported" : snapshot.Windows.Count.ToString(CultureInfo.InvariantCulture))
@@ -253,6 +262,15 @@ public sealed class DiagnosticsViewModel : ObservableObject
     private static string NextAttempt(DateTimeOffset? nextAttempt, DateTimeOffset now) => nextAttempt is DateTimeOffset scheduled
         ? LocalInstant(scheduled) + " · in " + QuotaFormatting.FormatCountdown(scheduled - now)
         : "As soon as the next poll is due";
+
+    private static string NextAttemptReason(NextAttemptSource source) => source switch
+    {
+        NextAttemptSource.Interval => "Normal polling interval",
+        NextAttemptSource.FailureBackoff => "Backing off after repeated failures",
+        NextAttemptSource.ProviderThrottle => "The provider asked this app to wait",
+        NextAttemptSource.ApplicationThrottle => "Waiting after repeated throttling",
+        _ => "Normal polling interval"
+    };
 
     private static string? InstantAndAge(DateTimeOffset? instant, DateTimeOffset now) => instant is DateTimeOffset value
         ? LocalInstant(value) + " · " + RelativeTime.FormatAge(now - value)

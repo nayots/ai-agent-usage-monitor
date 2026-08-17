@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
 using Microsoft.Extensions.Logging;
@@ -31,7 +32,9 @@ public sealed record ProviderActivity(
     int SuppressedRequests = 0,
     int ConsecutiveThrottles = 0,
     NextAttemptSource NextAttemptSource = NextAttemptSource.Interval,
-    int CoalescedLifecycleRefreshes = 0);
+    int CoalescedLifecycleRefreshes = 0,
+    TimeSpan? LastDuration = null,
+    string? LastOutcome = null);
 
 /// <summary>One provider's answer, raised as soon as that provider answers rather than at the end of a cycle.</summary>
 public sealed record ProviderRefreshed(ProviderDescriptor Provider, ProviderSnapshot Snapshot);
@@ -192,7 +195,9 @@ public sealed class ProviderRefreshService
                 attempts?.SuppressedRequests ?? 0,
                 backoff?.ConsecutiveThrottles ?? 0,
                 backoff?.NextAttemptSource ?? NextAttemptSource.Interval,
-                _coalescedLifecycleRefreshes);
+                _coalescedLifecycleRefreshes,
+                attempts?.LastDuration,
+                attempts?.LastOutcome);
         }
     }
 
@@ -365,6 +370,7 @@ public sealed class ProviderRefreshService
         CancellationToken ct)
     {
         ProviderSnapshot snapshot;
+        long durationStart = Stopwatch.GetTimestamp();
 
         try
         {
@@ -424,7 +430,7 @@ public sealed class ProviderRefreshService
                 snapshot = Failed(provider, $"The provider probe failed unexpectedly ({ex.GetType().Name}).");
             }
 
-            if (TryPublish(provider, sequence, snapshot, now))
+            if (TryPublish(provider, sequence, snapshot, now, Stopwatch.GetElapsedTime(durationStart)))
             {
                 RaiseRefreshed(provider, snapshot);
             }
@@ -517,8 +523,22 @@ public sealed class ProviderRefreshService
         return attempts;
     }
 
-    private bool TryPublish(ProviderDescriptor provider, long sequence, ProviderSnapshot snapshot, DateTimeOffset now)
+    private bool TryPublish(
+        ProviderDescriptor provider,
+        long sequence,
+        ProviderSnapshot snapshot,
+        DateTimeOffset now,
+        TimeSpan attemptDuration)
     {
+        RefreshTrigger? trigger;
+        string outcome;
+        TimeSpan? duration;
+        int failures;
+        int throttles;
+        DateTimeOffset nextAttempt;
+        NextAttemptSource nextAttemptSource;
+        int suppressed;
+
         lock (_gate)
         {
             AttemptState attempts = GetAttempts(provider);
@@ -540,9 +560,54 @@ public sealed class ProviderRefreshService
             }
 
             Record(provider, snapshot, now);
-            return true;
+            attempts.LastDuration = attempts.LastAttemptStartedAt is not null ? attemptDuration : null;
+            attempts.LastOutcome = OutcomeOf(snapshot);
+
+            Backoff state = _backoff[provider];
+            trigger = attempts.LastTrigger;
+            outcome = attempts.LastOutcome;
+            duration = attempts.LastDuration;
+            failures = state.ConsecutiveFailures;
+            throttles = state.ConsecutiveThrottles;
+            nextAttempt = state.NextAttempt;
+            nextAttemptSource = state.NextAttemptSource;
+            suppressed = attempts.SuppressedRequests;
         }
+
+        _logger.LogInformation(
+            "Provider {Provider} attempt ({Trigger}) ended {Outcome} in {DurationMs}ms; " +
+            "failures={Failures} throttles={Throttles} next={NextAttempt} because={NextAttemptSource} suppressed={Suppressed}",
+            provider.DisplayName,
+            trigger,
+            outcome,
+            duration?.TotalMilliseconds ?? 0,
+            failures,
+            throttles,
+            nextAttempt,
+            nextAttemptSource,
+            suppressed);
+
+        return true;
     }
+
+    /// <summary>
+    /// A safe, closed vocabulary for how an attempt ended. It is application-authored so no
+    /// provider-controlled text reaches diagnostics or the rolling log.
+    /// </summary>
+    private static string OutcomeOf(ProviderSnapshot snapshot) => snapshot.Throttle is not null
+        ? "Throttled"
+        : snapshot.State switch
+        {
+            ConnectionState.Connected => "Success",
+            ConnectionState.Stale => "Success",
+            ConnectionState.Unavailable => "Unavailable",
+            ConnectionState.NotInstalled => "NotInstalled",
+            ConnectionState.Unsupported => "Unsupported",
+            ConnectionState.Discovering => "Discovering",
+            ConnectionState.Waiting => "Waiting",
+            ConnectionState.Error => "Error",
+            _ => "Error"
+        };
 
     private void ClearInFlight(ProviderDescriptor provider, long sequence)
     {
@@ -641,5 +706,9 @@ public sealed class ProviderRefreshService
         public int SuppressedRequests { get; set; }
 
         public RefreshTrigger? LastTrigger { get; set; }
+
+        public TimeSpan? LastDuration { get; set; }
+
+        public string? LastOutcome { get; set; }
     }
 }

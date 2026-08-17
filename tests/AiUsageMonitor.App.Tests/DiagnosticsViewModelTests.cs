@@ -117,13 +117,33 @@ public class DiagnosticsViewModelTests
         Assert.Equal("Not scheduled — hidden by the user", Value(section, "Next attempt"));
     }
 
+    [Fact]
+    public async Task DiagnosticsShowsTheTriggerOutcomeAndNextAttemptReason()
+    {
+        TestProbe probe = new("Provider", MechanismTier.Official);
+        ProviderDescriptor provider = new("provider", "Provider", "P", probe);
+        ProviderRefreshService refresh = new([provider], TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1));
+        await refresh.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+
+        DiagnosticSection section = ViewModel([], [provider], refresh: refresh).Sections[0];
+
+        Assert.Equal("ManualCard", Value(section, "Last attempt trigger"));
+        Assert.Equal("Success", Value(section, "Last outcome"));
+        Assert.EndsWith(" ms", Value(section, "Last attempt duration"));
+        Assert.Equal("0", Value(section, "Consecutive throttles"));
+        Assert.Equal("Normal polling interval", Value(section, "Next attempt reason"));
+        Assert.Equal("0", Value(section, "Requests joined or suppressed"));
+        Assert.Equal("0", Value(section, "Lifecycle refreshes coalesced"));
+    }
+
     private static DiagnosticsViewModel ViewModel(
         IReadOnlyList<ProviderCardViewModel> cards,
         IReadOnlyList<ProviderDescriptor> providers,
+        ProviderRefreshService? refresh = null,
         Action<string>? copy = null) => new(
             cards,
             providers,
-            new ProviderRefreshService(providers, TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1)),
+            refresh ?? new ProviderRefreshService(providers, TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(1)),
             new EnvironmentReport("1.0", ".NET", "Windows", "C:\\logs", true, false),
             new StartupReport(Now, null),
             "System",
@@ -163,6 +183,18 @@ public class DiagnosticsViewModelTests
         public string Mechanism => "Test mechanism";
         public MechanismTier Tier => tier;
         public bool MakesFirstPartyNetworkCall => makesFirstPartyNetworkCall;
-        public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => Task.FromResult(new ProviderSnapshot(
+            name,
+            true,
+            "1.0",
+            "C:\\provider.exe",
+            ConnectionState.Connected,
+            Mechanism,
+            Tier,
+            "pull (poll)",
+            [],
+            Now,
+            null,
+            []));
     }
 }

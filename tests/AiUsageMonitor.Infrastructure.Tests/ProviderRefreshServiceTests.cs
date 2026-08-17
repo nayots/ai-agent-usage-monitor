@@ -1,6 +1,7 @@
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
+using Microsoft.Extensions.Logging;
 
 namespace AiUsageMonitor.Infrastructure.Tests;
 
@@ -26,7 +27,12 @@ public class ProviderRefreshServiceTests
         }
     }
 
-    private static ProviderSnapshot Snapshot(string name, ConnectionState state, ThrottleAdvice? throttle = null) => new(
+    private static ProviderSnapshot Snapshot(
+        string name,
+        ConnectionState state,
+        ThrottleAdvice? throttle = null,
+        string? error = null,
+        IReadOnlyList<string>? notes = null) => new(
         ProviderName: name,
         Installed: true,
         Version: null,
@@ -37,8 +43,8 @@ public class ProviderRefreshServiceTests
         UpdateModel: "pull (poll)",
         Windows: [],
         RetrievedAt: state == ConnectionState.Connected ? Now : null,
-        Error: null,
-        Notes: [],
+        Error: error,
+        Notes: notes ?? [],
         Throttle: throttle);
 
     private static ProviderDescriptor Descriptor(
@@ -53,6 +59,24 @@ public class ProviderRefreshServiceTests
 
     private static ProviderRefreshService ServiceWithInterval(TimeSpan baseInterval, params ProviderDescriptor[] providers) =>
         new(providers, TimeSpan.FromMilliseconds(250), baseInterval);
+
+    private sealed class CapturingLogger : ILogger<ProviderRefreshService>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NoopDisposable.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Add(formatter(state, exception));
+
+        private sealed class NoopDisposable : IDisposable
+        {
+            public static readonly NoopDisposable Instance = new();
+            public void Dispose() { }
+        }
+    }
 
     [Fact]
     public void ActivityForAnUnprobedProviderIsEmpty()
@@ -623,6 +647,62 @@ public class ProviderRefreshServiceTests
 
         Assert.Equal(1, calls);
         Assert.Equal(Now + TimeSpan.FromMinutes(5), service.ThrottledUntil(provider, Now.AddMinutes(1)));
+    }
+
+    [Fact]
+    public async Task AnAttemptRecordsItsOutcomeCategoryAndDuration()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal("Success", activity.LastOutcome);
+        Assert.NotNull(activity.LastDuration);
+    }
+
+    [Fact]
+    public async Task AnAttemptDurationMeasuresTheProbeWork()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", async ct =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(30), ct);
+            return Snapshot("Alpha", ConnectionState.Connected);
+        });
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+
+        Assert.True(service.ActivityFor(provider, Now).LastDuration >= TimeSpan.FromMilliseconds(10));
+    }
+
+    [Fact]
+    public async Task AThrottledAttemptRecordsTheThrottledOutcome()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Error, new ThrottleAdvice(Now.AddMinutes(2)))));
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+
+        Assert.Equal("Throttled", service.ActivityFor(provider, Now).LastOutcome);
+    }
+
+    [Fact]
+    public async Task TheAttemptLogLineNeverCarriesProviderText()
+    {
+        const string error = "SECRET-abc";
+        const string note = "SECRET-note";
+        CapturingLogger logger = new();
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Error, error: error, notes: [note])));
+        ProviderRefreshService service = new([provider], TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(60), logger);
+
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+
+        Assert.DoesNotContain(logger.Messages, message => message.Contains(error, StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Messages, message => message.Contains(note, StringComparison.Ordinal));
     }
 
     [Fact]
