@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # First, before any build work. A mistyped tag then fails in seconds rather than
       # after a multi-minute self-contained publish. CI verifies the tag against the
@@ -39,7 +39,7 @@ jobs:
           Write-Host "Tag and declared version agree: $expected"
 
       - name: Set up the .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
