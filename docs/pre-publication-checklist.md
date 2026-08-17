@@ -9,8 +9,8 @@ This checklist records the review required before the repository is made public.
 | `LICENSE` present (Task 2) | The MIT licence committed by Task 2 is present. | `Test-Path -LiteralPath 'LICENSE'` | Present. | Yes |
 | `README.md` present and accurate (Task 3) | The README landed after this checklist was first compiled. Every factual claim in it was checked against the code that makes it true: the endpoint, header and redirect policy in `ClaudeOAuthUsageProbe.cs`; the mechanism and tier in `CodexProbe.cs`; what "redacted" covers in `DiagnosticRedaction.cs`; `MinimumRefreshSeconds` in `AppSettings.cs`; the `HKCU` entry in `StartupRegistration.cs`; and the two storage paths in `AppSettingsStore.cs` and `RollingFileLoggerProvider.cs`. | `Test-Path -LiteralPath 'README.md'` | Present and verified. | Yes |
 | No hardcoded user path in source or docs | The public documents were checked for an author-specific Windows home path, after the README landed. | `grep -n "C:\\\\Users\\\\\|sgrig" README.md docs/pre-publication-checklist.md LICENSE` | No matches. | Yes - the standing user-agnostic constraint |
-| Repository description and topics set | Repository metadata has not been changed by this implementation task. | Owner review in the GitHub repository settings. | Set an accurate description and relevant topics before or after publication as the owner prefers. | No |
-| Issue template asking for the redacted diagnostics bundle | Issue-template coverage has not been added by this implementation task. | Owner review of `.github/ISSUE_TEMPLATE/`. | Add an issue template that asks for the redacted diagnostics bundle if issue intake is enabled. | No |
+| Repository description and topics set | Both are set. The description states what the application is; 14 topics cover the platform and stack (`windows`, `wpf`, `dotnet`, `csharp`, `desktop-widget`, `system-tray`, `developer-tools`), the providers it reads (`claude-code`, `codex`, `anthropic`, `openai`) and the subject (`quota`, `rate-limits`, `usage-monitor`). | `gh api repos/nayots/ai-agent-usage-monitor/topics` | Done 2026-08-17. | No |
+| Issue template asking for the redacted diagnostics bundle | `.github/ISSUE_TEMPLATE/bug_report.yml` asks for the **Settings → Diagnostics → Copy** report, states that it is redacted and that no credential is read into that screen, and offers an explicit escape for a build that will not start. Two required checkboxes gate submission: one confirms the report is attached or explains its absence, the other confirms the post carries no token, credential or `Authorization` header. The form also routes security reports to email rather than a public issue. `feature_request.yml` states the permanent scope limits and asks a new-provider request to name its mechanism and tier. | GitHub parsed both forms - confirmed via `gh repo view --json issueTemplates`. | Done 2026-08-17. | No |
 
 Compiled on 2026-08-17 against the commit this checklist is committed with; re-run it if publication happens materially later.
 
@@ -21,6 +21,6 @@ explicit decision on the one row that was a judgement call rather than a defect:
 captured quota percentages and session cost in `fixtures/claude-statusline-sample.json`
 are published deliberately. Check A found no secret in any commit.
 
-The two rows marked "No" — repository topics, and an issue template asking for the
-redacted diagnostics bundle — remain open. Neither blocked publication and both are still
-worth doing.
+The two rows marked "No" — repository topics, and an issue template asking for the redacted
+diagnostics bundle — were closed on 2026-08-17, after publication. Every row in this
+checklist is now settled, so it is a historical record rather than an open list.

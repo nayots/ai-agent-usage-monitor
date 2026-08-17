@@ -1,0 +1,42 @@
+name: Feature request
+description: Something Quota Monitor should do, or should do differently
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A few things are permanently out of scope, so that asking for them is not a wasted
+        trip. Quota Monitor will not scrape a website, drive a browser, read browser cookies
+        or profiles, send telemetry or analytics anywhere, modify a provider's own
+        configuration without asking first, require administrator rights, or display an
+        estimated, remembered or extrapolated number as though a provider had reported it.
+        Where a provider does not publish a fact, the application says so rather than
+        guessing.
+
+        Everything else is open, including support for a provider that is not yet covered.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to find out, or do?
+      description: >-
+        Describe the situation rather than the solution. "I cannot tell which window is about
+        to reset" leads somewhere better than "add a countdown column".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+      description: Optional. Skip it if you would rather leave the design open.
+
+  - type: textarea
+    id: mechanism
+    attributes:
+      label: For a new provider — where would the number come from?
+      description: >-
+        This is the part that decides whether a provider is feasible. Name the command, local
+        file or documented endpoint that reports the quota, and say whether it is officially
+        supported by that provider or not. A provider with no such mechanism cannot be added,
+        because the application never infers a value it was not given.

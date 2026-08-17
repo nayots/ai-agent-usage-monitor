@@ -1,0 +1,86 @@
+name: Bug report
+description: Something Quota Monitor does wrong, shows wrong, or stops doing
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Two things before you start.
+
+        **Never paste a credential.** Not a token, not an `Authorization` header, not the
+        contents of `.credentials.json`, not a raw provider response that might contain one.
+        Quota Monitor never puts a credential into its own diagnostics, so the report asked
+        for below is safe to share — but anything you paste from elsewhere is on you, and an
+        issue here is public and permanently indexed.
+
+        **If this is a security problem** — a way to make the application leak a token, for
+        instance — do not open a public issue. Email the address on the repository owner's
+        GitHub profile instead.
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Which provider is affected?
+      options:
+        - Claude Code
+        - Codex
+        - Both
+        - Neither — the application itself
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: >-
+        Settings → Diagnostics → Application version, or the version in the file name you
+        downloaded. If the application will not start, write what you downloaded.
+      placeholder: 0.1.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect instead?
+      description: >-
+        If a provider card shows an error, quote it exactly — the text is chosen to say which
+        of several different failures occurred.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        Leave blank if it just happens. If it only occurs after a lock, a resume, a manual
+        refresh, or a long idle period, that detail is usually the whole answer.
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: >-
+        **Settings → Diagnostics → Copy**, then paste here. It records what each provider
+        reported, when, how long it took, what is scheduled next and why — which is normally
+        enough to identify the fault without any further questions. Your user folder and user
+        name are replaced with `%USERPROFILE%` and `%USERNAME%` before it is copied, and no
+        credential is read into that screen at all. If the application will not start far
+        enough to produce one, say so here instead.
+      render: text
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: >-
+            I have included the diagnostics report above, or explained why I cannot produce
+            one.
+          required: true
+        - label: >-
+            I have read what I am about to post and it contains no token, credential or
+            `Authorization` header.
+          required: true
