@@ -73,6 +73,19 @@ Two traps it must keep guarding:
 
 Missing data is `null` and surfaces as `Waiting`/`Unavailable` — **never** as `0`. A window duration is inferred only when it can be derived honestly; otherwise the elapsed-time marker (PRD §16) is omitted.
 
+### Request cadence and throttling (added 2026-08-17)
+
+Implemented from `docs/specs/2026-08-14-provider-request-cadence-and-rate-limits.md`. The rules that are expensive to rediscover:
+
+- **"Throttle" and "rate limit" are different things here.** A *rate limit* is a quota window — the thing the widget displays, and literally what Codex's `account/rateLimits/read` returns. A *throttle* is the provider refusing a request because we asked too often. Never use one word for the other; `Domain/ThrottleAdvice.cs` exists under that name for exactly this reason.
+- **60 seconds is the effective polling floor**, global and per-provider (`AppSettings.MinimumRefreshSeconds`). A hand-edited sub-floor value resolves to 60 and is **never rewritten to disk** — same read-time-sanitize pattern as `EffectiveAlertThresholds`.
+- **A 429 is not a new `ConnectionState`.** It is `Error` plus a `ThrottleAdvice` on the snapshot. A provider-named `Retry-After` instant is honoured exactly (bounded at 1 h against a malformed header); with no usable header the *scheduler* applies 2 → 4 → 8 minutes. There is deliberately **no 15-minute starting fallback**.
+- **A throttle cooldown is the one gate a forced refresh may not bypass.** An ordinary failure backoff still yields to a manual retry — that is how a provider gets recovered by hand.
+- **One in-flight request per provider**, shared rather than skipped, so a manual refresh cannot flick the spinner off while a probe is still running. Claude and Codex stay concurrent with each other; no lock is held across a provider await.
+- **Only `SessionLock`/`SessionUnlock` pause polling.** Never infer a lock from input idleness, a timer, or widget visibility. The manual triggers (`ManualGlobal`, `ManualCard`) are exempt from the pause — which is why a refresh's `RefreshTrigger` must match what actually caused it, not be hardcoded.
+
+Claude's usage response also carries a `limits[]` array that, on the observed account, **restates the top-level windows exactly** rather than adding new ones. `Providers/Claude/ClaudeScopedLimits.cs` normalizes it and suppresses duplicates by *reset instant + percentage* — never by name, because the array says `session`/`weekly` where the top level says `five_hour`/`seven_day`. Do not "fix" this by adding `percent` to `DuckTypedQuotaExtractor.PercentKeys`: that renders every window twice. Evidence is in Appendix A of the spec.
+
 ## Hard constraints
 
 Per PRD §4.1.1 and §23 — these are product requirements, not style preferences:
