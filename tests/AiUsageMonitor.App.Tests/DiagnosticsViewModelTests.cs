@@ -136,6 +136,23 @@ public class DiagnosticsViewModelTests
         Assert.Equal("0", Value(section, "Lifecycle refreshes coalesced"));
     }
 
+    [Fact]
+    public async Task DiagnosticsNamesAResetAlignedWaitRatherThanCallingItNormalPolling()
+    {
+        // Without its own switch arm this falls to the default and reports "Normal polling
+        // interval" - confidently wrong, on the screen whose whole job is explaining a card
+        // that has not moved.
+        QuotaWindow window = new("w", "w", 50, Now.AddMinutes(10), null, 0, false, new Dictionary<string, string>(), false);
+        TestProbe probe = new("Provider", MechanismTier.Official, windows: [window]);
+        ProviderDescriptor provider = new("provider", "Provider", "P", probe);
+        ProviderRefreshService refresh = new([provider], TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(30));
+        await refresh.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+
+        DiagnosticSection section = ViewModel([], [provider], refresh: refresh).Sections[0];
+
+        Assert.Equal("Waiting for the provider's next quota reset", Value(section, "Next attempt reason"));
+    }
+
     private static DiagnosticsViewModel ViewModel(
         IReadOnlyList<ProviderCardViewModel> cards,
         IReadOnlyList<ProviderDescriptor> providers,
@@ -177,7 +194,11 @@ public class DiagnosticsViewModelTests
             error,
             notes ?? []);
 
-    private sealed class TestProbe(string name, MechanismTier tier, bool makesFirstPartyNetworkCall = false) : IProviderProbe
+    private sealed class TestProbe(
+        string name,
+        MechanismTier tier,
+        bool makesFirstPartyNetworkCall = false,
+        IReadOnlyList<QuotaWindow>? windows = null) : IProviderProbe
     {
         public string Name => name;
         public string Mechanism => "Test mechanism";
@@ -192,7 +213,7 @@ public class DiagnosticsViewModelTests
             Mechanism,
             Tier,
             "pull (poll)",
-            [],
+            windows ?? [],
             Now,
             null,
             []));

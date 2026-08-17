@@ -399,7 +399,7 @@ git commit -m "feat: name a reset-aligned wait in diagnostics"
 | Not doing | Why |
 |---|---|
 | A user setting for the buffer or for alignment at all | Nothing to tune: alignment never increases request volume, so there is no cost to opt out of. A setting would be a knob whose only effect is making the widget staler. |
-| Aligning on a `Stale` snapshot | `Stale` means the value is old; its reset instant is old too. Only a fresh success justifies alignment. |
+| Excluding a `Stale` snapshot | Checked during implementation and found moot: `Stale` is produced by `Domain/Freshness.cs` ageing an already-Connected card in the UI layer, never returned by a probe, so `Record` never sees one. A guard against it would be dead code. |
 | Persisting the schedule across restarts | The first refresh after launch re-derives it from a live response within seconds. Persisting it would add a stale-schedule failure mode for no gain. |
 | Waking the machine, or a timer that fires at the reset instant | The existing 5-second poll tick already gives ±5 s. A dedicated timer would be a second scheduling mechanism to keep correct. |
 | Aligning across providers | Reset instants are per-provider facts. Coordinating them would couple two providers this service exists to keep independent. |

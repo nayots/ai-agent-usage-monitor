@@ -269,6 +269,7 @@ public sealed class DiagnosticsViewModel : ObservableObject
         NextAttemptSource.FailureBackoff => "Backing off after repeated failures",
         NextAttemptSource.ProviderThrottle => "The provider asked this app to wait",
         NextAttemptSource.ApplicationThrottle => "Waiting after repeated throttling",
+        NextAttemptSource.ResetAlignment => "Waiting for the provider's next quota reset",
         _ => "Normal polling interval"
     };
 

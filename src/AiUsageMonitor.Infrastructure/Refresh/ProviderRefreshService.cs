@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
+using AiUsageMonitor.Infrastructure.Settings;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -13,7 +14,8 @@ public enum NextAttemptSource
     Interval,
     FailureBackoff,
     ProviderThrottle,
-    ApplicationThrottle
+    ApplicationThrottle,
+    ResetAlignment
 }
 
 /// <summary>
@@ -225,6 +227,21 @@ public sealed class ProviderRefreshService
     /// </summary>
     public static TimeSpan ThrottleBackoffFor(int consecutiveThrottles) =>
         ThrottleLadder[Math.Clamp(consecutiveThrottles, 1, ThrottleLadder.Length) - 1];
+
+    /// <summary>
+    /// How long after a provider's own reset instant an aligned read is taken. A read at the exact
+    /// instant can still see the outgoing window if the provider's counter updates lazily, so the
+    /// alignment deliberately lands just after it (spec §5.1).
+    /// </summary>
+    public static readonly TimeSpan ResetAlignmentBuffer = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// The floor between two successful reads of one provider. Reset alignment may bring a read
+    /// forward but never below this: the point is to align one read that was going to happen
+    /// anyway, not to open a second, faster polling loop.
+    /// </summary>
+    private static readonly TimeSpan MinimumHealthyGap =
+        TimeSpan.FromSeconds(AppSettings.MinimumRefreshSeconds);
 
     /// <summary>
     /// Probes every provider concurrently. Never throws: a provider that fails produces an Error
@@ -656,6 +673,67 @@ public sealed class ProviderRefreshService
         state.ConsecutiveFailures = failed ? state.ConsecutiveFailures + 1 : 0;
         state.NextAttemptSource = failed ? NextAttemptSource.FailureBackoff : NextAttemptSource.Interval;
         state.NextAttempt = now + (failed ? BackoffFor(state.ConsecutiveFailures, interval) : interval);
+
+        // Only ever brings a read forward, never pushes one back: a provider that failed still
+        // backs off, and an interval shorter than the wait to the reset still wins.
+        if (!failed
+            && ResetAlignedAttempt(snapshot, now) is DateTimeOffset aligned
+            && aligned < state.NextAttempt)
+        {
+            state.NextAttempt = aligned;
+            state.NextAttemptSource = NextAttemptSource.ResetAlignment;
+        }
+    }
+
+    /// <summary>
+    /// When this snapshot's own reset instants justify reading earlier than the interval would, or
+    /// null when they do not. Derived fresh from each successful snapshot and never stored, so a
+    /// provider that revises a reset instant simply produces a different answer next time - there
+    /// is no cached schedule that could go stale or need invalidating (spec §5.1).
+    /// </summary>
+    private static DateTimeOffset? ResetAlignedAttempt(ProviderSnapshot snapshot, DateTimeOffset now)
+    {
+        DateTimeOffset? earliest = null;
+
+        foreach (QuotaWindow window in snapshot.Windows)
+        {
+            // Strictly future only. A reset at or before now is either already observed or a clock
+            // artefact; aligning to it would schedule a read that finds the same instant still
+            // reported and schedule again - exactly the high-frequency loop §5.1 forbids. This is
+            // also what makes a forward clock jump harmless rather than a burst.
+            if (window.ResetsAt is not DateTimeOffset resets || resets <= now)
+            {
+                continue;
+            }
+
+            if (earliest is null || resets < earliest)
+            {
+                earliest = resets;
+            }
+        }
+
+        if (earliest is null)
+        {
+            return null;
+        }
+
+        // Resets closer together than the floor cannot each get their own read, so they are one
+        // event. Anchoring to the last of them means a single read observes them all, instead of
+        // one read per window a floor apart.
+        DateTimeOffset anchor = earliest.Value;
+        foreach (QuotaWindow window in snapshot.Windows)
+        {
+            if (window.ResetsAt is DateTimeOffset resets
+                && resets > anchor
+                && resets - earliest.Value <= MinimumHealthyGap)
+            {
+                anchor = resets;
+            }
+        }
+
+        DateTimeOffset aligned = anchor + ResetAlignmentBuffer;
+        DateTimeOffset floor = now + MinimumHealthyGap;
+        return aligned < floor ? floor : aligned;
     }
 
     private TimeSpan IntervalForUnsafe(ProviderDescriptor provider)

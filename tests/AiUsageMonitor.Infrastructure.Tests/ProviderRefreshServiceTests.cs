@@ -32,7 +32,8 @@ public class ProviderRefreshServiceTests
         ConnectionState state,
         ThrottleAdvice? throttle = null,
         string? error = null,
-        IReadOnlyList<string>? notes = null) => new(
+        IReadOnlyList<string>? notes = null,
+        IReadOnlyList<QuotaWindow>? windows = null) => new(
         ProviderName: name,
         Installed: true,
         Version: null,
@@ -41,11 +42,14 @@ public class ProviderRefreshServiceTests
         Mechanism: "fake",
         Tier: MechanismTier.Official,
         UpdateModel: "pull (poll)",
-        Windows: [],
+        Windows: windows ?? [],
         RetrievedAt: state == ConnectionState.Connected ? Now : null,
         Error: error,
         Notes: notes ?? [],
         Throttle: throttle);
+
+    private static QuotaWindow Window(DateTimeOffset? resetsAt, string id = "w") =>
+        new(id, id, 50, resetsAt, null, 0, false, new Dictionary<string, string>(), false);
 
     private static ProviderDescriptor Descriptor(
         string name,
@@ -839,5 +843,115 @@ public class ProviderRefreshServiceTests
 
         Assert.Equal(1, calls);
         Assert.Equal(next, service.NextAttemptFor(provider, Now.AddMinutes(1)));
+    }
+
+    [Fact]
+    public async Task Aligns_the_next_attempt_to_just_after_a_future_reset()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Connected, windows: [Window(Now.AddMinutes(10))])));
+        ProviderRefreshService service = ServiceWithInterval(TimeSpan.FromMinutes(30), provider);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal(Now.AddMinutes(10) + ProviderRefreshService.ResetAlignmentBuffer, activity.NextAttemptAt);
+        Assert.Equal(NextAttemptSource.ResetAlignment, activity.NextAttemptSource);
+    }
+
+    [Fact]
+    public async Task Does_not_delay_a_read_the_interval_would_have_taken_sooner()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Connected, windows: [Window(Now.AddHours(5))])));
+        ProviderRefreshService service = ServiceWithInterval(TimeSpan.FromMinutes(1), provider);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal(Now.AddMinutes(1), activity.NextAttemptAt);
+        Assert.Equal(NextAttemptSource.Interval, activity.NextAttemptSource);
+    }
+
+    [Fact]
+    public async Task Never_schedules_an_aligned_read_inside_the_sixty_second_floor()
+    {
+        // A reset 5 seconds away would otherwise produce a read 35 seconds after this one.
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Connected, windows: [Window(Now.AddSeconds(5))])));
+        ProviderRefreshService service = ServiceWithInterval(TimeSpan.FromMinutes(30), provider);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+
+        Assert.Equal(Now.AddSeconds(60), service.ActivityFor(provider, Now).NextAttemptAt);
+    }
+
+    [Fact]
+    public async Task Ignores_a_reset_that_has_already_passed()
+    {
+        // The loop guard. Aligning to a past instant would schedule a read that finds the same
+        // instant still reported, and schedule again, forever.
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Connected, windows: [Window(Now.AddMinutes(-1))])));
+        ProviderRefreshService service = ServiceWithInterval(TimeSpan.FromMinutes(30), provider);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal(Now.AddMinutes(30), activity.NextAttemptAt);
+        Assert.Equal(NextAttemptSource.Interval, activity.NextAttemptSource);
+    }
+
+    [Fact]
+    public async Task Collapses_resets_that_fall_within_one_minimum_gap_into_a_single_read()
+    {
+        // Two windows resetting 40 seconds apart are one event: aligning to the later of them
+        // means one read observes both, instead of two reads a floor apart.
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Connected, windows:
+            [
+                Window(Now.AddMinutes(10), "first"),
+                Window(Now.AddMinutes(10).AddSeconds(40), "second")
+            ])));
+        ProviderRefreshService service = ServiceWithInterval(TimeSpan.FromMinutes(30), provider);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+
+        Assert.Equal(
+            Now.AddMinutes(10).AddSeconds(40) + ProviderRefreshService.ResetAlignmentBuffer,
+            service.ActivityFor(provider, Now).NextAttemptAt);
+    }
+
+    [Fact]
+    public async Task Does_not_align_to_a_reset_reported_alongside_a_throttle()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot(
+                "Alpha",
+                ConnectionState.Error,
+                new ThrottleAdvice(Now.AddMinutes(20)),
+                windows: [Window(Now.AddMinutes(2))])));
+        ProviderRefreshService service = ServiceWithInterval(TimeSpan.FromMinutes(30), provider);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal(Now.AddMinutes(30), activity.NextAttemptAt);
+        Assert.Equal(NextAttemptSource.ProviderThrottle, activity.NextAttemptSource);
+        Assert.Equal(Now.AddMinutes(20), service.ThrottledUntil(provider, Now));
+    }
+
+    [Fact]
+    public async Task Does_not_align_when_the_attempt_failed()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Error, windows: [Window(Now.AddMinutes(2))])));
+        ProviderRefreshService service = ServiceWithInterval(TimeSpan.FromMinutes(30), provider);
+
+        await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal(NextAttemptSource.FailureBackoff, activity.NextAttemptSource);
+        Assert.Equal(Now.AddMinutes(30), activity.NextAttemptAt);
     }
 }
