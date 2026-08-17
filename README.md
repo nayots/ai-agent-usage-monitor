@@ -96,6 +96,8 @@ It does **not**:
 
 The Claude Code OAuth token is read from `%USERPROFILE%\.claude\.credentials.json` into memory, used once to build one `Authorization` header, and never logged, persisted, cached, displayed, copied, or placed in any diagnostic output.
 
+**If you think you have found a way to break any of that**, see [SECURITY.md](SECURITY.md) and report it privately — never as a public issue.
+
 ## Limitations
 
 - **Windows only.** WPF and Windows-specific APIs throughout; there is no macOS or Linux build.

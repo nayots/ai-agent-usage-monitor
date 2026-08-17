@@ -14,8 +14,10 @@ body:
         issue here is public and permanently indexed.
 
         **If this is a security problem** — a way to make the application leak a token, for
-        instance — do not open a public issue. Email the address on the repository owner's
-        GitHub profile instead.
+        instance — do not open a public issue.
+        [Report it privately](https://github.com/nayots/ai-agent-usage-monitor/security/advisories/new)
+        instead; [SECURITY.md](https://github.com/nayots/ai-agent-usage-monitor/blob/main/SECURITY.md)
+        says what is in scope and what to include.
 
   - type: dropdown
     id: provider
