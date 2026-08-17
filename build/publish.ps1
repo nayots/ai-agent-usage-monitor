@@ -59,7 +59,51 @@ if ($sizeMb -lt $minimumSizeMb) {
     throw $message
 }
 
+# --- Release asset staging -------------------------------------------------------------
+# The published file is named after the assembly (AiUsageMonitor.App.exe), but the product
+# is called Quota Monitor everywhere the user can see it. A download sitting in a Downloads
+# folder under the assembly name is not recognisably the thing they installed, so the
+# release asset carries the product name and its version instead.
+#
+# The version is read from the binary that was just built rather than from
+# Directory.Build.props, so the name always describes what actually shipped.
+$productVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe.FullName).ProductVersion
+if ([string]::IsNullOrWhiteSpace($productVersion)) {
+    throw "The published executable reports no product version: $($exe.FullName)"
+}
+
+# Strip the +<commit> build metadata the SDK appends. This mirrors exactly what the
+# diagnostics screen shows for "Application version"
+# (EnvironmentReport.CaptureApplicationVersion), so the number in a pasted bug report and
+# the number in the downloaded file name are the same number.
+$version = ($productVersion -split '\+', 2)[0].Trim()
+
+$artifactsDir = Join-Path $repoRoot 'artifacts'
+if (Test-Path $artifactsDir) {
+    Remove-Item -Path $artifactsDir -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $artifactsDir | Out-Null
+
+$assetName = "QuotaMonitor-v$version-win-x64.exe"
+$assetPath = Join-Path $artifactsDir $assetName
+Copy-Item -Path $exe.FullName -Destination $assetPath
+
+# sha256sum format: lower-case hash, two spaces, bare file name - so `sha256sum -c` and the
+# README's Get-FileHash instructions both verify it as-is.
+#
+# ASCII is deliberate. Set-Content -Encoding utf8 emits a BOM under Windows PowerShell 5.1,
+# and a BOM at the start of a checksum file makes the first line unparseable. A hash and a
+# file name are ASCII by construction, so nothing is lost.
+$hash = (Get-FileHash -Path $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+Set-Content -Path "$assetPath.sha256" -Value "$hash  $assetName" -Encoding ASCII
+
 Write-Host ""
 Write-Host "Single-file publish OK" -ForegroundColor Green
 Write-Host "  $($exe.FullName)"
 Write-Host "  $sizeMb MB"
+Write-Host ""
+Write-Host "Release assets staged" -ForegroundColor Green
+Write-Host "  $assetPath"
+Write-Host "  $assetPath.sha256"
+Write-Host "  sha256 $hash"
