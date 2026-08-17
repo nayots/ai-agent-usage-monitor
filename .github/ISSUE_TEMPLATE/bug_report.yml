@@ -36,7 +36,7 @@ body:
       description: >-
         Settings → Diagnostics → Application version, or the version in the file name you
         downloaded. If the application will not start, write what you downloaded.
-      placeholder: 0.1.1
+      placeholder: 0.1.2
     validations:
       required: true
 
