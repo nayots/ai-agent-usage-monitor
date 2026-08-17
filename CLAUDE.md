@@ -17,6 +17,22 @@ dotnet run --project src/AiUsageMonitor.Poc    # runs all provider probes, print
 powershell -File build/publish.ps1             # single self-contained .exe (~65 MB)
 ```
 
+Cutting a release (the tag is the trigger — everything else is automatic):
+
+```powershell
+# 1. Bump <VersionPrefix> in Directory.Build.props and commit it.
+# 2. Tag that commit and push the tag:
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` verifies the tag against `<VersionPrefix>` **before** it
+builds, runs the tests, publishes the self-contained `.exe`, and attaches it with its
+`SHA256` to a GitHub release. A tag that disagrees with the declared version fails in
+seconds. The artifact is always the self-contained build — never the framework-dependent
+one, which needs the .NET 10 Desktop Runtime preinstalled and so fails on exactly the
+machines this application must work on.
+
 Domain tests live in `tests/AiUsageMonitor.Domain.Tests`. For a single test, prefer `dotnet test --filter FullyQualifiedName~<Name>`.
 
 Regenerating the Codex protocol schema (the source of truth for its wire format):

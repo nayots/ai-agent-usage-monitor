@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish the release artifact
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # First, before any build work. A mistyped tag then fails in seconds rather than
+      # after a multi-minute self-contained publish. CI verifies the tag against the
+      # declared version; it never injects a version of its own, so the number shown in
+      # Settings > Diagnostics always matches the release the user downloaded.
+      - name: Verify the tag matches the declared version
+        shell: pwsh
+        run: |
+          $props = [xml](Get-Content -Raw -Encoding UTF8 'Directory.Build.props')
+          $node = $props.SelectSingleNode('//VersionPrefix')
+          if ($null -eq $node) {
+              throw 'Directory.Build.props declares no <VersionPrefix>.'
+          }
+
+          $version = $node.InnerText.Trim()
+          $expected = "v$version"
+          if ($env:GITHUB_REF_NAME -ne $expected) {
+              throw "Tag '$($env:GITHUB_REF_NAME)' does not match the declared version. Expected '$expected'. Either update <VersionPrefix> and retag, or delete the tag."
+          }
+
+          Write-Host "Tag and declared version agree: $expected"
+
+      - name: Set up the .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Deliberately repeated here rather than trusting that CI already ran on this
+      # commit. A tag can be pushed to a commit CI never saw.
+      - name: Test
+        run: dotnet test --configuration Release
+
+      - name: Publish the single-file artifact
+        shell: pwsh
+        run: ./build/publish.ps1 -Configuration Release
+
+      - name: Create the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = @(Get-ChildItem -Path 'artifacts' -File)
+          if ($assets.Count -ne 2) {
+              throw "Expected the .exe and its .sha256 in artifacts/, found $($assets.Count)."
+          }
+
+          gh release create $env:GITHUB_REF_NAME @($assets.ForEach({ $_.FullName })) `
+            --title $env:GITHUB_REF_NAME `
+            --generate-notes `
+            --verify-tag
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "gh release create failed with exit code $LASTEXITCODE"
+          }
