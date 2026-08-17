@@ -163,7 +163,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         foreach ((ProviderDescriptor provider, ProviderCardViewModel card) in _cards)
         {
-            card.SetNextAttempt(_refresh.NextAttemptFor(provider, now));
+            card.SetActivity(_refresh.ActivityFor(provider, now), _refresh.ThrottledUntil(provider, now));
             card.Tick(now);
         }
     }

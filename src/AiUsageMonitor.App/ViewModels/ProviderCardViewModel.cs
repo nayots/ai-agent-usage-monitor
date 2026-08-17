@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
+using AiUsageMonitor.Infrastructure.Refresh;
 
 namespace AiUsageMonitor.App.ViewModels;
 
@@ -25,6 +26,8 @@ public sealed class ProviderCardViewModel : ObservableObject
     private string? _versionText;
     private string? _timestampText;
     private DateTimeOffset? _nextAttempt;
+    private bool _isInFlight;
+    private DateTimeOffset? _throttledUntil;
     private string? _nextCheckText;
     private ProviderNotice? _notice;
 
@@ -32,7 +35,7 @@ public sealed class ProviderCardViewModel : ObservableObject
     {
         _descriptor = descriptor;
         _colorBarsByUsage = colorBarsByUsage;
-        RetryCommand = new RelayCommand(() => retry(descriptor));
+        RetryCommand = new RelayCommand(() => retry(descriptor), () => CanRetry);
     }
 
     public string DisplayName => _descriptor.DisplayName;
@@ -40,6 +43,12 @@ public sealed class ProviderCardViewModel : ObservableObject
     public string Monogram => _descriptor.Monogram;
 
     public RelayCommand RetryCommand { get; }
+
+    /// <summary>
+    /// Retry is offered for an ordinary failure and withheld while a request is already running or
+    /// the provider is in a cooldown.
+    /// </summary>
+    public bool CanRetry => !_isInFlight && _throttledUntil is null;
 
     /// <summary>
     /// The snapshot behind everything else on this card, for the diagnostics screen alone. Nothing
@@ -240,7 +249,18 @@ public sealed class ProviderCardViewModel : ObservableObject
         Tick(now);
     }
 
-    public void SetNextAttempt(DateTimeOffset? nextAttempt) => _nextAttempt = nextAttempt;
+    /// <summary>
+    /// The scheduler's live view of this provider, pushed once per presentation tick. Retry
+    /// availability is derived here rather than guessed from connection state.
+    /// </summary>
+    public void SetActivity(ProviderActivity activity, DateTimeOffset? throttledUntil)
+    {
+        _nextAttempt = activity.NextAttemptAt;
+        _isInFlight = activity.IsInFlight;
+        _throttledUntil = throttledUntil;
+        Raise(nameof(CanRetry));
+        RetryCommand.RaiseCanExecuteChanged();
+    }
 
     private void RebuildWindows()
     {
@@ -296,10 +316,14 @@ public sealed class ProviderCardViewModel : ObservableObject
             _freshness.Evaluate(snapshot.RetrievedAt, now));
 
         TimestampText = TimestampLine(snapshot, State, now);
-        NextCheckText = _nextAttempt is DateTimeOffset nextAttempt
+        DateTimeOffset? showFrom = _throttledUntil ?? (_nextAttempt is DateTimeOffset nextAttempt
             && nextAttempt > now
             && State is ConnectionState.Error or ConnectionState.Unavailable
-            ? "Next check in " + QuotaFormatting.FormatCountdown(nextAttempt - now)
+                ? nextAttempt
+                : null);
+
+        NextCheckText = showFrom is DateTimeOffset when && when > now
+            ? "Next check in " + QuotaFormatting.FormatCountdown(when - now)
             : null;
         Notice = ProviderNoticeSelector.For(snapshot, State);
 

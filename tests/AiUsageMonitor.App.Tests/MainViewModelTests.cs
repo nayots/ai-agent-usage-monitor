@@ -12,23 +12,28 @@ public class MainViewModelTests
 
     private sealed class StubProbe(string name, ConnectionState state, IReadOnlyList<QuotaWindow> windows) : IProviderProbe
     {
+        public int Calls { get; private set; }
         public string Name => name;
         public string Mechanism => "stub";
         public MechanismTier Tier => MechanismTier.Official;
 
-        public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => Task.FromResult(new ProviderSnapshot(
-            ProviderName: name,
-            Installed: true,
-            Version: "1.0.0",
-            ExecutablePath: null,
-            State: state,
-            Mechanism: "stub",
-            Tier: MechanismTier.Official,
-            UpdateModel: "pull (poll)",
-            Windows: windows,
-            RetrievedAt: state == ConnectionState.Connected ? Now : null,
-            Error: null,
-            Notes: []));
+        public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
+        {
+            Calls++;
+            return Task.FromResult(new ProviderSnapshot(
+                ProviderName: name,
+                Installed: true,
+                Version: "1.0.0",
+                ExecutablePath: null,
+                State: state,
+                Mechanism: "stub",
+                Tier: MechanismTier.Official,
+                UpdateModel: "pull (poll)",
+                Windows: windows,
+                RetrievedAt: state == ConnectionState.Connected ? Now : null,
+                Error: null,
+                Notes: []));
+        }
     }
 
     private static QuotaWindow Window() => new(
@@ -103,6 +108,22 @@ public class MainViewModelTests
 
         Assert.False(service.IsWorkstationLocked);
         Assert.Equal(RefreshTrigger.Unlock, service.ActivityFor(provider, Now).LastTrigger);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void RetryingOneProviderDoesNotRefreshTheOther()
+    {
+        StubProbe claudeProbe = new("Claude Code", ConnectionState.Error, []);
+        StubProbe codexProbe = new("Codex", ConnectionState.Connected, []);
+        ProviderDescriptor claude = new("claude-code", "Claude Code", "CC", claudeProbe);
+        ProviderDescriptor codex = new("codex", "Codex", "CX", codexProbe);
+        (MainViewModel model, _) = Build(claude, codex);
+
+        model.Providers.Single(card => card.DisplayName == "Claude Code").RetryCommand.Execute(null);
+
+        Assert.Equal(1, claudeProbe.Calls);
+        Assert.Equal(0, codexProbe.Calls);
         model.Dispose();
     }
 

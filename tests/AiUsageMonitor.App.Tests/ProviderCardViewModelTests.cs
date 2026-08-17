@@ -1,6 +1,7 @@
 using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
+using AiUsageMonitor.Infrastructure.Refresh;
 
 namespace AiUsageMonitor.App.Tests;
 
@@ -237,7 +238,7 @@ public class ProviderCardViewModelTests
         ProviderCardViewModel card = Card();
         card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: Now, error: "boom"), Now, Policy);
 
-        card.SetNextAttempt(Now.AddMinutes(5));
+        card.SetActivity(new ProviderActivity(null, null, null, Now.AddMinutes(5), 0, IsInFlight: false), null);
         card.Tick(Now);
 
         Assert.Equal("Next check in 5m 00s", card.NextCheckText);
@@ -255,7 +256,7 @@ public class ProviderCardViewModelTests
         ProviderCardViewModel card = Card();
         card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: Now, error: "boom"), Now, Policy);
 
-        card.SetNextAttempt(null);
+        card.SetActivity(new ProviderActivity(null, null, null, null, 0, IsInFlight: false), null);
         card.Tick(Now);
 
         Assert.Null(card.NextCheckText);
@@ -519,6 +520,67 @@ public class ProviderCardViewModelTests
         card.RetryCommand.Execute(null);
 
         Assert.Equal(["Claude Code"], retried);
+    }
+
+    [Fact]
+    public void RetryIsUnavailableWhileARequestIsInFlight()
+    {
+        ProviderCardViewModel card = Card();
+
+        card.SetActivity(new ProviderActivity(null, null, null, null, 0, IsInFlight: true), null);
+
+        Assert.False(card.CanRetry);
+        Assert.False(card.RetryCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void RetryIsUnavailableDuringAThrottleCooldown()
+    {
+        ProviderCardViewModel card = Card();
+
+        card.SetActivity(new ProviderActivity(null, null, null, Now.AddMinutes(2), 0, IsInFlight: false), Now.AddMinutes(2));
+
+        Assert.False(card.CanRetry);
+        Assert.False(card.RetryCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void RetryIsAvailableForAnOrdinaryFailure()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: null, error: "boom"), Now, Policy);
+
+        card.SetActivity(new ProviderActivity(null, null, null, Now.AddMinutes(1), 1, IsInFlight: false), null);
+
+        Assert.True(card.CanRetry);
+        Assert.True(card.RetryCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void RetryBecomesAvailableAgainWhenTheCooldownPasses()
+    {
+        ProviderCardViewModel card = Card();
+        List<EventArgs> changes = [];
+        card.RetryCommand.CanExecuteChanged += (_, e) => changes.Add(e);
+
+        card.SetActivity(new ProviderActivity(null, null, null, Now.AddMinutes(2), 0, IsInFlight: false), Now.AddMinutes(2));
+        card.SetActivity(new ProviderActivity(null, null, null, null, 0, IsInFlight: false), null);
+
+        Assert.True(card.CanRetry);
+        Assert.True(card.RetryCommand.CanExecute(null));
+        Assert.NotEmpty(changes);
+    }
+
+    [Fact]
+    public void AThrottledCardShowsATruthfulNextCheckCountdown()
+    {
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(state: ConnectionState.Error, retrievedAt: null, error: "boom"), Now, Policy);
+
+        card.SetActivity(new ProviderActivity(null, null, null, Now.AddMinutes(2), 0, IsInFlight: false), Now.AddMinutes(2));
+        card.Tick(Now);
+
+        Assert.Equal("Next check in 2m 00s", card.NextCheckText);
     }
 
     [Fact]
