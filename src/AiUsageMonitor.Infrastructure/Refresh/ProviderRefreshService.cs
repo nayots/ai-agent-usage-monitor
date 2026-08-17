@@ -16,7 +16,9 @@ public sealed record ProviderActivity(
     DateTimeOffset? LastSuccessAt,
     DateTimeOffset? NextAttemptAt,
     int ConsecutiveFailures,
-    bool IsInFlight);
+    bool IsInFlight,
+    RefreshTrigger? LastTrigger = null,
+    int SuppressedRequests = 0);
 
 /// <summary>One provider's answer, raised as soon as that provider answers rather than at the end of a cycle.</summary>
 public sealed record ProviderRefreshed(ProviderDescriptor Provider, ProviderSnapshot Snapshot);
@@ -142,7 +144,9 @@ public sealed class ProviderRefreshService
                 attempts?.LastSuccessAt,
                 NextAttemptFor(provider, now),
                 backoff?.ConsecutiveFailures ?? 0,
-                attempts?.InFlight.Count > 0);
+                attempts?.InFlight.Count > 0,
+                attempts?.LastTrigger,
+                attempts?.SuppressedRequests ?? 0);
         }
     }
 
@@ -160,7 +164,7 @@ public sealed class ProviderRefreshService
     /// Probes every provider concurrently. Never throws: a provider that fails produces an Error
     /// snapshot, so one provider can never take down the other or the process (PRD §4.5).
     /// </summary>
-    public async Task RefreshAllAsync(bool force, DateTimeOffset now, CancellationToken ct)
+    public async Task RefreshAllAsync(bool force, RefreshTrigger trigger, DateTimeOffset now, CancellationToken ct)
     {
         List<Task> running = [];
 
@@ -174,34 +178,80 @@ public sealed class ProviderRefreshService
                 }
             }
 
-            running.Add(StartRefreshAsync(provider, force, now, ct));
+            running.Add(StartRefreshAsync(provider, force, trigger, now, ct));
         }
 
         await Task.WhenAll(running).ConfigureAwait(false);
     }
 
     /// <summary>Probes one provider, ignoring its backoff. This is what a manual retry calls.</summary>
-    public Task RefreshAsync(ProviderDescriptor provider, DateTimeOffset now, CancellationToken ct) =>
-        StartRefreshAsync(provider, force: true, now, ct);
+    public Task RefreshAsync(ProviderDescriptor provider, RefreshTrigger trigger, DateTimeOffset now, CancellationToken ct) =>
+        StartRefreshAsync(provider, force: true, trigger, now, ct);
 
-    private Task StartRefreshAsync(ProviderDescriptor provider, bool force, DateTimeOffset now, CancellationToken ct)
+    // Retained for existing internal callers. New application call sites name their trigger.
+    public Task RefreshAllAsync(bool force, DateTimeOffset now, CancellationToken ct) =>
+        RefreshAllAsync(force, RefreshTrigger.Scheduled, now, ct);
+
+    // Retained for existing internal callers. New application call sites name their trigger.
+    public Task RefreshAsync(ProviderDescriptor provider, DateTimeOffset now, CancellationToken ct) =>
+        RefreshAsync(provider, RefreshTrigger.ManualCard, now, ct);
+
+    private Task StartRefreshAsync(
+        ProviderDescriptor provider,
+        bool force,
+        RefreshTrigger trigger,
+        DateTimeOffset now,
+        CancellationToken ct)
     {
         long sequence;
+        TaskCompletionSource completion;
 
         lock (_gate)
         {
             AttemptState attempts = GetAttempts(provider);
-            if (!force && (IsBackedOff(provider, now) || attempts.InFlight.Count > 0))
+            if (attempts.Current is Task running)
+            {
+                attempts.SuppressedRequests++;
+                return running;
+            }
+
+            if (!force && IsBackedOffUnsafe(provider, now))
             {
                 return Task.CompletedTask;
             }
 
             sequence = ++attempts.LastStarted;
             attempts.LastAttemptStartedAt = now;
+            attempts.LastTrigger = trigger;
             attempts.InFlight.Add(sequence);
+
+            completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            attempts.Current = completion.Task;
         }
 
-        return RefreshAttemptAsync(provider, sequence, now, ct);
+        return RunAttemptAsync(provider, sequence, now, completion, ct);
+    }
+
+    private async Task RunAttemptAsync(
+        ProviderDescriptor provider,
+        long sequence,
+        DateTimeOffset now,
+        TaskCompletionSource completion,
+        CancellationToken ct)
+    {
+        try
+        {
+            await RefreshAttemptAsync(provider, sequence, now, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                GetAttempts(provider).Current = null;
+            }
+
+            completion.TrySetResult();
+        }
     }
 
     private async Task RefreshAttemptAsync(
@@ -328,7 +378,7 @@ public sealed class ProviderRefreshService
         Error: error,
         Notes: []);
 
-    private bool IsBackedOff(ProviderDescriptor provider, DateTimeOffset now) =>
+    private bool IsBackedOffUnsafe(ProviderDescriptor provider, DateTimeOffset now) =>
         _backoff.TryGetValue(provider, out Backoff? state) && state.NextAttempt > now;
 
     private AttemptState GetAttempts(ProviderDescriptor provider)
@@ -432,5 +482,11 @@ public sealed class ProviderRefreshService
         public long HighestPublished { get; set; }
 
         public HashSet<long> InFlight { get; } = [];
+
+        public Task? Current { get; set; }
+
+        public int SuppressedRequests { get; set; }
+
+        public RefreshTrigger? LastTrigger { get; set; }
     }
 }

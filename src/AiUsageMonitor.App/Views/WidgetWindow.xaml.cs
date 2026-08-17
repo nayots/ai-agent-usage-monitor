@@ -87,7 +87,7 @@ public partial class WidgetWindow : Window
         // have its own interval or be hidden entirely. Pushed before the first refresh so a hidden
         // provider is never polled even once.
         _poll.Interval = TickCadence.Poll;
-        _poll.Tick += (_, _) => _ = _model.RefreshAsync(force: false);
+        _poll.Tick += (_, _) => _ = _model.RefreshAsync(force: false, RefreshTrigger.Scheduled);
         ApplyCadence(settings.Current);
         _dismiss.Tick += OnDismissTick;
 
@@ -141,7 +141,7 @@ public partial class WidgetWindow : Window
 
         _tick.Start();
         _poll.Start();
-        _ = _model.RefreshAsync(force: true);
+        _ = _model.RefreshAsync(force: true, RefreshTrigger.Startup);
 
         // Last, so the widget is fully constructed before it is hidden again. Restoring mini mode
         // must not leave the widget on screen beside the strip.
@@ -288,7 +288,7 @@ public partial class WidgetWindow : Window
     {
         if (e.Mode == PowerModes.Resume)
         {
-            Dispatcher.BeginInvoke(ForceRefreshAfterSystemEvent);
+            Dispatcher.BeginInvoke(() => ForceRefreshAfterSystemEvent(RefreshTrigger.Resume));
         }
     }
 
@@ -296,13 +296,13 @@ public partial class WidgetWindow : Window
     {
         if (e.Reason == SessionSwitchReason.SessionUnlock)
         {
-            Dispatcher.BeginInvoke(ForceRefreshAfterSystemEvent);
+            Dispatcher.BeginInvoke(() => ForceRefreshAfterSystemEvent(RefreshTrigger.Unlock));
         }
     }
 
-    private void ForceRefreshAfterSystemEvent()
+    private void ForceRefreshAfterSystemEvent(RefreshTrigger trigger)
     {
-        _ = _model.RefreshAsync(force: true);
+        _ = _model.RefreshAsync(force: true, trigger);
         OnTick(this, EventArgs.Empty);
     }
 
@@ -388,7 +388,7 @@ public partial class WidgetWindow : Window
             _settings,
             StartupRegistration.ForThisProcess(),
             resetPosition: ResetPlacement,
-            recheckProviders: () => _ = _model.RefreshAsync(force: true),
+            recheckProviders: () => _ = _model.RefreshAsync(force: true, RefreshTrigger.ManualGlobal),
             providers: _providers,
             globalHotkeyUnavailable: _globalHotkeyUnavailable);
 
@@ -777,7 +777,7 @@ public partial class WidgetWindow : Window
 
     private void TrayOpen_Click(object sender, RoutedEventArgs e) => ShowFromTray();
 
-    private void TrayRefresh_Click(object sender, RoutedEventArgs e) => _ = _model.RefreshAsync(force: true);
+    private void TrayRefresh_Click(object sender, RoutedEventArgs e) => _ = _model.RefreshAsync(force: true, RefreshTrigger.ManualGlobal);
 
     private void TraySettings_Click(object sender, RoutedEventArgs e)
     {

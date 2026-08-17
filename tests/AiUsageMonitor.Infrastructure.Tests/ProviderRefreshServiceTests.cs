@@ -348,36 +348,27 @@ public class ProviderRefreshServiceTests
     }
 
     [Fact]
-    public async Task ANewerCompletionSupersedesAnOlderFailureAndLeavesNoBackoff()
+    public async Task AProviderReleasedFromSharingCanStartAFreshAttempt()
     {
         var first = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var second = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
         int attempt = 0;
         FakeProbe probe = new("Alpha", _ => ++attempt switch
         {
             1 => first.Task,
-            2 => second.Task,
             _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)),
         });
         ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(provider);
-        List<ProviderSnapshot> raised = [];
-        service.Refreshed += (_, e) => raised.Add(e.Snapshot);
 
-        Task older = service.RefreshAsync(provider, Now, CancellationToken.None);
-        Task newer = service.RefreshAsync(provider, Now.AddSeconds(1), CancellationToken.None);
-        Assert.Equal(2, probe.Calls);
+        Task initial = service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+        Task shared = service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now.AddSeconds(1), CancellationToken.None);
+        Assert.Equal(1, probe.Calls);
 
-        second.SetResult(Snapshot("Alpha", ConnectionState.Connected));
-        await newer;
         first.SetResult(Snapshot("Alpha", ConnectionState.Error));
-        await older;
+        await Task.WhenAll(initial, shared);
 
-        Assert.Single(raised);
-        Assert.Equal(ConnectionState.Connected, raised[0].State);
-
-        await service.RefreshAllAsync(force: false, Now.AddSeconds(62), CancellationToken.None);
-        Assert.Equal(3, probe.Calls);
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now.AddSeconds(2), CancellationToken.None);
+        Assert.Equal(2, probe.Calls);
     }
 
     [Fact]
@@ -397,22 +388,49 @@ public class ProviderRefreshServiceTests
     }
 
     [Fact]
-    public async Task AManualRetryStartsASecondAttemptWhileTheFirstIsInFlight()
+    public async Task AManualRetryJoinsTheAttemptAlreadyInFlight()
     {
-        var first = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var second = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
-        int attempt = 0;
-        FakeProbe probe = new("Alpha", _ => ++attempt == 1 ? first.Task : second.Task);
+        var pending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeProbe probe = new("Alpha", _ => pending.Task);
         ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
         ProviderRefreshService service = Service(provider);
 
-        Task initial = service.RefreshAllAsync(force: true, Now, CancellationToken.None);
-        Task retry = service.RefreshAsync(provider, Now.AddSeconds(1), CancellationToken.None);
+        Task initial = service.RefreshAllAsync(force: true, RefreshTrigger.Startup, Now, CancellationToken.None);
+        Task retry = service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now.AddSeconds(1), CancellationToken.None);
 
-        Assert.Equal(2, probe.Calls);
-        second.SetResult(Snapshot("Alpha", ConnectionState.Connected));
-        first.SetResult(Snapshot("Alpha", ConnectionState.Connected));
+        Assert.Equal(1, probe.Calls);
+        Assert.False(retry.IsCompleted);
+        pending.SetResult(Snapshot("Alpha", ConnectionState.Connected));
         await Task.WhenAll(initial, retry);
+    }
+
+    [Fact]
+    public async Task SuppressedRequestsCountsRefreshesThatJoinedAnAttempt()
+    {
+        var pending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeProbe probe = new("Alpha", _ => pending.Task);
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+
+        Task first = service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+        Task second = service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now.AddSeconds(1), CancellationToken.None);
+        Task third = service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now.AddSeconds(2), CancellationToken.None);
+
+        Assert.Equal(1, probe.Calls);
+        Assert.Equal(2, service.ActivityFor(provider, Now).SuppressedRequests);
+        pending.SetResult(Snapshot("Alpha", ConnectionState.Connected));
+        await Task.WhenAll(first, second, third);
+    }
+
+    [Fact]
+    public async Task TheTriggerOfTheLastAttemptIsRecorded()
+    {
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+
+        Assert.Equal(RefreshTrigger.ManualCard, service.ActivityFor(provider, Now).LastTrigger);
     }
 
     [Fact]

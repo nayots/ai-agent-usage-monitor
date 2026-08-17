@@ -54,7 +54,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Providers.Add(card);
         }
 
-        RefreshCommand = new RelayCommand(() => _ = RefreshAsync(force: true), () => !IsRefreshing);
+        RefreshCommand = new RelayCommand(() => _ = RefreshAsync(force: true, RefreshTrigger.ManualGlobal), () => !IsRefreshing);
         _refresh.Refreshed += OnRefreshed;
     }
 
@@ -127,7 +127,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public async Task RefreshAsync(bool force)
+    public async Task RefreshAsync(bool force, RefreshTrigger trigger)
     {
         if (_lifetime.IsCancellationRequested)
         {
@@ -138,13 +138,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            await _refresh.RefreshAllAsync(force, _clock(), _lifetime.Token).ConfigureAwait(true);
+            await _refresh.RefreshAllAsync(force, trigger, _clock(), _lifetime.Token).ConfigureAwait(true);
         }
         finally
         {
             IsRefreshing = false;
         }
     }
+
+    // Retained for existing internal callers. New application call sites name their trigger.
+    public Task RefreshAsync(bool force) => RefreshAsync(force, RefreshTrigger.ManualGlobal);
 
     /// <summary>Advances every locally derived value: countdowns, ages, elapsed markers.</summary>
     public void Tick()
@@ -169,7 +172,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (!_lifetime.IsCancellationRequested)
         {
-            _ = _refresh.RefreshAsync(provider, _clock(), _lifetime.Token);
+            _ = _refresh.RefreshAsync(provider, RefreshTrigger.ManualCard, _clock(), _lifetime.Token);
         }
     }
 
