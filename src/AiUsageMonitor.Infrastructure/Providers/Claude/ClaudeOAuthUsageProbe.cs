@@ -200,16 +200,29 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             // Reuse the shared, provider-neutral extractor rather than a bespoke parser. It already
             // handles this endpoint's dialect (utilization + ISO-8601 resets_at) as well as
             // statusLine's (used_percentage + unix seconds) with no code change needed here.
-            IReadOnlyList<QuotaWindow> windows = DuckTypedQuotaExtractor.Extract(doc.RootElement);
+            IReadOnlyList<QuotaWindow> extracted = DuckTypedQuotaExtractor.Extract(doc.RootElement);
+
+            // Defensive, and cheap. The shared extractor does not currently produce a window from a limits[]
+            // entry - the entries use "percent", which is not one of its percent keys - but if the provider
+            // ever renames that field to one the extractor does know, it would start emitting windows whose
+            // ids are array positions. An id like "limits[2]" is not a provider identity: it moves whenever
+            // the array is reordered. Dropping them here keeps the normalized entries below the single source
+            // of truth for this array.
+            IReadOnlyList<QuotaWindow> topLevel = extracted
+                .Where(w => !w.Id.StartsWith("limits[", StringComparison.Ordinal))
+                .ToList();
+
+            IReadOnlyList<QuotaWindow> scoped = ClaudeScopedLimits.Normalize(doc.RootElement, topLevel);
+            IReadOnlyList<QuotaWindow> windows = [.. topLevel, .. scoped];
 
             notes.Add($"{windows.Count} quota window(s) discovered.");
+            notes.Add(scoped.Count == 0
+                ? "No additional quota windows found in the limits array beyond those already reported."
+                : $"{scoped.Count} additional quota window(s) normalized from the limits array.");
 
-            IReadOnlyList<string> unhumanized = windows
-                .Where(w => w.LabelIsProviderToken)
-                .Select(w => w.Id)
-                .ToList();
-            notes.Add(unhumanized.Count > 0
-                ? $"Window key(s) the extractor could not humanise into a friendly \"N unit\" label: {string.Join(", ", unhumanized)}."
+            int unhumanizedCount = windows.Count(w => w.LabelIsProviderToken);
+            notes.Add(unhumanizedCount > 0
+                ? $"{unhumanizedCount} quota window(s) have provider-token labels that could not be humanised into friendly \"N unit\" labels."
                 : "Every discovered window key humanised cleanly into a friendly \"N unit\" label.");
 
             return Snapshot(true, version, exePath, ConnectionState.Connected, windows, _clock(), null, notes);

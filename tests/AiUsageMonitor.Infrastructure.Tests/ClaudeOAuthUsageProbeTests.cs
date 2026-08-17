@@ -72,6 +72,71 @@ public sealed class ClaudeOAuthUsageProbeTests
     }
 
     [Fact]
+    public async Task TheLiveShapedFixtureProducesNoDuplicateWindows()
+    {
+        ProviderSnapshot snapshot = await ProbeFixtureAsync();
+
+        Assert.Equal(snapshot.Windows.Count, snapshot.Windows.Select(window => window.Id).Distinct(StringComparer.Ordinal).Count());
+        (long Reset, double UsedPercent)[] comparable = snapshot.Windows
+            .Where(window => window.ResetsAt is not null && window.UsedPercent is not null)
+            .Select(window => (window.ResetsAt!.Value.ToUnixTimeSeconds(), window.UsedPercent!.Value))
+            .ToArray();
+        Assert.Equal(comparable.Length, comparable.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task TheTopLevelWindowsSurviveUnchanged()
+    {
+        ProviderSnapshot snapshot = await ProbeFixtureAsync();
+
+        QuotaWindow fiveHour = Assert.Single(snapshot.Windows, window => window.Id == "five_hour");
+        Assert.Equal(41.5, fiveHour.UsedPercent);
+        Assert.Equal(new DateTimeOffset(2026, 8, 17, 20, 50, 0, TimeSpan.Zero), fiveHour.ResetsAt);
+
+        QuotaWindow sevenDay = Assert.Single(snapshot.Windows, window => window.Id == "seven_day");
+        Assert.Equal(12.25, sevenDay.UsedPercent);
+        Assert.Equal(new DateTimeOffset(2026, 8, 24, 15, 0, 0, TimeSpan.Zero), sevenDay.ResetsAt);
+    }
+
+    [Fact]
+    public async Task AScopedLimitAppearsAsItsOwnWindow()
+    {
+        ProviderSnapshot snapshot = await ProbeFixtureAsync();
+
+        Assert.Single(snapshot.Windows, window => window.Id == "weekly_scoped_opus");
+    }
+
+    [Fact]
+    public async Task NimbusQuillIsStillAPartialWindow()
+    {
+        ProviderSnapshot snapshot = await ProbeFixtureAsync();
+
+        QuotaWindow nimbus = Assert.Single(snapshot.Windows, window => window.Id == "nimbus_quill");
+        Assert.Null(nimbus.ResetsAt);
+        Assert.Equal("nimbus_quill", nimbus.Label);
+        Assert.True(nimbus.LabelIsProviderToken);
+    }
+
+    [Fact]
+    public async Task SpendAndExtraUsageStillProduceNoWindows()
+    {
+        ProviderSnapshot snapshot = await ProbeFixtureAsync();
+
+        Assert.DoesNotContain(snapshot.Windows, window => window.Id is "spend" or "extra_usage");
+    }
+
+    [Fact]
+    public async Task TheAddedNoteNeverQuotesResponseContent()
+    {
+        ProviderSnapshot snapshot = await ProbeFixtureAsync();
+
+        Assert.Contains("3 additional quota window(s) normalized from the limits array.", snapshot.Notes);
+        Assert.DoesNotContain(snapshot.Notes, note => note.Contains("weekly_scoped_opus", StringComparison.Ordinal)
+            || note.Contains("warning", StringComparison.Ordinal)
+            || note.Contains("synthetic", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task CredentialTokenIsUsedOnlyInTheAuthorizationHeader()
     {
         const string sentinel = "credential-sentinel-5f0b68bd";
@@ -343,6 +408,15 @@ public sealed class ClaudeOAuthUsageProbeTests
         return new ClaudeOAuthUsageProbe(processes, handler, () => ExePath, () => credentialsPath, clock: clock);
     }
 
+    private static async Task<ProviderSnapshot> ProbeFixtureAsync()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, File.ReadAllText(FixturePath)));
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"));
+
+        return await probe.ProbeAsync(CancellationToken.None);
+    }
+
     private static string WriteCredentials(TempDirectory directory, string token)
     {
         string path = directory.File("credentials.json");
@@ -352,6 +426,8 @@ public sealed class ClaudeOAuthUsageProbeTests
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string body) =>
         new(statusCode) { Content = new StringContent(body) };
+
+    private static string FixturePath => Path.Combine(AppContext.BaseDirectory, "Fixtures", "claude-usage-limits-sample.json");
 
     private static string SnapshotText(ProviderSnapshot snapshot) => string.Join(
         Environment.NewLine,
