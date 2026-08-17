@@ -89,14 +89,16 @@ $assetName = "QuotaMonitor-v$version-win-x64.exe"
 $assetPath = Join-Path $artifactsDir $assetName
 Copy-Item -Path $exe.FullName -Destination $assetPath
 
-# sha256sum format: lower-case hash, two spaces, bare file name - so `sha256sum -c` and the
-# README's Get-FileHash instructions both verify it as-is.
+# sha256sum format: lower-case hash, two spaces, bare file name, LF terminator - so
+# `sha256sum -c` and the README's Get-FileHash instructions both verify it as-is.
 #
-# ASCII is deliberate. Set-Content -Encoding utf8 emits a BOM under Windows PowerShell 5.1,
-# and a BOM at the start of a checksum file makes the first line unparseable. A hash and a
-# file name are ASCII by construction, so nothing is lost.
+# Written byte-for-byte with WriteAllText rather than Set-Content, because Set-Content
+# terminates the line with CRLF. sha256sum then reads the trailing CR as part of the file
+# name and reports "No such file or directory" for a checksum that is in fact correct -
+# which is worse than no checksum file, since it looks like tampering. WriteAllText also
+# emits no BOM, and a BOM would make the first line unparseable for the same tool.
 $hash = (Get-FileHash -Path $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
-Set-Content -Path "$assetPath.sha256" -Value "$hash  $assetName" -Encoding ASCII
+[System.IO.File]::WriteAllText("$assetPath.sha256", "$hash  $assetName`n")
 
 Write-Host ""
 Write-Host "Single-file publish OK" -ForegroundColor Green
