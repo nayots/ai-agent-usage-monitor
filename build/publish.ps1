@@ -100,6 +100,44 @@ Copy-Item -Path $exe.FullName -Destination $assetPath
 $hash = (Get-FileHash -Path $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
 [System.IO.File]::WriteAllText("$assetPath.sha256", "$hash  $assetName`n")
 
+# A zipped copy of the same two files, shipped alongside them rather than instead of them.
+#
+# Managed Windows machines frequently sit behind a web filter that refuses a bare .exe
+# download by extension or MIME type, so the direct download is simply unavailable to some
+# users. The zip is not a way around a security control - a filter that inspects archive
+# contents blocks this too, and it is meant to - it is the ordinary distribution shape that
+# such environments do allow through, the same one every other Windows tool ships.
+#
+# It also keeps the binary and its checksum together: a user who downloads one file cannot
+# end up with the .exe and no way to check it. The zip's own per-entry CRC32 detects a
+# truncated or corrupted download on extraction, which is why there is deliberately no
+# .zip.sha256 - it would only verify a container nobody runs, while the checksum that
+# matters travels inside, next to the binary it describes.
+#
+# Built with the ZipFile API rather than Compress-Archive: this behaves identically under
+# Windows PowerShell 5.1 (used locally) and pwsh 7 (used on the runner), whereas 5.1's
+# Compress-Archive is markedly slower on a file this size.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$zipName = [System.IO.Path]::ChangeExtension($assetName, '.zip')
+$zipPath = Join-Path $artifactsDir $zipName
+
+$archive = [System.IO.Compression.ZipFile]::Open($zipPath, 'Create')
+try {
+    foreach ($entry in @($assetPath, "$assetPath.sha256")) {
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $archive,
+            $entry,
+            [System.IO.Path]::GetFileName($entry),
+            [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    }
+}
+finally {
+    $archive.Dispose()
+}
+
+$zipSizeMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
+
 Write-Host ""
 Write-Host "Single-file publish OK" -ForegroundColor Green
 Write-Host "  $($exe.FullName)"
@@ -108,4 +146,5 @@ Write-Host ""
 Write-Host "Release assets staged" -ForegroundColor Green
 Write-Host "  $assetPath"
 Write-Host "  $assetPath.sha256"
+Write-Host "  $zipPath ($zipSizeMb MB)"
 Write-Host "  sha256 $hash"

@@ -58,8 +58,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $assets = @(Get-ChildItem -Path 'artifacts' -File)
-          if ($assets.Count -ne 2) {
-              throw "Expected the .exe and its .sha256 in artifacts/, found $($assets.Count)."
+          if ($assets.Count -ne 3) {
+              throw "Expected the .exe, its .sha256 and the .zip in artifacts/, found $($assets.Count)."
           }
 
           gh release create $env:GITHUB_REF_NAME @($assets.ForEach({ $_.FullName })) `

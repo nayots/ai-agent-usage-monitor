@@ -27,11 +27,19 @@ git push origin v0.1.0
 ```
 
 `.github/workflows/release.yml` verifies the tag against `<VersionPrefix>` **before** it
-builds, runs the tests, publishes the self-contained `.exe`, and attaches it with its
-`SHA256` to a GitHub release. A tag that disagrees with the declared version fails in
-seconds. The artifact is always the self-contained build — never the framework-dependent
-one, which needs the .NET 10 Desktop Runtime preinstalled and so fails on exactly the
-machines this application must work on.
+builds, runs the tests, publishes the self-contained `.exe`, and attaches **three** assets
+to a GitHub release: the `.exe`, its `SHA256`, and a `.zip` holding both. A tag that
+disagrees with the declared version fails in seconds. The artifact is always the
+self-contained build — never the framework-dependent one, which needs the .NET 10 Desktop
+Runtime preinstalled and so fails on exactly the machines this application must work on.
+
+The zip exists because managed Windows machines routinely sit behind a filter that refuses
+a bare `.exe` download; it ships *alongside* the `.exe`, never instead of it. There is
+deliberately no `.zip.sha256` — zip entries carry their own CRC32, so corruption is caught
+on extraction, and the checksum worth publishing is the one on the binary that actually
+runs, which travels inside the archive. Note that a release's zip can only ever be built by
+the release run itself: two publishes of the same commit do not produce byte-identical
+executables, so a hand-built zip would contain a different binary from the `.exe` beside it.
 
 Domain tests live in `tests/AiUsageMonitor.Domain.Tests`. For a single test, prefer `dotnet test --filter FullyQualifiedName~<Name>`.
 

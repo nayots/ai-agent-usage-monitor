@@ -26,17 +26,19 @@ A provider that is not installed shows as **Not installed** and costs nothing. Y
 
 That single file contains its own .NET runtime, so nothing else needs installing.
 
+**If your network blocks `.exe` downloads**, take `QuotaMonitor-v<version>-win-x64.zip` from the same release instead. It holds the identical executable plus its checksum file, built in the same release run. Extract both, then continue below. If your filter inspects inside archives, it will block this too — that is the filter working as intended, and the answer is your IT department, not a workaround.
+
 ### Windows will warn you, and here is why
 
-The executable is **not code-signed**, so on first run Windows SmartScreen shows **"Windows protected your PC"**. Click **More info**, then **Run anyway**.
+The executable is **not code-signed**, so on first run Windows SmartScreen shows **"Windows protected your PC"**. Click **More info**, then **Run anyway**. This is the same whether you downloaded the `.exe` or extracted it from the `.zip` — Windows carries the download mark through extraction, and the zip is not a way around the warning.
 
 A signing certificate costs money annually and requires a verified publisher identity this project does not have. Rather than leave you to guess, here is what to check instead — every release publishes a SHA256 next to the binary:
 
 ```powershell
-Get-FileHash .\QuotaMonitor-v0.1.0-win-x64.exe -Algorithm SHA256
+Get-FileHash .\QuotaMonitor-v<version>-win-x64.exe -Algorithm SHA256
 ```
 
-Compare the result against the contents of the matching `.sha256` file on the release page. If they differ, do not run it.
+Compare the result against the contents of the matching `.sha256` file — on the release page if you downloaded the `.exe` directly, or the copy extracted from the `.zip`. If they differ, do not run it.
 
 ### Where it puts things
 
