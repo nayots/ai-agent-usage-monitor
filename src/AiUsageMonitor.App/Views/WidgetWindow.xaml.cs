@@ -288,21 +288,32 @@ public partial class WidgetWindow : Window
     {
         if (e.Mode == PowerModes.Resume)
         {
-            Dispatcher.BeginInvoke(() => ForceRefreshAfterSystemEvent(RefreshTrigger.Resume));
+            Dispatcher.BeginInvoke(() => AfterSystemEvent(RefreshTrigger.Resume));
         }
     }
 
     private void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
     {
-        if (e.Reason == SessionSwitchReason.SessionUnlock)
+        switch (e.Reason)
         {
-            Dispatcher.BeginInvoke(() => ForceRefreshAfterSystemEvent(RefreshTrigger.Unlock));
+            case SessionSwitchReason.SessionLock:
+                Dispatcher.BeginInvoke(() => _model.SetWorkstationLocked(true));
+                break;
+
+            case SessionSwitchReason.SessionUnlock:
+                Dispatcher.BeginInvoke(() =>
+                {
+                    // Clear the pause before requesting the unlock refresh, or it refuses itself.
+                    _model.SetWorkstationLocked(false);
+                    AfterSystemEvent(RefreshTrigger.Unlock);
+                });
+                break;
         }
     }
 
-    private void ForceRefreshAfterSystemEvent(RefreshTrigger trigger)
+    private void AfterSystemEvent(RefreshTrigger trigger)
     {
-        _ = _model.RefreshAsync(force: true, trigger);
+        _ = _model.RefreshAfterLifecycleEventAsync(trigger);
         OnTick(this, EventArgs.Empty);
     }
 

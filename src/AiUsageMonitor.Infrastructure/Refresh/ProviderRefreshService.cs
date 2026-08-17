@@ -30,7 +30,8 @@ public sealed record ProviderActivity(
     RefreshTrigger? LastTrigger = null,
     int SuppressedRequests = 0,
     int ConsecutiveThrottles = 0,
-    NextAttemptSource NextAttemptSource = NextAttemptSource.Interval);
+    NextAttemptSource NextAttemptSource = NextAttemptSource.Interval,
+    int CoalescedLifecycleRefreshes = 0);
 
 /// <summary>One provider's answer, raised as soon as that provider answers rather than at the end of a cycle.</summary>
 public sealed record ProviderRefreshed(ProviderDescriptor Provider, ProviderSnapshot Snapshot);
@@ -51,6 +52,9 @@ public sealed class ProviderRefreshService
     private readonly Lock _gate = new();
     private IReadOnlyDictionary<string, TimeSpan> _intervalOverrides = new Dictionary<string, TimeSpan>();
     private IReadOnlyCollection<string> _hiddenProviderKeys = [];
+    private bool _isWorkstationLocked;
+    private DateTimeOffset? _lastLifecycleRefreshAt;
+    private int _coalescedLifecycleRefreshes;
 
     public ProviderRefreshService(
         IReadOnlyList<ProviderDescriptor> providers,
@@ -76,6 +80,33 @@ public sealed class ProviderRefreshService
     /// next attempt against the new value.
     /// </summary>
     public TimeSpan BaseInterval { get; set; }
+
+    /// <summary>
+    /// Whether Windows has explicitly reported that the workstation is locked. This is lifecycle
+    /// state, never an inference from input idleness, visibility, or a timer.
+    /// </summary>
+    public bool IsWorkstationLocked
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _isWorkstationLocked;
+            }
+        }
+        set
+        {
+            lock (_gate)
+            {
+                _isWorkstationLocked = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// How close together two system lifecycle events must be to count as one user action.
+    /// </summary>
+    public static readonly TimeSpan LifecycleCoalescingWindow = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Per-provider cadence overrides, keyed by <see cref="ProviderDescriptor.Key"/>. A provider not
@@ -160,7 +191,8 @@ public sealed class ProviderRefreshService
                 attempts?.LastTrigger,
                 attempts?.SuppressedRequests ?? 0,
                 backoff?.ConsecutiveThrottles ?? 0,
-                backoff?.NextAttemptSource ?? NextAttemptSource.Interval);
+                backoff?.NextAttemptSource ?? NextAttemptSource.Interval,
+                _coalescedLifecycleRefreshes);
         }
     }
 
@@ -217,6 +249,32 @@ public sealed class ProviderRefreshService
     public Task RefreshAsync(ProviderDescriptor provider, RefreshTrigger trigger, DateTimeOffset now, CancellationToken ct) =>
         StartRefreshAsync(provider, force: true, trigger, now, ct);
 
+    /// <summary>
+    /// Starts one refresh for a system lifecycle event, coalescing a closely following event from
+    /// the same wake-and-unlock action. A lock defers the event entirely so its subsequent unlock
+    /// remains eligible to refresh.
+    /// </summary>
+    public Task RefreshAfterLifecycleEventAsync(RefreshTrigger trigger, DateTimeOffset now, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            if (_isWorkstationLocked)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (_lastLifecycleRefreshAt is DateTimeOffset last && now - last < LifecycleCoalescingWindow)
+            {
+                _coalescedLifecycleRefreshes++;
+                return Task.CompletedTask;
+            }
+
+            _lastLifecycleRefreshAt = now;
+        }
+
+        return RefreshAllAsync(force: true, trigger, now, ct);
+    }
+
     // Retained for existing internal callers. New application call sites name their trigger.
     public Task RefreshAllAsync(bool force, DateTimeOffset now, CancellationToken ct) =>
         RefreshAllAsync(force, RefreshTrigger.Scheduled, now, ct);
@@ -250,6 +308,14 @@ public sealed class ProviderRefreshService
             if (IsThrottledUnsafe(provider, now))
             {
                 attempts.SuppressedRequests++;
+                return Task.CompletedTask;
+            }
+
+            bool startedByTheApplication =
+                trigger is not (RefreshTrigger.ManualGlobal or RefreshTrigger.ManualCard);
+
+            if (startedByTheApplication && _isWorkstationLocked)
+            {
                 return Task.CompletedTask;
             }
 

@@ -149,6 +149,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     // Retained for existing internal callers. New application call sites name their trigger.
     public Task RefreshAsync(bool force) => RefreshAsync(force, RefreshTrigger.ManualGlobal);
 
+    public void SetWorkstationLocked(bool locked) => _refresh.IsWorkstationLocked = locked;
+
+    public Task RefreshAfterLifecycleEventAsync(RefreshTrigger trigger) =>
+        _lifetime.IsCancellationRequested
+            ? Task.CompletedTask
+            : _refresh.RefreshAfterLifecycleEventAsync(trigger, _clock(), _lifetime.Token);
+
     /// <summary>Advances every locally derived value: countdowns, ages, elapsed markers.</summary>
     public void Tick()
     {

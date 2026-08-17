@@ -624,4 +624,140 @@ public class ProviderRefreshServiceTests
         Assert.Equal(1, calls);
         Assert.Equal(Now + TimeSpan.FromMinutes(5), service.ThrottledUntil(provider, Now.AddMinutes(1)));
     }
+
+    [Fact]
+    public async Task NoScheduledAttemptStartsWhileTheWorkstationIsLocked()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+        service.IsWorkstationLocked = true;
+
+        await service.RefreshAllAsync(force: false, RefreshTrigger.Scheduled, Now, CancellationToken.None);
+
+        Assert.Equal(0, probe.Calls);
+    }
+
+    [Fact]
+    public async Task AnAttemptAlreadyInFlightIsNotCancelledByALock()
+    {
+        var pending = new TaskCompletionSource<ProviderSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        FakeProbe probe = new("Alpha", _ => pending.Task);
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+
+        Task attempt = service.RefreshAllAsync(force: true, RefreshTrigger.Startup, Now, CancellationToken.None);
+        service.IsWorkstationLocked = true;
+        pending.SetResult(Snapshot("Alpha", ConnectionState.Connected));
+        await attempt;
+
+        Assert.Equal(Now, service.ActivityFor(provider, Now).LastSuccessAt);
+    }
+
+    [Fact]
+    public async Task AManualRefreshStillWorksWhileLocked()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+        service.IsWorkstationLocked = true;
+
+        await service.RefreshAllAsync(force: true, RefreshTrigger.ManualGlobal, Now, CancellationToken.None);
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now.AddSeconds(1), CancellationToken.None);
+
+        Assert.Equal(2, probe.Calls);
+    }
+
+    [Fact]
+    public async Task UnlockRequestsExactlyOneRefreshCycle()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+        service.IsWorkstationLocked = true;
+
+        for (int tick = 0; tick < 10; tick++)
+        {
+            await service.RefreshAllAsync(force: false, RefreshTrigger.Scheduled, Now.AddSeconds(tick), CancellationToken.None);
+        }
+
+        service.IsWorkstationLocked = false;
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Unlock, Now.AddMinutes(1), CancellationToken.None);
+
+        Assert.Equal(1, probe.Calls);
+    }
+
+    [Fact]
+    public async Task ResumeAndUnlockWithinTheWindowProduceOneRefresh()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Resume, Now, CancellationToken.None);
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Unlock, Now.AddSeconds(3), CancellationToken.None);
+
+        Assert.Equal(1, probe.Calls);
+        Assert.Equal(1, service.ActivityFor(provider, Now).CoalescedLifecycleRefreshes);
+    }
+
+    [Fact]
+    public async Task ResumeAndUnlockOutsideTheWindowProduceTwoRefreshes()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Resume, Now, CancellationToken.None);
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Unlock, Now.AddSeconds(30), CancellationToken.None);
+
+        Assert.Equal(2, probe.Calls);
+    }
+
+    [Fact]
+    public async Task AResumeWhileLockedIsDeferredAndDoesNotSwallowTheUnlock()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+        service.IsWorkstationLocked = true;
+
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Resume, Now, CancellationToken.None);
+        service.IsWorkstationLocked = false;
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Unlock, Now.AddSeconds(2), CancellationToken.None);
+
+        Assert.Equal(1, probe.Calls);
+    }
+
+    [Fact]
+    public async Task ADeliberateManualRefreshIsNeverCoalesced()
+    {
+        FakeProbe probe = new("Alpha", _ => Task.FromResult(Snapshot("Alpha", ConnectionState.Connected)));
+        ProviderDescriptor provider = new("alpha", "Alpha", "A", probe);
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Resume, Now, CancellationToken.None);
+        await service.RefreshAllAsync(force: true, RefreshTrigger.ManualGlobal, Now.AddSeconds(1), CancellationToken.None);
+
+        Assert.Equal(2, probe.Calls);
+    }
+
+    [Fact]
+    public async Task AnUnlockRefreshStillObeysAThrottleCooldown()
+    {
+        int calls = 0;
+        ProviderDescriptor provider = Descriptor("Alpha", _ =>
+        {
+            calls++;
+            return Task.FromResult(Snapshot("Alpha", ConnectionState.Error, new ThrottleAdvice(Now + TimeSpan.FromMinutes(5))));
+        });
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+        DateTimeOffset? next = service.NextAttemptFor(provider, Now.AddMinutes(1));
+        await service.RefreshAfterLifecycleEventAsync(RefreshTrigger.Unlock, Now.AddMinutes(1), CancellationToken.None);
+
+        Assert.Equal(1, calls);
+        Assert.Equal(next, service.NextAttemptFor(provider, Now.AddMinutes(1)));
+    }
 }

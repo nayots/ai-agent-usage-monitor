@@ -86,6 +86,27 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public async Task LifecycleRefreshIsDeferredWhileLockedAndRunsAfterUnlock()
+    {
+        ProviderDescriptor provider = new(
+            "codex",
+            "Codex",
+            "CX",
+            new StubProbe("Codex", ConnectionState.Connected, []));
+        ProviderRefreshService service = new([provider], TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
+        MainViewModel model = new(service, [provider], AppSettings.Default, () => Now);
+
+        model.SetWorkstationLocked(true);
+        await model.RefreshAfterLifecycleEventAsync(RefreshTrigger.Resume);
+        model.SetWorkstationLocked(false);
+        await model.RefreshAfterLifecycleEventAsync(RefreshTrigger.Unlock);
+
+        Assert.False(service.IsWorkstationLocked);
+        Assert.Equal(RefreshTrigger.Unlock, service.ActivityFor(provider, Now).LastTrigger);
+        model.Dispose();
+    }
+
+    [Fact]
     public async Task RefreshIsNotReentrant()
     {
         (MainViewModel model, _) = Build(
