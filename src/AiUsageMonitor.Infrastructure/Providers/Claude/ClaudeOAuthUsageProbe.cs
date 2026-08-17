@@ -41,10 +41,15 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private const string UpdateModel = "pull (poll)";
 
     private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan MaxThrottleWait = TimeSpan.FromHours(1);
 
     // Message text is mandated verbatim by the task's hard constraints - do not alter.
     private const string TokenRejectedMessage =
         "OAuth token rejected or expired — run any Claude Code session to refresh it";
+
+    // Rendered verbatim on the card. UI copy, not diagnostics.
+    private const string ThrottledMessage =
+        "Anthropic is asking this app to slow down — the next check is scheduled automatically.";
 
     private static readonly HttpClient Client = CreateClient();
 
@@ -54,6 +59,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private readonly Func<string> _credentialsPath;
     private readonly ProviderVersionCache _versions;
     private readonly Func<string, DateTime> _lastWriteUtc;
+    private readonly Func<DateTimeOffset> _clock;
 
     private static HttpClient CreateClient()
     {
@@ -89,7 +95,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         Func<string?>? locateExecutable = null,
         Func<string>? credentialsPath = null,
         ProviderVersionCache? versions = null,
-        Func<string, DateTime>? lastWriteUtc = null)
+        Func<string, DateTime>? lastWriteUtc = null,
+        Func<DateTimeOffset>? clock = null)
     {
         _processes = processes ?? DefaultProcessRunner.Instance;
         _client = handler is null ? Client : CreateClient(handler);
@@ -97,6 +104,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         _credentialsPath = credentialsPath ?? GetCredentialsPath;
         _versions = versions ?? new ProviderVersionCache();
         _lastWriteUtc = lastWriteUtc ?? File.GetLastWriteTimeUtc;
+        _clock = clock ?? (() => DateTimeOffset.UtcNow);
     }
 
     public async Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
@@ -154,13 +162,26 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             request.Headers.UserAgent.ParseAdd(UserAgent);
 
             using HttpResponseMessage response = await _client.SendAsync(request, ct).ConfigureAwait(false);
-            string body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
                 notes.Add($"HTTP {(int)response.StatusCode} ({response.StatusCode}) received from the usage endpoint.");
                 return Snapshot(true, version, exePath, ConnectionState.Error, [], null, TokenRejectedMessage, notes);
             }
+
+            if (response.StatusCode is HttpStatusCode.TooManyRequests)
+            {
+                DateTimeOffset? notBefore = ThrottleInstantFrom(response.Headers.RetryAfter, _clock());
+                notes.Add(notBefore is null
+                    ? "HTTP 429 (TooManyRequests); no usable Retry-After header, so the application's own wait applies."
+                    : "HTTP 429 (TooManyRequests); the endpoint's Retry-After instruction is being honoured.");
+
+                return Snapshot(
+                    true, version, exePath, ConnectionState.Error, [], null, ThrottledMessage, notes,
+                    new ThrottleAdvice(notBefore));
+            }
+
+            string body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -191,7 +212,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
                 ? $"Window key(s) the extractor could not humanise into a friendly \"N unit\" label: {string.Join(", ", unhumanized)}."
                 : "Every discovered window key humanised cleanly into a friendly \"N unit\" label.");
 
-            return Snapshot(true, version, exePath, ConnectionState.Connected, windows, DateTimeOffset.UtcNow, null, notes);
+            return Snapshot(true, version, exePath, ConnectionState.Connected, windows, _clock(), null, notes);
         }
         catch (JsonException)
         {
@@ -282,7 +303,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         IReadOnlyList<QuotaWindow> windows,
         DateTimeOffset? retrievedAt,
         string? error,
-        List<string> notes) =>
+        List<string> notes,
+        ThrottleAdvice? throttle = null) =>
         new(
             ProviderName: Name,
             Installed: installed,
@@ -295,7 +317,43 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             Windows: windows,
             RetrievedAt: retrievedAt,
             Error: error,
-            Notes: notes);
+            Notes: notes,
+            Throttle: throttle);
+
+    /// <summary>
+    /// Converts a Retry-After header into an absolute instant, or null when it carries nothing usable.
+    /// Both header forms are accepted: delta-seconds and an HTTP-date. A value that is absent, zero,
+    /// negative, or already in the past is "no usable instruction" rather than "retry immediately" —
+    /// the caller must not read null as permission to ask again at once.
+    /// </summary>
+    private static DateTimeOffset? ThrottleInstantFrom(RetryConditionHeaderValue? retryAfter, DateTimeOffset now)
+    {
+        if (retryAfter is null)
+        {
+            return null;
+        }
+
+        TimeSpan wait;
+        if (retryAfter.Delta is TimeSpan delta)
+        {
+            wait = delta;
+        }
+        else if (retryAfter.Date is DateTimeOffset date)
+        {
+            wait = date - now;
+        }
+        else
+        {
+            return null;
+        }
+
+        if (wait <= TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        return now + (wait > MaxThrottleWait ? MaxThrottleWait : wait);
+    }
 
     private static string GetCredentialsPath()
     {

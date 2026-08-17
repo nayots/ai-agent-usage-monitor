@@ -125,6 +125,155 @@ public sealed class ClaudeOAuthUsageProbeTests
     }
 
     [Fact]
+    public async Task A429WithDeltaSecondsRetryAfterReportsThatInstant()
+    {
+        DateTimeOffset now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ =>
+        {
+            var response = JsonResponse(HttpStatusCode.TooManyRequests, "{\"error\":\"secret-value\"}");
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromMinutes(2));
+            return response;
+        });
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"), () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Error, snapshot.State);
+        Assert.Empty(snapshot.Windows);
+        Assert.Null(snapshot.RetrievedAt);
+        Assert.Equal(now + TimeSpan.FromMinutes(2), snapshot.Throttle!.NotBefore);
+        Assert.True(snapshot.Throttle.IsProviderSpecified);
+        Assert.DoesNotContain("429", snapshot.Error);
+        Assert.DoesNotContain("Retry-After", snapshot.Error);
+        Assert.DoesNotContain("secret-value", SnapshotText(snapshot));
+    }
+
+    [Fact]
+    public async Task A429WithAnHttpDateRetryAfterReportsThatInstant()
+    {
+        DateTimeOffset now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+        DateTimeOffset retryAt = now + TimeSpan.FromMinutes(5);
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ =>
+        {
+            var response = JsonResponse(HttpStatusCode.TooManyRequests, "{}");
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(retryAt);
+            return response;
+        });
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"), () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(retryAt, snapshot.Throttle!.NotBefore);
+        Assert.True(snapshot.Throttle.IsProviderSpecified);
+    }
+
+    [Fact]
+    public async Task A429WithNoRetryAfterReportsAThrottleWithNoInstant()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.TooManyRequests, "{}"));
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"));
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.NotNull(snapshot.Throttle);
+        Assert.Null(snapshot.Throttle.NotBefore);
+        Assert.False(snapshot.Throttle.IsProviderSpecified);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public async Task A429WithNoUsableRetryAfterReportsAThrottleWithoutAnInstant(int seconds)
+    {
+        DateTimeOffset now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ =>
+        {
+            var response = JsonResponse(HttpStatusCode.TooManyRequests, "{}");
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(seconds));
+            return response;
+        });
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"), () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.NotNull(snapshot.Throttle);
+        Assert.Null(snapshot.Throttle.NotBefore);
+        Assert.False(snapshot.Throttle.IsProviderSpecified);
+    }
+
+    [Fact]
+    public async Task A429ClampsAnAbsurdRetryAfterToOneHour()
+    {
+        DateTimeOffset now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ =>
+        {
+            var response = JsonResponse(HttpStatusCode.TooManyRequests, "{}");
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromDays(1));
+            return response;
+        });
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"), () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(now + TimeSpan.FromHours(1), snapshot.Throttle!.NotBefore);
+    }
+
+    [Fact]
+    public async Task A429WithAnExpiredRetryAfterReportsNoInstant()
+    {
+        DateTimeOffset now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ =>
+        {
+            var response = JsonResponse(HttpStatusCode.TooManyRequests, "{}");
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(now - TimeSpan.FromMinutes(1));
+            return response;
+        });
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"), () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Null(snapshot.Throttle!.NotBefore);
+        Assert.False(snapshot.Throttle.IsProviderSpecified);
+    }
+
+    [Fact]
+    public async Task ANon429FailureCarriesNoThrottle()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(
+            HttpStatusCode.InternalServerError,
+            """{"error":"unavailable"}"""));
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"));
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Null(snapshot.Throttle);
+        Assert.Equal("Unexpected HTTP 500 (InternalServerError) from the usage endpoint.", snapshot.Error);
+        Assert.Contains("Response top-level JSON keys: error.", snapshot.Notes);
+    }
+
+    [Fact]
+    public async Task ASuccessCarriesNoThrottle()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(
+            HttpStatusCode.OK,
+            """{"five_hour":{"utilization":42.5,"resets_at":"2026-08-17T12:00:00Z"}}"""));
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"));
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Connected, snapshot.State);
+        Assert.Null(snapshot.Throttle);
+    }
+
+    [Fact]
     public async Task MalformedSuccessBodyReturnsTheAuthoredJsonError()
     {
         using var directory = new TempDirectory();
@@ -187,11 +336,11 @@ public sealed class ClaudeOAuthUsageProbeTests
         Assert.Contains("Version 2.1.227 (cached; executable unchanged since it was read).", second.Notes);
     }
 
-    private static ClaudeOAuthUsageProbe CreateProbe(HttpMessageHandler handler, string credentialsPath)
+    private static ClaudeOAuthUsageProbe CreateProbe(HttpMessageHandler handler, string credentialsPath, Func<DateTimeOffset>? clock = null)
     {
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.227 (Claude Code)");
-        return new ClaudeOAuthUsageProbe(processes, handler, () => ExePath, () => credentialsPath);
+        return new ClaudeOAuthUsageProbe(processes, handler, () => ExePath, () => credentialsPath, clock: clock);
     }
 
     private static string WriteCredentials(TempDirectory directory, string token)

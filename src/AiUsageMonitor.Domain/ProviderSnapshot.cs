@@ -15,4 +15,5 @@ public sealed record ProviderSnapshot(
     IReadOnlyList<QuotaWindow> Windows,
     DateTimeOffset? RetrievedAt,
     string? Error,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes,
+    ThrottleAdvice? Throttle = null);
