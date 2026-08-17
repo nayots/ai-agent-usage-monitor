@@ -26,4 +26,10 @@
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\fixtures\claude-usage-limits-sample.json"
+          Link="Fixtures\claude-usage-limits-sample.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -1,0 +1,70 @@
+{
+  "five_hour": {
+    "utilization": 41.5,
+    "resets_at": "2026-08-17T20:50:00.000000+00:00",
+    "limit_dollars": null, "used_dollars": null, "remaining_dollars": null
+  },
+  "seven_day": {
+    "utilization": 12.25,
+    "resets_at": "2026-08-24T15:00:00.000000+00:00",
+    "limit_dollars": null, "used_dollars": null, "remaining_dollars": null
+  },
+  "seven_day_opus": null,
+  "nimbus_quill": {
+    "utilization": 3.0,
+    "resets_at": null,
+    "limit_dollars": null, "used_dollars": null, "remaining_dollars": null
+  },
+  "extra_usage": {
+    "is_enabled": false, "monthly_limit": null, "used_credits": 0,
+    "utilization": null, "currency": "USD", "decimal_places": 2,
+    "disabled_reason": "not_enabled", "user_disabled": false,
+    "spend_limit_reached": false, "credits_ever_enabled": false,
+    "daily": null, "weekly": null
+  },
+  "limits": [
+    {
+      "kind": "session", "group": "session", "percent": 41.5,
+      "severity": "normal", "resets_at": "2026-08-17T20:50:00.000000+00:00",
+      "scope": null, "is_active": true
+    },
+    {
+      "kind": "weekly_all", "group": "weekly", "percent": 12.25,
+      "severity": "normal", "resets_at": "2026-08-24T15:00:00.000000+00:00",
+      "scope": null, "is_active": false
+    },
+    {
+      "kind": "weekly_scoped", "group": "weekly", "percent": 66.0,
+      "severity": "warning", "resets_at": "2026-08-24T15:00:00.000000+00:00",
+      "scope": "opus", "is_active": true
+    },
+    {
+      "kind": "weekly_scoped", "group": "weekly", "percent": 0,
+      "severity": "normal", "resets_at": "2026-08-24T15:00:00.000000+00:00",
+      "scope": "sonnet", "is_active": true
+    },
+    {
+      "kind": "monthly_scoped", "group": "monthly", "percent": 8.0,
+      "severity": "normal", "resets_at": null,
+      "scope": "haiku", "is_active": true
+    },
+    {
+      "kind": "", "group": "", "percent": 5.0,
+      "severity": "normal", "resets_at": "2026-08-24T15:00:00.000000+00:00",
+      "scope": null, "is_active": true
+    },
+    {
+      "kind": "no_percent", "group": "weekly",
+      "severity": "normal", "resets_at": "2026-08-24T15:00:00.000000+00:00",
+      "scope": null, "is_active": true
+    }
+  ],
+  "spend": {
+    "used": { "amount_minor": 0, "currency": "USD", "exponent": 2 },
+    "limit": null, "percent": 0.0, "severity": "normal", "enabled": false,
+    "disabled_reason": "not_enabled", "cap": null, "balance": null,
+    "auto_reload": null, "disclaimer": "synthetic", "can_purchase_credits": false,
+    "can_toggle": false
+  },
+  "member_dashboard_available": false
+}
