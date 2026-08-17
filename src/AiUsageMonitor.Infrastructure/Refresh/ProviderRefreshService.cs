@@ -5,6 +5,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AiUsageMonitor.Infrastructure.Refresh;
 
+/// <summary>Why the next attempt is scheduled when it is. Diagnostics needs to tell an
+/// application-authored wait apart from one the provider asked for (spec §4.7).</summary>
+public enum NextAttemptSource
+{
+    Interval,
+    FailureBackoff,
+    ProviderThrottle,
+    ApplicationThrottle
+}
+
 /// <summary>
 /// What the service knows about one provider's polling history. PRD §20 requires the last
 /// discovery time, the last successful refresh, and enough about deferral to explain a card
@@ -18,7 +28,9 @@ public sealed record ProviderActivity(
     int ConsecutiveFailures,
     bool IsInFlight,
     RefreshTrigger? LastTrigger = null,
-    int SuppressedRequests = 0);
+    int SuppressedRequests = 0,
+    int ConsecutiveThrottles = 0,
+    NextAttemptSource NextAttemptSource = NextAttemptSource.Interval);
 
 /// <summary>One provider's answer, raised as soon as that provider answers rather than at the end of a cycle.</summary>
 public sealed record ProviderRefreshed(ProviderDescriptor Provider, ProviderSnapshot Snapshot);
@@ -146,7 +158,9 @@ public sealed class ProviderRefreshService
                 backoff?.ConsecutiveFailures ?? 0,
                 attempts?.InFlight.Count > 0,
                 attempts?.LastTrigger,
-                attempts?.SuppressedRequests ?? 0);
+                attempts?.SuppressedRequests ?? 0,
+                backoff?.ConsecutiveThrottles ?? 0,
+                backoff?.NextAttemptSource ?? NextAttemptSource.Interval);
         }
     }
 
@@ -159,6 +173,21 @@ public sealed class ProviderRefreshService
         consecutiveFailures <= 0
             ? TimeSpan.Zero
             : baseInterval * Math.Min(Math.Pow(2, consecutiveFailures - 1), 8);
+
+    private static readonly TimeSpan[] ThrottleLadder =
+    [
+        TimeSpan.FromMinutes(2),
+        TimeSpan.FromMinutes(4),
+        TimeSpan.FromMinutes(8)
+    ];
+
+    /// <summary>
+    /// How long to wait after a provider refused the request without saying for how long. Fixed
+    /// minutes rather than a multiple of the configured interval: the wait a provider needs is a fact
+    /// about the provider, not about how often the user wants the widget updated.
+    /// </summary>
+    public static TimeSpan ThrottleBackoffFor(int consecutiveThrottles) =>
+        ThrottleLadder[Math.Clamp(consecutiveThrottles, 1, ThrottleLadder.Length) - 1];
 
     /// <summary>
     /// Probes every provider concurrently. Never throws: a provider that fails produces an Error
@@ -213,6 +242,15 @@ public sealed class ProviderRefreshService
             {
                 attempts.SuppressedRequests++;
                 return running;
+            }
+
+            // The only gate a forced refresh may not bypass. An ordinary failure backoff still yields
+            // to a manual retry - that is how someone recovers a provider by hand - but asking harder
+            // is exactly the wrong response to being told to ask less (spec §4.4).
+            if (IsThrottledUnsafe(provider, now))
+            {
+                attempts.SuppressedRequests++;
+                return Task.CompletedTask;
             }
 
             if (!force && IsBackedOffUnsafe(provider, now))
@@ -381,6 +419,27 @@ public sealed class ProviderRefreshService
     private bool IsBackedOffUnsafe(ProviderDescriptor provider, DateTimeOffset now) =>
         _backoff.TryGetValue(provider, out Backoff? state) && state.NextAttempt > now;
 
+    private bool IsThrottledUnsafe(ProviderDescriptor provider, DateTimeOffset now) =>
+        _backoff.TryGetValue(provider, out Backoff? state)
+        && state.ThrottleUntil is DateTimeOffset until
+        && until > now;
+
+    /// <summary>
+    /// When this provider may next be contacted at all, including by a manual retry, or null when no
+    /// throttle cooldown is active.
+    /// </summary>
+    public DateTimeOffset? ThrottledUntil(ProviderDescriptor provider, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            return _backoff.TryGetValue(provider, out Backoff? state)
+                && state.ThrottleUntil is DateTimeOffset until
+                && until > now
+                    ? until
+                    : null;
+        }
+    }
+
     private AttemptState GetAttempts(ProviderDescriptor provider)
     {
         if (!_attempts.TryGetValue(provider, out AttemptState? attempts))
@@ -429,21 +488,43 @@ public sealed class ProviderRefreshService
 
     private void Record(ProviderDescriptor provider, ProviderSnapshot snapshot, DateTimeOffset now)
     {
-        // NotInstalled and Unsupported are stable facts about the machine, not failures to retry
-        // more slowly - and re-checking them costs a file-existence test.
-        bool failed = snapshot.State is ConnectionState.Error or ConnectionState.Unavailable;
-
         if (!_backoff.TryGetValue(provider, out Backoff? state))
         {
             state = new Backoff();
             _backoff[provider] = state;
         }
 
-        state.ConsecutiveFailures = failed ? state.ConsecutiveFailures + 1 : 0;
         TimeSpan interval = IntervalForUnsafe(provider);
-        state.NextAttempt = now + (failed
-            ? BackoffFor(state.ConsecutiveFailures, interval)
-            : interval);
+
+        if (snapshot.Throttle is ThrottleAdvice advice)
+        {
+            state.ConsecutiveThrottles++;
+
+            if (advice.NotBefore is DateTimeOffset instructed)
+            {
+                state.ThrottleUntil = instructed;
+                state.NextAttemptSource = NextAttemptSource.ProviderThrottle;
+            }
+            else
+            {
+                state.ThrottleUntil = now + ThrottleBackoffFor(state.ConsecutiveThrottles);
+                state.NextAttemptSource = NextAttemptSource.ApplicationThrottle;
+            }
+
+            DateTimeOffset healthy = now + interval;
+            state.NextAttempt = state.ThrottleUntil.Value > healthy ? state.ThrottleUntil.Value : healthy;
+            return;
+        }
+
+        state.ConsecutiveThrottles = 0;
+        state.ThrottleUntil = null;
+
+        // NotInstalled and Unsupported are stable facts about the machine, not failures to retry
+        // more slowly - and re-checking them costs a file-existence test.
+        bool failed = snapshot.State is ConnectionState.Error or ConnectionState.Unavailable;
+        state.ConsecutiveFailures = failed ? state.ConsecutiveFailures + 1 : 0;
+        state.NextAttemptSource = failed ? NextAttemptSource.FailureBackoff : NextAttemptSource.Interval;
+        state.NextAttempt = now + (failed ? BackoffFor(state.ConsecutiveFailures, interval) : interval);
     }
 
     private TimeSpan IntervalForUnsafe(ProviderDescriptor provider)
@@ -465,6 +546,12 @@ public sealed class ProviderRefreshService
     private sealed class Backoff
     {
         public int ConsecutiveFailures { get; set; }
+
+        public int ConsecutiveThrottles { get; set; }
+
+        public DateTimeOffset? ThrottleUntil { get; set; }
+
+        public NextAttemptSource NextAttemptSource { get; set; }
 
         public DateTimeOffset NextAttempt { get; set; }
     }

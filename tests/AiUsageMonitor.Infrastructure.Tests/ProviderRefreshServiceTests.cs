@@ -26,7 +26,7 @@ public class ProviderRefreshServiceTests
         }
     }
 
-    private static ProviderSnapshot Snapshot(string name, ConnectionState state) => new(
+    private static ProviderSnapshot Snapshot(string name, ConnectionState state, ThrottleAdvice? throttle = null) => new(
         ProviderName: name,
         Installed: true,
         Version: null,
@@ -38,7 +38,8 @@ public class ProviderRefreshServiceTests
         Windows: [],
         RetrievedAt: state == ConnectionState.Connected ? Now : null,
         Error: null,
-        Notes: []);
+        Notes: [],
+        Throttle: throttle);
 
     private static ProviderDescriptor Descriptor(
         string name,
@@ -580,4 +581,47 @@ public class ProviderRefreshServiceTests
         Assert.Equal(
             TimeSpan.FromSeconds(expectedSeconds),
             ProviderRefreshService.BackoffFor(failures, TimeSpan.FromSeconds(60)));
+
+    [Fact]
+    public async Task AThrottleWithAProviderInstantSchedulesExactlyThatInstant()
+    {
+        DateTimeOffset instructed = Now + TimeSpan.FromMinutes(15);
+        ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
+            Snapshot("Alpha", ConnectionState.Error, new ThrottleAdvice(instructed))));
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+
+        ProviderActivity activity = service.ActivityFor(provider, Now);
+        Assert.Equal(instructed, service.NextAttemptFor(provider, Now));
+        Assert.Equal(NextAttemptSource.ProviderThrottle, activity.NextAttemptSource);
+        Assert.Equal(0, activity.ConsecutiveFailures);
+    }
+
+    [Fact]
+    public void ConsecutiveThrottlesWithoutAnInstantUseTheTwoFourEightMinuteLadder()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(2), ProviderRefreshService.ThrottleBackoffFor(1));
+        Assert.Equal(TimeSpan.FromMinutes(4), ProviderRefreshService.ThrottleBackoffFor(2));
+        Assert.Equal(TimeSpan.FromMinutes(8), ProviderRefreshService.ThrottleBackoffFor(3));
+        Assert.Equal(TimeSpan.FromMinutes(8), ProviderRefreshService.ThrottleBackoffFor(5));
+    }
+
+    [Fact]
+    public async Task AForcedRefreshIsRefusedDuringAThrottleCooldown()
+    {
+        int calls = 0;
+        ProviderDescriptor provider = Descriptor("Alpha", _ =>
+        {
+            calls++;
+            return Task.FromResult(Snapshot("Alpha", ConnectionState.Error, new ThrottleAdvice(Now + TimeSpan.FromMinutes(5))));
+        });
+        ProviderRefreshService service = Service(provider);
+
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now, CancellationToken.None);
+        await service.RefreshAsync(provider, RefreshTrigger.ManualCard, Now.AddMinutes(1), CancellationToken.None);
+
+        Assert.Equal(1, calls);
+        Assert.Equal(Now + TimeSpan.FromMinutes(5), service.ThrottledUntil(provider, Now.AddMinutes(1)));
+    }
 }
