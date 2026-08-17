@@ -146,8 +146,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    // Retained for existing internal callers. New application call sites name their trigger.
-    public Task RefreshAsync(bool force) => RefreshAsync(force, RefreshTrigger.ManualGlobal);
+    /// <summary>
+    /// Retained for callers that have no trigger to name. The trigger is derived from
+    /// <paramref name="force"/> rather than fixed, because the two differ in a way that matters:
+    /// the manual triggers are exempt from the workstation-lock pause, so labelling an UNforced
+    /// refresh as a manual one would let a scheduled poll run while the machine is locked - exactly
+    /// the traffic this increment exists to stop. An unforced refresh is a scheduled one.
+    /// </summary>
+    public Task RefreshAsync(bool force) =>
+        RefreshAsync(force, force ? RefreshTrigger.ManualGlobal : RefreshTrigger.Scheduled);
 
     public void SetWorkstationLocked(bool locked) => _refresh.IsWorkstationLocked = locked;
 

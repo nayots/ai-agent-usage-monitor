@@ -111,6 +111,33 @@ public class MainViewModelTests
         model.Dispose();
     }
 
+    /// <summary>
+    /// The trigger-less overload derives its trigger from <c>force</c>. Fixing it to a manual
+    /// trigger would make an unforced refresh exempt from the workstation-lock pause, because the
+    /// two manual triggers are the ones the scheduler deliberately lets through while locked - so a
+    /// scheduled poll routed through this overload would keep hitting the provider behind a lock
+    /// screen.
+    /// </summary>
+    [Fact]
+    public async Task AnUnforcedRefreshDoesNotPollWhileTheWorkstationIsLocked()
+    {
+        StubProbe probe = new("Codex", ConnectionState.Connected, []);
+        ProviderDescriptor provider = new("codex", "Codex", "CX", probe);
+        ProviderRefreshService service = new([provider], TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
+        MainViewModel model = new(service, [provider], AppSettings.Default, () => Now);
+
+        model.SetWorkstationLocked(true);
+        await model.RefreshAsync(force: false);
+
+        Assert.Equal(0, probe.Calls);
+
+        model.SetWorkstationLocked(false);
+        await model.RefreshAsync(force: false);
+
+        Assert.Equal(1, probe.Calls);
+        model.Dispose();
+    }
+
     [Fact]
     public void RetryingOneProviderDoesNotRefreshTheOther()
     {
