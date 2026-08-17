@@ -13,3 +13,14 @@ This checklist records the review required before the repository is made public.
 | Issue template asking for the redacted diagnostics bundle | Issue-template coverage has not been added by this implementation task. | Owner review of `.github/ISSUE_TEMPLATE/`. | Add an issue template that asks for the redacted diagnostics bundle if issue intake is enabled. | No |
 
 Compiled on 2026-08-17 against the commit this checklist is committed with; re-run it if publication happens materially later.
+
+## Outcome
+
+The repository was made **public on 2026-08-17**, at commit `e134277`, with the owner's
+explicit decision on the one row that was a judgement call rather than a defect: the
+captured quota percentages and session cost in `fixtures/claude-statusline-sample.json`
+are published deliberately. Check A found no secret in any commit.
+
+The two rows marked "No" — repository topics, and an issue template asking for the
+redacted diagnostics bundle — remain open. Neither blocked publication and both are still
+worth doing.
