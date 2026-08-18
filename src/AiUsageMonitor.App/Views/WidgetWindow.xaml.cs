@@ -226,6 +226,7 @@ public partial class WidgetWindow : Window
         UpdateTrayGlyph();
 
         DeliverAlerts();
+        DeliverPendingUpdateAnnouncement();
     }
 
     /// <summary>
@@ -594,7 +595,55 @@ public partial class WidgetWindow : Window
     }
 
     private void OnUpdateStatusChanged(object? sender, UpdateStatus status) =>
-        Dispatcher.Invoke(() => _model.ApplyUpdateStatus(status));
+        Dispatcher.Invoke(() =>
+        {
+            _model.ApplyUpdateStatus(status);
+            AnnounceUpdate(status);
+        });
+
+    /// <summary>
+    /// Rides the same balloon path as a quota alert, so the notification toggle and quiet hours
+    /// apply to it without a second copy of either rule. Silent: a new release is worth saying,
+    /// never worth a sound - only a spent limit earns that.
+    /// </summary>
+    private void AnnounceUpdate(UpdateStatus status)
+    {
+        AppSettings settings = _settings.Current;
+
+        if (!settings.NotifyOnQuotaEvents
+            || !UpdateAnnouncement.ShouldAnnounce(status, settings.LastNotifiedUpdateVersion))
+        {
+            return;
+        }
+
+        if (settings.QuietHours.Contains(TimeOnly.FromDateTime(DateTime.Now)))
+        {
+            // Held, not dropped: LastNotifiedUpdateVersion is untouched, so it announces once the
+            // quiet window ends rather than being silently spent while nobody was listening.
+            return;
+        }
+
+        if (_tray is null)
+        {
+            return;
+        }
+
+        _tray.Notify(UpdateAnnouncement.Title, UpdateAnnouncement.Text(status), silent: true);
+        _settings.Update(s => s with { LastNotifiedUpdateVersion = status.Latest?.ToString() });
+    }
+
+    /// <summary>
+    /// An update held during quiet hours remains eligible because its version is not recorded until
+    /// after delivery. Revisit the retained status on the existing visible tick so it can announce
+    /// shortly after quiet hours end without adding another timer.
+    /// </summary>
+    private void DeliverPendingUpdateAnnouncement()
+    {
+        if (_updates is not null)
+        {
+            AnnounceUpdate(_updates.Status);
+        }
+    }
 
     /// <summary>
     /// Written through the settings service rather than by assigning <see cref="Window.Topmost"/>
