@@ -9,6 +9,7 @@ using AiUsageMonitor.Infrastructure.Diagnostics;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
+using AiUsageMonitor.Infrastructure.Updates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -64,6 +65,17 @@ public partial class App : Application
             timeout: TimeSpan.FromSeconds(30),
             baseInterval: loaded.Settings.RefreshInterval,
             provider.GetRequiredService<ILogger<ProviderRefreshService>>()));
+
+        // startedAt is now, so the first check waits out UpdateCheckService.StartupDelay and never
+        // competes with the first quota read - spec D7.
+        services.AddSingleton(_ => new UpdateCheckService(
+            EnvironmentReport.CaptureApplicationVersion(),
+            initialETag: loaded.Settings.LastUpdateCheckETag,
+            lastCheckedUtc: loaded.Settings.LastUpdateCheckUtc,
+            startedAt: DateTimeOffset.Now)
+        {
+            Enabled = loaded.Settings.UpdateCheckEnabled
+        });
 
         _services = services.BuildServiceProvider();
         _logger = _services.GetRequiredService<ILogger<App>>();

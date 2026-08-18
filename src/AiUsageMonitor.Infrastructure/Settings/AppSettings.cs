@@ -218,5 +218,36 @@ public sealed record AppSettings
     /// </summary>
     public bool TrayHintShown { get; init; }
 
+    /// <summary>
+    /// Whether the application asks GitHub's public release feed, once a day, whether a newer
+    /// release exists (spec D3). On by default.
+    /// <para>
+    /// The request is unauthenticated, carries a constant User-Agent with no version, and sends
+    /// nothing about this machine - so it transmits none of the usage data, diagnostics or settings
+    /// PRD §23 protects. Turning this off stops every unattended request; the settings window's
+    /// "Check now" button still works, because that one the user asked for.
+    /// </para>
+    /// </summary>
+    public bool UpdateCheckEnabled { get; init; } = true;
+
+    /// <summary>
+    /// When the last check completed, so a restart does not start the day's cadence again. Null
+    /// until one has run.
+    /// </summary>
+    public DateTimeOffset? LastUpdateCheckUtc { get; init; }
+
+    /// <summary>
+    /// The feed's last ETag, sent back as <c>If-None-Match</c> so an unchanged check costs a 304
+    /// rather than a body. Persisted because the saving is worth nothing if it lapses at every
+    /// restart.
+    /// </summary>
+    public string? LastUpdateCheckETag { get; init; }
+
+    /// <summary>
+    /// The version last announced in a notification, so a given release interrupts once and never
+    /// again. Application state rather than a preference, and so not offered in the settings window.
+    /// </summary>
+    public string? LastNotifiedUpdateVersion { get; init; }
+
     public static AppSettings Default { get; } = new();
 }
