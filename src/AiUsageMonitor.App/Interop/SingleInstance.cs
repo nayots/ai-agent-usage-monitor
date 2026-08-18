@@ -19,6 +19,13 @@ public sealed class SingleInstance : IDisposable
     /// </summary>
     public static readonly uint ShowMessage = RegisterWindowMessage("AiUsageMonitor.Show");
 
+    /// <summary>
+    /// Broadcast by a replacing instance to ask the running one to exit. Separate from
+    /// <see cref="ShowMessage"/> because the two mean opposite things and a receiver must never
+    /// guess which was meant.
+    /// </summary>
+    public static readonly uint QuitMessage = RegisterWindowMessage("AiUsageMonitor.Quit");
+
     private const int HWND_BROADCAST = 0xFFFF;
 
     private readonly Mutex _mutex;
@@ -49,6 +56,13 @@ public sealed class SingleInstance : IDisposable
     /// instance that is busy cannot block this one from exiting.
     /// </summary>
     public static void BroadcastShow() => PostMessage(new IntPtr(HWND_BROADCAST), ShowMessage, IntPtr.Zero, IntPtr.Zero);
+
+    /// <summary>
+    /// Asks whichever instance already exists to exit, so this one can take the mutex. Cooperative
+    /// on purpose: the running copy shuts down through its own exit path, releasing its tray icon
+    /// and flushing its settings, neither of which survives a terminated process.
+    /// </summary>
+    public static void BroadcastQuit() => PostMessage(new IntPtr(HWND_BROADCAST), QuitMessage, IntPtr.Zero, IntPtr.Zero);
 
     public void Dispose()
     {

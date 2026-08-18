@@ -20,6 +20,7 @@ public partial class App : Application
     private ServiceProvider? _services;
     private ILogger<App>? _logger;
     private SingleInstance? _instance;
+    private InstanceCoordinator? _coordinator;
 
     public IServiceProvider Services => _services
         ?? throw new InvalidOperationException("Services are not available until startup has run.");
@@ -28,9 +29,16 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        if (!SingleInstance.TryAcquire("AiUsageMonitor.SingleInstance", out _instance))
+        _coordinator = new InstanceCoordinator(
+            "AiUsageMonitor.SingleInstance",
+            Environment.ProcessPath,
+            EnvironmentReport.CaptureApplicationVersion(),
+            new RunningInstanceFile(RunningInstanceFile.DefaultPath),
+            new WindowMessenger(),
+            new MessageBoxPrompts());
+
+        if (_coordinator.Acquire(out _instance) != InstanceOutcome.Start)
         {
-            SingleInstance.BroadcastShow();
             Shutdown();
             return;
         }
@@ -140,6 +148,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Before the mutex, never after: see InstanceCoordinator.Release.
+        _coordinator?.Release();
         _instance?.Dispose();
         _services?.GetService<ThemeManager>()?.Dispose();
         _services?.Dispose();

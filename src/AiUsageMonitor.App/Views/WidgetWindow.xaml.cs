@@ -668,6 +668,14 @@ public partial class WidgetWindow : Window
             handled = true;
         }
 
+        if ((uint)msg == SingleInstance.QuitMessage)
+        {
+            // ExitApplication, not Shutdown: it is the one path that actually ends the process, and
+            // it is what releases the tray icon. Shutting down around it leaves a ghost icon behind.
+            ExitApplication();
+            handled = true;
+        }
+
         return IntPtr.Zero;
     }
 
