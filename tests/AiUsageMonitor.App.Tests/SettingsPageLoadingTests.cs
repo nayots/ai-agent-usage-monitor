@@ -1,5 +1,7 @@
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -9,6 +11,7 @@ using AiUsageMonitor.App.Views.Settings;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Settings;
+using AiUsageMonitor.Infrastructure.Updates;
 
 namespace AiUsageMonitor.App.Tests;
 
@@ -28,7 +31,7 @@ public class SettingsPageLoadingTests(WpfFixture wpf)
         public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => throw new NotSupportedException();
     }
 
-    private static SettingsViewModel Model()
+    private static SettingsViewModel Model(UpdateCheckService? updates = null)
     {
         string path = Path.Combine(Path.GetTempPath(), "aium-page-" + Guid.NewGuid().ToString("N"), "settings.json");
 
@@ -41,7 +44,8 @@ public class SettingsPageLoadingTests(WpfFixture wpf)
             [
                 new ProviderDescriptor("claude-code", "Claude Code", "CC", new SilentProbe("Claude Code")),
                 new ProviderDescriptor("codex", "Codex", "CX", new SilentProbe("Codex"))
-            ]);
+            ],
+            updates: updates);
     }
 
     private static T Page<T>(object dataContext) where T : UserControl, new()
@@ -64,9 +68,54 @@ public class SettingsPageLoadingTests(WpfFixture wpf)
         Assert.True(Page<ProvidersPage>(model).ActualHeight > 0);
         Assert.True(Page<NotificationsPage>(model).ActualHeight > 0);
         Assert.True(Page<RefreshPage>(model).ActualHeight > 0);
+        Assert.True(Page<UpdatesPage>(model).ActualHeight > 0);
 
         model.Dispose();
     });
+
+    /// <summary>
+    /// The button is replaced by the spinner rather than sitting beside it, and it is never
+    /// disabled - a check already running is joined, not refused.
+    /// </summary>
+    [Fact]
+    public void TheCheckButtonBecomesASpinnerWhileACheckRuns() => wpf.Invoke(() =>
+    {
+        // Never released, so the check is still running when the page is measured again.
+        TaskCompletionSource gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        SettingsViewModel model = Model(new UpdateCheckService(
+            "0.1.3", new GitHubReleaseClient(new HeldHandler(gate.Task))));
+
+        UpdatesPage page = Page<UpdatesPage>(model);
+        Button check = Descendants(page).OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == "Check now");
+
+        Assert.Equal(Visibility.Visible, check.Visibility);
+        Assert.NotNull(check.ToolTip);
+        Assert.True(check.IsEnabled);
+
+        _ = model.CheckForUpdatesAsync();
+        page.UpdateLayout();
+
+        Assert.Equal(Visibility.Collapsed, check.Visibility);
+        Assert.True(check.IsEnabled);
+
+        FrameworkElement busy = (FrameworkElement)Descendants(page).OfType<TextBlock>()
+            .Single(text => text.Text == "Checking…").Parent;
+        Assert.Equal(Visibility.Visible, busy.Visibility);
+
+        gate.SetResult();
+        model.Dispose();
+    });
+
+    private sealed class HeldHandler(Task hold) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await hold.ConfigureAwait(false);
+            return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+        }
+    }
 
     [Fact]
     public void TheTwoActionsThatChangedPageCameWithTheirPage() => wpf.Invoke(() =>

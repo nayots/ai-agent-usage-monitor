@@ -16,10 +16,86 @@
                Style="{StaticResource CaptionTextStyle}"
                Foreground="{DynamicResource TextTertiaryBrush}" />
     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-      <Button Content="Check now" Command="{Binding CheckForUpdatesCommand}"
-              Style="{StaticResource SettingsActionButtonStyle}" Margin="0,0,8,0" />
+
+      <!--
+        The button and the spinner share one cell, so the row keeps its width and height and the
+        neighbouring button does not move when one replaces the other. The button carries no
+        IsEnabled or CanExecute condition on purpose: a press while a check is running joins that
+        check rather than starting a second, so there is nothing to protect against by refusing it.
+      -->
+      <Grid Margin="0,0,8,0">
+        <Button Content="Check now" Command="{Binding CheckForUpdatesCommand}"
+                ToolTip="Check GitHub for a newer release now, instead of waiting for the daily check."
+                AutomationProperties.Name="Check now">
+          <Button.Style>
+            <Style TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCheckingForUpdates}" Value="True">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Button.Style>
+        </Button>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,6"
+                    AutomationProperties.LiveSetting="Polite">
+          <StackPanel.Style>
+            <Style TargetType="StackPanel">
+              <Setter Property="Visibility" Value="Collapsed" />
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCheckingForUpdates}" Value="True">
+                  <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </StackPanel.Style>
+
+          <!--
+            An arc rather than a ring: the dash array leaves roughly a quarter of the circumference
+            drawn, which is what makes the rotation readable at 12px. The transform is declared on
+            the element rather than in the style because a style's setter value is shared and
+            frozen, and a frozen transform cannot be animated.
+          -->
+          <Ellipse Width="12" Height="12" Margin="0,0,6,0" VerticalAlignment="Center"
+                   Stroke="{DynamicResource AccentTextBrush}" StrokeThickness="2"
+                   StrokeDashArray="4 12" StrokeDashCap="Round"
+                   RenderTransformOrigin="0.5,0.5">
+            <Ellipse.RenderTransform>
+              <RotateTransform />
+            </Ellipse.RenderTransform>
+            <Ellipse.Style>
+              <Style TargetType="Ellipse">
+                <Style.Triggers>
+                  <!-- Keyed to IsVisible so the clock only runs while the spinner is on screen. -->
+                  <Trigger Property="IsVisible" Value="True">
+                    <Trigger.EnterActions>
+                      <BeginStoryboard x:Name="Spin">
+                        <Storyboard>
+                          <DoubleAnimation
+                            Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                            From="0" To="360" Duration="0:0:0.9" RepeatBehavior="Forever" />
+                        </Storyboard>
+                      </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                      <StopStoryboard BeginStoryboardName="Spin" />
+                    </Trigger.ExitActions>
+                  </Trigger>
+                </Style.Triggers>
+              </Style>
+            </Ellipse.Style>
+          </Ellipse>
+          <TextBlock Text="Checking…" VerticalAlignment="Center"
+                     Style="{StaticResource BodySmallTextStyle}"
+                     Foreground="{DynamicResource TextSecondaryBrush}" />
+        </StackPanel>
+      </Grid>
+
       <Button Content="Open the release page" Command="{Binding OpenReleasePageCommand}"
-              Style="{StaticResource SettingsActionButtonStyle}" />
+              Style="{StaticResource SettingsActionButtonStyle}"
+              ToolTip="Open this project's releases on github.com in your browser."
+              AutomationProperties.Name="Open the release page" />
     </StackPanel>
   </StackPanel>
 </UserControl>

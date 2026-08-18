@@ -171,14 +171,19 @@ public sealed class UpdateCheckServiceTests
     }
 
     [Fact]
-    public async Task A_manual_check_is_refused_inside_its_cooldown()
+    public async Task A_manual_check_is_never_refused_for_asking_too_soon()
     {
-        UpdateCheckService service = Service("0.1.3", "v0.1.4");
+        // There was a 60-second cooldown here and it is gone on purpose. It disabled the button
+        // for a minute after every press, which reads as a broken button rather than as a rule,
+        // and it guarded nothing: sharing already bounds the rate to one request per completed
+        // check, and a check GitHub refuses for asking too often is an ordinary failed check.
+        StubHandler handler = new(Body("v0.1.4"));
+        UpdateCheckService service = new("0.1.3", new GitHubReleaseClient(handler));
 
         await service.CheckAsync(manual: true, Now, CancellationToken.None);
+        await service.CheckAsync(manual: true, Now.AddSeconds(1), CancellationToken.None);
 
-        Assert.False(service.CanCheckManually(Now.AddSeconds(59)));
-        Assert.True(service.CanCheckManually(Now.AddSeconds(60)));
+        Assert.Equal(2, handler.RequestCount);
     }
 
     [Fact]

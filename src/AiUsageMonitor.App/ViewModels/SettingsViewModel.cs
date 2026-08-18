@@ -34,6 +34,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private readonly bool _globalHotkeyUnavailable;
     private readonly UpdateCheckService _updates;
     private readonly Func<DateTimeOffset> _clock;
+    private bool _isCheckingForUpdates;
 
     public SettingsViewModel(
         SettingsService settings,
@@ -55,9 +56,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _providers = providers;
         _globalHotkeyUnavailable = globalHotkeyUnavailable;
 
-        CheckForUpdatesCommand = new RelayCommand(
-            () => _ = _updates.CheckAsync(manual: true, _clock(), CancellationToken.None),
-            () => _updates.CanCheckManually(_clock()));
+        // No CanExecute. The button is always pressable: while a check is running it shows a
+        // spinner instead, and a press after one has finished is a legitimate re-check.
+        CheckForUpdatesCommand = new RelayCommand(() => _ = CheckForUpdatesAsync());
 
         OpenReleasePageCommand = new RelayCommand(OpenReleasePage);
 
@@ -198,6 +199,38 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public bool HasUpdate => _updates.Status.Availability == UpdateAvailability.UpdateAvailable;
 
+    /// <summary>
+    /// Whether a check is running, so the page can show a spinner where the button was. The press
+    /// itself is never refused: the service shares one request, so pressing again while this is
+    /// true would join the check already running rather than start a second one.
+    /// </summary>
+    public bool IsCheckingForUpdates
+    {
+        get => _isCheckingForUpdates;
+        private set => Set(ref _isCheckingForUpdates, value);
+    }
+
+    /// <summary>
+    /// Exposed as a task so a test can await the check rather than sleep on it. The command
+    /// discards it, which is the one place fire-and-forget is right - a button press has no
+    /// caller to return to.
+    /// </summary>
+    public async Task CheckForUpdatesAsync()
+    {
+        IsCheckingForUpdates = true;
+
+        try
+        {
+            await _updates
+                .CheckAsync(manual: true, _clock(), CancellationToken.None)
+                .ConfigureAwait(true);
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
     public RelayCommand CheckForUpdatesCommand { get; }
 
     public RelayCommand OpenReleasePageCommand { get; }
@@ -314,7 +347,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         Raise(nameof(UpdateStatusText));
         Raise(nameof(UpdateLastCheckedText));
         Raise(nameof(HasUpdate));
-        CheckForUpdatesCommand.RaiseCanExecuteChanged();
     }
 
     /// <summary>

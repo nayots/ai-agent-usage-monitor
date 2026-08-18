@@ -53,12 +53,6 @@ public sealed class UpdateCheckService
     public static readonly TimeSpan RetryInterval = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// How long the manual button stays refused after a check. Exists so the button cannot be
-    /// hammered, not because GitHub's 60-per-hour ceiling is reachable at a daily cadence.
-    /// </summary>
-    public static readonly TimeSpan ManualCooldown = TimeSpan.FromSeconds(60);
-
-    /// <summary>
     /// How long after startup the first check may run (spec D7). It exists so the check never
     /// competes with the first quota read, which is the one the user is actually waiting to see.
     /// <para>
@@ -76,7 +70,6 @@ public sealed class UpdateCheckService
 
     private Task<UpdateStatus>? _inFlight;
     private DateTimeOffset _nextAttempt;
-    private DateTimeOffset? _lastAttempt;
 
     public UpdateCheckService(
         string currentVersion,
@@ -117,12 +110,16 @@ public sealed class UpdateCheckService
 
     public bool IsDue(DateTimeOffset now) => Enabled && now >= _nextAttempt;
 
-    public bool CanCheckManually(DateTimeOffset now) =>
-        _lastAttempt is null || now - _lastAttempt >= ManualCooldown;
-
     /// <summary>
     /// Runs a check, or joins the one already running. Never throws: every failure below becomes an
     /// <see cref="UpdateAvailability.Unknown"/> status with a reason.
+    /// <para>
+    /// There is deliberately no cooldown gating a manual check. One was tried and removed: it
+    /// disabled the button for a minute after every press, which reads as the button being broken
+    /// rather than as a rule, and it protected against nothing real. Sharing already bounds the
+    /// rate to one request per completed check, and a check refused by GitHub for asking too often
+    /// is an ordinary failed check that says so and recovers on its own.
+    /// </para>
     /// </summary>
     public Task<UpdateStatus> CheckAsync(bool manual, DateTimeOffset now, CancellationToken cancellationToken)
     {
@@ -134,8 +131,6 @@ public sealed class UpdateCheckService
             {
                 return _inFlight;
             }
-
-            _lastAttempt = now;
 
             Task<UpdateStatus> started = RunAsync(now, cancellationToken);
 
