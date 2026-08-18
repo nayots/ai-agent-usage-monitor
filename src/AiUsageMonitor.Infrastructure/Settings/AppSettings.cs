@@ -11,7 +11,11 @@ public enum ThemePreference
     Dark
 }
 
-/// <summary>Widget density. Compact drops metadata in the order recorded in docs/design/rationale.md.</summary>
+/// <summary>
+/// Widget density. Compact drops metadata in a fixed order — per-card timestamp, version, monogram,
+/// the <em>Connected</em> chip, then padding — so that what goes first is what is least often read.
+/// A window label, percentage, bar, marker, countdown, tier badge or non-connected state is never cut.
+/// </summary>
 public enum WidgetDensity
 {
     Normal,
@@ -33,7 +37,7 @@ public sealed record AppSettings
 {
     /// <summary>
     /// The floor for every effective refresh interval, global or per-provider. The Claude Code
-    /// mechanism is an undocumented first-party endpoint (CLAUDE.md), so the ceiling on how often it
+    /// mechanism is an undocumented first-party endpoint, so the ceiling on how often it
     /// may be asked is the provider's to set and ours to stay under.
     /// <para>
     /// Raised from 60 to 120 seconds on 2026-08-18: a 60-second cadence drew repeated HTTP 429s from

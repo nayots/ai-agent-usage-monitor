@@ -6,7 +6,6 @@ namespace AiUsageMonitor.Infrastructure.Theming;
 /// flush inside the left cap and at 100% flush inside the right, never overhanging the track and
 /// never merging with an end cap. The core's centre therefore shifts by at most half the marker
 /// width from a mathematically exact position, a deliberate trade at a 5px bar height.
-/// See docs/design/tokens.md §2.
 /// </summary>
 public static class ElapsedMarkerLayout
 {

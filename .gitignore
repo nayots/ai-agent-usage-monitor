@@ -62,3 +62,20 @@ $RECYCLE.BIN/
 # a bash subprocess faults; they carry no project value and must never land in
 # a commit.
 *.stackdump
+
+# Process documents. These stay on disk and are used every day locally; they are
+# deliberately not part of the public tree. The repository is a product, not a
+# record of how it was built — the plans, specs, design output and PRD say more
+# about the workflow than about the application, and the design folder alone is
+# ~500 KB of generated HTML plus a vendored component runtime.
+#
+# They remain readable in this repository's history; untracking them stops them
+# accumulating in HEAD, it does not unpublish them.
+/CLAUDE.md
+/AGENTS.md
+docs/PRD.md
+docs/codex-workflow.md
+docs/pre-publication-checklist.md
+docs/design/
+docs/plans/
+docs/specs/

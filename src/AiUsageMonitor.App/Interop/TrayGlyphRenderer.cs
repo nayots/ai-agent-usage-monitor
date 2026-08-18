@@ -94,7 +94,7 @@ public sealed record TrayGlyphPalette(
 }
 
 /// <summary>
-/// Draws <c>docs/design/TrayGlyph.dc.html</c> into a notification-area icon: a stack of bars, one
+/// Draws the widget into a notification-area icon: a stack of bars, one
 /// per quota window, with the worst percentage above them as digits and a state overlay on top.
 /// <para>
 /// Everything is measured in device pixels. The bitmap is created at 96 dpi so one drawing unit is

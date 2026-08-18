@@ -18,7 +18,6 @@
     0.x is deliberate and is not modesty about the code: the Claude Code mechanism is
     unofficial and undocumented and may break without notice, so a 1.0 would promise a
     stability that depends on an endpoint this project does not control.
-    See docs/specs/2026-08-17-release-and-distribution.md, D1 and D2.
   -->
   <PropertyGroup>
     <VersionPrefix>0.1.2</VersionPrefix>

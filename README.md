@@ -120,7 +120,7 @@ powershell -File build/publish.ps1             # the single-file release artifac
 
 `build/publish.ps1` produces the self-contained executable and stages it with its checksum under `artifacts/`. The release artifact is **always** the self-contained build — the framework-dependent one is a few hundred kilobytes, runs fine on a machine that already has the .NET 10 Desktop Runtime, and fails everywhere else.
 
-`docs/PRD.md` is the authoritative specification. `CLAUDE.md` documents the provider mechanisms and the architectural rules in detail.
+`docs/provider-capability-findings.md` is the verification record behind the table at the top of this file: how each mechanism was proven, the wire formats and schemas observed, the version behaviour, and the mechanisms that were investigated and rejected for carrying no usable quota signal.
 
 ## Licence
 
