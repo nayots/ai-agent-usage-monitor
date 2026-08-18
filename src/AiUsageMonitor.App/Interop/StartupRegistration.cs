@@ -41,23 +41,42 @@ public sealed class StartupRegistration
     public bool IsSupported => _executablePath is not null;
 
     /// <summary>
-    /// True only when the stored command line is this executable. An entry left by a copy of the
-    /// app that has since moved is not this app starting with Windows, so it reads as off and
-    /// <see cref="Enable"/> overwrites it.
+    /// True when a value exists under this application's own name. Deliberately not a path
+    /// comparison: the value name is ours, nothing else writes it, so its presence means "registered
+    /// to start with Windows" whichever copy's path it holds. An upgraded release carries a new file
+    /// name, and reading that as off would show an unchecked box while Windows went on launching the
+    /// previous version at every login.
     /// </summary>
-    public bool IsEnabled
-    {
-        get
-        {
-            if (_executablePath is null)
-            {
-                return false;
-            }
+    public bool IsEnabled => _executablePath is not null && StoredCommand() is not null;
 
-            using RegistryKey? key = Registry.CurrentUser.OpenSubKey(_keyPath);
-            return key?.GetValue(_valueName) is string stored
-                && string.Equals(stored, Command(_executablePath), StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Registered, but under some other executable — an entry left behind by a previous release or
+    /// by a copy that has since moved. This is a stale entry to repair, not evidence of a second
+    /// application; see <see cref="SyncPath"/>.
+    /// </summary>
+    public bool IsRegisteredElsewhere =>
+        _executablePath is not null
+        && StoredCommand() is string stored
+        && !string.Equals(stored, Command(_executablePath), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Repoints an existing registration at the running executable, and does nothing at all when
+    /// there is no registration to repair. Without this, upgrading to a release with a new file name
+    /// leaves Windows starting the old one forever, and deleting the old file leaves the entry
+    /// dangling with nothing in the UI to say so.
+    /// </summary>
+    public void SyncPath()
+    {
+        if (IsRegisteredElsewhere)
+        {
+            Enable();
         }
+    }
+
+    private string? StoredCommand()
+    {
+        using RegistryKey? key = Registry.CurrentUser.OpenSubKey(_keyPath);
+        return key?.GetValue(_valueName) as string;
     }
 
     public void Enable()

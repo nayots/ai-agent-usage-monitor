@@ -39,6 +39,12 @@ public partial class App : Application
         // window disappearing as the end of the application.
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+#if !DEBUG
+        // Release builds only. A debug build running out of bin\Debug must never claim the user's
+        // real registration, which is exactly what happens if this runs on every dotnet run.
+        StartupRegistration.ForThisProcess().SyncPath();
+#endif
+
         AppSettingsStore store = new(AppSettingsStore.DefaultPath);
         SettingsLoadResult loaded = store.Load();
 

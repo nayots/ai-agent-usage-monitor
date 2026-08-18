@@ -14,6 +14,12 @@ public sealed class StartupRegistrationTests : IDisposable
 
     private static StartupRegistration Registration(string? path) => new(ScratchKey, ValueName, path);
 
+    private static string? Stored()
+    {
+        using RegistryKey? key = Registry.CurrentUser.OpenSubKey(ScratchKey);
+        return key?.GetValue(ValueName) as string;
+    }
+
     [Fact]
     public void ANewMachineStartsDisabled() => Assert.False(Registration(@"C:\app\widget.exe").IsEnabled);
 
@@ -51,14 +57,14 @@ public sealed class StartupRegistrationTests : IDisposable
     }
 
     [Fact]
-    public void AnEntryPointingAtADifferentExecutableReadsAsDisabled()
+    public void AnEntryPointingAtADifferentExecutableStillReadsAsEnabled()
     {
-        // A moved or reinstalled app must show the checkbox off, so that turning it on rewrites the
-        // entry to the new location. Reporting a third "registered elsewhere" state would be one
-        // more thing the UI has to explain for no gain.
         Registration(@"C:\old\widget.exe").Enable();
 
-        Assert.False(Registration(@"C:\new\widget.exe").IsEnabled);
+        StartupRegistration upgraded = Registration(@"C:\new\widget.exe");
+
+        Assert.True(upgraded.IsEnabled);
+        Assert.True(upgraded.IsRegisteredElsewhere);
     }
 
     [Fact]
@@ -70,7 +76,8 @@ public sealed class StartupRegistrationTests : IDisposable
         moved.Enable();
 
         Assert.True(moved.IsEnabled);
-        Assert.False(Registration(@"C:\old\widget.exe").IsEnabled);
+        Assert.False(moved.IsRegisteredElsewhere);
+        Assert.Equal(@"""C:\new\widget.exe""", Stored());
     }
 
     [Fact]
@@ -80,6 +87,52 @@ public sealed class StartupRegistrationTests : IDisposable
 
         Assert.False(registration.IsSupported);
         Assert.False(registration.IsEnabled);
+    }
+
+    [Fact]
+    public void SyncPathRepointsAnEntryLeftByAnEarlierVersion()
+    {
+        Registration(@"C:\downloads\widget-v1.exe").Enable();
+        StartupRegistration upgraded = Registration(@"C:\downloads\widget-v2.exe");
+
+        upgraded.SyncPath();
+
+        Assert.Equal(@"""C:\downloads\widget-v2.exe""", Stored());
+        Assert.False(upgraded.IsRegisteredElsewhere);
+    }
+
+    [Fact]
+    public void SyncPathNeverRegistersAnApplicationThatWasNotAlreadyRegistered()
+    {
+        // Repairing a registration the user asked for is the feature. Creating one they never
+        // asked for would turn a startup housekeeping call into a setting change behind their back.
+        StartupRegistration registration = Registration(@"C:\app\widget.exe");
+
+        registration.SyncPath();
+
+        Assert.False(registration.IsEnabled);
+        Assert.Null(Stored());
+    }
+
+    [Fact]
+    public void SyncPathLeavesAMatchingEntryUntouched()
+    {
+        StartupRegistration registration = Registration(@"C:\app\widget.exe");
+        registration.Enable();
+
+        registration.SyncPath();
+
+        Assert.Equal(@"""C:\app\widget.exe""", Stored());
+    }
+
+    [Fact]
+    public void SyncPathDoesNothingWithoutAKnownExecutable()
+    {
+        Registration(@"C:\old\widget.exe").Enable();
+
+        Registration(null).SyncPath();
+
+        Assert.Equal(@"""C:\old\widget.exe""", Stored());
     }
 
     public void Dispose()
