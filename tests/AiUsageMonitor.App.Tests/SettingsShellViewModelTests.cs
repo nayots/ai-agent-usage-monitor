@@ -63,16 +63,16 @@ public class SettingsShellViewModelTests(WpfFixture wpf)
     }
 
     [Fact]
-    public void TheSidebarListsTheFiveSettingsPagesThenOnePagePerDiagnosticSection() => wpf.Invoke(() =>
+    public void TheSidebarListsTheSixSettingsPagesThenOnePagePerDiagnosticSection() => wpf.Invoke(() =>
     {
         SettingsShellViewModel shell = Shell(out _, out _);
 
         Assert.Equal(
-            new[] { "Appearance", "Window", "Providers", "Notifications", "Refresh", "Claude Code", "Codex", "Application" },
+            new[] { "Appearance", "Window", "Providers", "Notifications", "Refresh", "Updates", "Claude Code", "Codex", "Application" },
             shell.Pages.Select(page => page.Title));
 
         Assert.Equal(
-            new[] { "Settings", "Settings", "Settings", "Settings", "Settings", "Diagnostics", "Diagnostics", "Diagnostics" },
+            new[] { "Settings", "Settings", "Settings", "Settings", "Settings", "Settings", "Diagnostics", "Diagnostics", "Diagnostics" },
             shell.Pages.Select(page => page.GroupTitle));
 
         shell.Dispose();

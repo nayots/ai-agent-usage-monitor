@@ -29,7 +29,8 @@ public sealed class SettingsShellViewModel : ObservableObject, IDisposable
             SettingsPage(SettingsPageKind.Window, "Window"),
             SettingsPage(SettingsPageKind.Providers, "Providers"),
             SettingsPage(SettingsPageKind.Notifications, "Notifications"),
-            SettingsPage(SettingsPageKind.Refresh, "Refresh")
+            SettingsPage(SettingsPageKind.Refresh, "Refresh"),
+            SettingsPage(SettingsPageKind.Updates, "Updates")
         ];
 
         foreach (DiagnosticSection section in diagnostics.Sections)

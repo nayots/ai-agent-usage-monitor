@@ -27,6 +27,9 @@
       <settings:SettingsPageTemplateSelector.Refresh>
         <DataTemplate><settings:RefreshPage DataContext="{Binding Content}" /></DataTemplate>
       </settings:SettingsPageTemplateSelector.Refresh>
+      <settings:SettingsPageTemplateSelector.Updates>
+        <DataTemplate><settings:UpdatesPage DataContext="{Binding Content}" /></DataTemplate>
+      </settings:SettingsPageTemplateSelector.Updates>
       <settings:SettingsPageTemplateSelector.Diagnostics>
         <DataTemplate><settings:DiagnosticsPage DataContext="{Binding Content}" /></DataTemplate>
       </settings:SettingsPageTemplateSelector.Diagnostics>

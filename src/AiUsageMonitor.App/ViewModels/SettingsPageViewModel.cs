@@ -8,6 +8,7 @@ public enum SettingsPageKind
     Providers,
     Notifications,
     Refresh,
+    Updates,
     ProviderDiagnostics,
     ApplicationDiagnostics
 }

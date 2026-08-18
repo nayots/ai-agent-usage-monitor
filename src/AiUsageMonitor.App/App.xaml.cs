@@ -109,7 +109,8 @@ public partial class App : Application
                 _services.GetRequiredService<ThemeManager>(),
                 _services.GetRequiredService<IReadOnlyList<ProviderDescriptor>>(),
                 _services.GetRequiredService<EnvironmentReport>(),
-                _services.GetRequiredService<StartupReport>()).Show();
+                _services.GetRequiredService<StartupReport>(),
+                _services.GetRequiredService<UpdateCheckService>()).Show();
         }
         catch (Exception ex)
         {

@@ -4,6 +4,7 @@ using System.IO;
 using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Settings;
+using AiUsageMonitor.Infrastructure.Updates;
 
 namespace AiUsageMonitor.App.ViewModels;
 
@@ -31,6 +32,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private readonly StartupRegistration _startup;
     private readonly IReadOnlyList<ProviderDescriptor> _providers;
     private readonly bool _globalHotkeyUnavailable;
+    private readonly UpdateCheckService _updates;
+    private readonly Func<DateTimeOffset> _clock;
 
     public SettingsViewModel(
         SettingsService settings,
@@ -38,12 +41,25 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         Action resetPosition,
         Action recheckProviders,
         IReadOnlyList<ProviderDescriptor> providers,
-        bool globalHotkeyUnavailable = false)
+        bool globalHotkeyUnavailable = false,
+        UpdateCheckService? updates = null,
+        Func<DateTimeOffset>? clock = null)
     {
+        // A disabled fallback rather than a null check on every read: a test or a harness that does
+        // not care about updates still gets a page that renders and a button that refuses.
+        _updates = updates ?? new UpdateCheckService("unknown") { Enabled = false };
+        _clock = clock ?? (() => DateTimeOffset.Now);
+        _updates.StatusChanged += OnUpdateStatusChanged;
         _settings = settings;
         _startup = startup;
         _providers = providers;
         _globalHotkeyUnavailable = globalHotkeyUnavailable;
+
+        CheckForUpdatesCommand = new RelayCommand(
+            () => _ = _updates.CheckAsync(manual: true, _clock(), CancellationToken.None),
+            () => _updates.CanCheckManually(_clock()));
+
+        OpenReleasePageCommand = new RelayCommand(OpenReleasePage);
 
         Themes =
         [
@@ -156,6 +172,36 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => _settings.Update(s => s with { GlobalHotkeyEnabled = value });
     }
 
+    /// <summary>
+    /// Spec D3. Off stops every unattended request; <see cref="CheckForUpdatesCommand"/> keeps
+    /// working, because that one the user asked for.
+    /// </summary>
+    public bool UpdateCheckEnabled
+    {
+        get => _settings.Current.UpdateCheckEnabled;
+        set
+        {
+            _settings.Update(s => s with { UpdateCheckEnabled = value });
+            _updates.Enabled = value;
+        }
+    }
+
+    public string UpdateDisclosureText =>
+        "Asks github.com once a day whether a newer release exists. The request is anonymous: it "
+        + "sends nothing about you, this machine, or your providers, and no usage data ever leaves "
+        + "this computer.";
+
+    public string UpdateStatusText => UpdateCopy.StatusText(_updates.Status);
+
+    public string UpdateLastCheckedText =>
+        UpdateCopy.LastCheckedText(_updates.Status.LastCheckedUtc, _clock());
+
+    public bool HasUpdate => _updates.Status.Availability == UpdateAvailability.UpdateAvailable;
+
+    public RelayCommand CheckForUpdatesCommand { get; }
+
+    public RelayCommand OpenReleasePageCommand { get; }
+
     public string GlobalHotkeyLabel => "Ctrl+Alt+Q";
 
     public string? GlobalHotkeyUnavailableReason => _globalHotkeyUnavailable
@@ -260,6 +306,41 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         _settings.Changed -= OnSettingsChanged;
         _settings.PersistenceStateChanged -= OnPersistenceStateChanged;
+        _updates.StatusChanged -= OnUpdateStatusChanged;
+    }
+
+    private void OnUpdateStatusChanged(object? sender, UpdateStatus status)
+    {
+        Raise(nameof(UpdateStatusText));
+        Raise(nameof(UpdateLastCheckedText));
+        Raise(nameof(HasUpdate));
+        CheckForUpdatesCommand.RaiseCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// A compile-time constant destination, never a URL from the response - spec D6, and the same
+    /// rule the footer's GitHub link already follows. A machine with no registered browser is not
+    /// a reason to take the settings window down.
+    /// </summary>
+    private static void OpenReleasePage()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(GitHubReleaseClient.ReleasePageUrl)
+                {
+                    UseShellExecute = true
+                });
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     private ChoiceViewModel Theme(string label, ThemePreference preference) => new(

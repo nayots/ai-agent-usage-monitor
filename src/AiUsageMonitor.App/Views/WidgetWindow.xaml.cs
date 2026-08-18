@@ -17,6 +17,7 @@ using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
 using AiUsageMonitor.Infrastructure.Theming;
+using AiUsageMonitor.Infrastructure.Updates;
 using Microsoft.Win32;
 
 namespace AiUsageMonitor.App.Views;
@@ -37,6 +38,7 @@ public partial class WidgetWindow : Window
     private readonly IReadOnlyList<ProviderDescriptor> _providers;
     private readonly EnvironmentReport _environment;
     private readonly StartupReport _startup;
+    private readonly UpdateCheckService? _updates;
     private SettingsWindow? _settingsWindow;
     private MiniWindow? _mini;
     private readonly DispatcherTimer _tick = new() { Interval = TickCadence.Visible };
@@ -70,7 +72,8 @@ public partial class WidgetWindow : Window
         ThemeManager? theme = null,
         IReadOnlyList<ProviderDescriptor>? providers = null,
         EnvironmentReport? environment = null,
-        StartupReport? startup = null)
+        StartupReport? startup = null,
+        UpdateCheckService? updates = null)
     {
         _model = model;
         _settings = settings;
@@ -79,6 +82,7 @@ public partial class WidgetWindow : Window
         _providers = providers ?? [];
         _environment = environment ?? EnvironmentReport.Capture();
         _startup = startup ?? new StartupReport(DateTimeOffset.Now, null);
+        _updates = updates;
 
         InitializeComponent();
         DataContext = model;
@@ -408,7 +412,8 @@ public partial class WidgetWindow : Window
             resetPosition: ResetPlacement,
             recheckProviders: RecheckProviders,
             providers: _providers,
-            globalHotkeyUnavailable: _globalHotkeyUnavailable);
+            globalHotkeyUnavailable: _globalHotkeyUnavailable,
+            updates: _updates);
 
         DiagnosticsViewModel diagnostics = new(
             _model.Providers,

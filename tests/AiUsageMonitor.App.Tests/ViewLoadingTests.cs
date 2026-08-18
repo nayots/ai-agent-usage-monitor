@@ -398,7 +398,7 @@ public class ViewLoadingTests(WpfFixture wpf)
         ListBox navigation = Descendants(content).OfType<ListBox>().Single();
 
         Assert.Equal(
-            new[] { "Appearance", "Window", "Providers", "Notifications", "Refresh", "Claude Code", "Codex", "Application" },
+            new[] { "Appearance", "Window", "Providers", "Notifications", "Refresh", "Updates", "Claude Code", "Codex", "Application" },
             navigation.Items.Cast<SettingsPageViewModel>().Select(page => page.Title));
     });
 

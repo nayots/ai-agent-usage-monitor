@@ -16,6 +16,7 @@ public sealed class SettingsPageTemplateSelector : DataTemplateSelector
     public DataTemplate? Providers { get; set; }
     public DataTemplate? Notifications { get; set; }
     public DataTemplate? Refresh { get; set; }
+    public DataTemplate? Updates { get; set; }
     public DataTemplate? Diagnostics { get; set; }
 
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) => item switch
@@ -25,6 +26,7 @@ public sealed class SettingsPageTemplateSelector : DataTemplateSelector
         SettingsPageViewModel { Kind: SettingsPageKind.Providers } => Providers,
         SettingsPageViewModel { Kind: SettingsPageKind.Notifications } => Notifications,
         SettingsPageViewModel { Kind: SettingsPageKind.Refresh } => Refresh,
+        SettingsPageViewModel { Kind: SettingsPageKind.Updates } => Updates,
         SettingsPageViewModel { IsDiagnostics: true } => Diagnostics,
         _ => null
     };
