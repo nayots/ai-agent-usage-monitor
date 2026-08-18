@@ -50,6 +50,12 @@ git push origin v0.2.1
 version follows Conventional Commits against the range since the last tag — any `feat:` in it makes
 the bump a minor one, which is what took `v0.1.5` to `v0.2.0` rather than to `v0.1.6`.
 
+The user-scoped `/release` skill computes that version and the changelog, and knows to push the tag
+alone here rather than create the release itself. **What it does not know is step 1** — it has no
+concept of `<VersionPrefix>`, because the other project it was written for derives its version from
+tags instead of a file. Bump and commit that yourself before invoking it, or the tag-verification
+step fails the run in seconds.
+
 `.github/workflows/release.yml` verifies the tag against `<VersionPrefix>` **before** it
 builds, runs the tests, publishes the self-contained `.exe`, and attaches **three** assets
 to a GitHub release: the `.exe`, its `SHA256`, and a `.zip` holding both. A tag that
