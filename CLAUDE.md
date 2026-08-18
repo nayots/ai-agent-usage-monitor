@@ -15,13 +15,16 @@ The repo has **four** projects, layered in one direction:
 | `src/AiUsageMonitor.App` | The shipped WPF application — windows, view models, tray, notifications. References Domain and Infrastructure. |
 | `src/AiUsageMonitor.Poc` | The live console harness that proves the provider mechanisms work against real installs. References Infrastructure rather than duplicating it, and is **not** superseded by the other three. |
 
-The App is no longer the empty shell earlier revisions of this file described; the design brief it was waiting on was run, and its output governs the widget's appearance (`docs/design/`, also local-only). Three test projects, **765 tests**: Domain 128, Infrastructure 292, App 345.
+The App is no longer the empty shell earlier revisions of this file described; the design brief it was waiting on was run, and its output governs the widget's appearance (`docs/design/`, also local-only). Three test projects — Domain, Infrastructure and App. **No test count is recorded here on
+purpose**: it moves with almost every commit, so a number in this file is a line that is wrong
+more often than it is right. The standard is that `dotnet test` is green, not that it prints a
+particular total.
 
 ## Commands
 
 ```powershell
 dotnet build                                   # warnings are errors — must be clean
-dotnet test                                    # 765 tests across three suites
+dotnet test                                    # all three suites — must be green
 dotnet run --project src/AiUsageMonitor.Poc    # runs all provider probes, prints a report
 powershell -File build/publish.ps1             # single self-contained .exe (~65 MB)
 ```

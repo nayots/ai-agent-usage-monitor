@@ -742,6 +742,16 @@ public partial class WidgetWindow : Window
     /// <summary>
     /// Replaces the widget with the edge-docked strip. The pair is mutually exclusive, so nothing
     /// here has to decide which window owns the placement, the dismissal timer or the cadence.
+    /// <para>
+    /// The strip is built and the field assigned <em>before</em> the setting is announced, which is
+    /// the same order <see cref="LeaveMiniMode"/> uses and for the same reason. Settings are
+    /// announced synchronously, and <see cref="OnSettingsChanged"/> answers a raised MiniMode by
+    /// calling straight back into here; announcing first re-entered this method with the field
+    /// still null, so the inner call built and showed a strip that the outer call then overwrote
+    /// with a second one. Only the tracked strip is ever closed, so the other stayed on screen for
+    /// the life of the process - mini mode plainly visible while the setting, the settings
+    /// checkbox and the tray menu's tick all said it was off.
+    /// </para>
     /// </summary>
     public void EnterMiniMode()
     {
@@ -749,8 +759,6 @@ public partial class WidgetWindow : Window
         {
             return;
         }
-
-        _settings.Update(s => s with { MiniMode = true });
 
         // Hide(), not HideToTray(): the balloon exists to explain a window that vanished, and this
         // one has not vanished - it is on the screen edge, which is where the user just sent it.
@@ -762,6 +770,7 @@ public partial class WidgetWindow : Window
         _mini.ContextMenuRequested += OnTrayContextMenuRequested;
         _mini.Show();
 
+        _settings.Update(s => s with { MiniMode = true });
         UpdateTickCadence();
     }
 

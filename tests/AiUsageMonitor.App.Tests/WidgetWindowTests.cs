@@ -655,4 +655,84 @@ public class WidgetWindowTests(WpfFixture wpf)
 
         model.Dispose();
     });
+
+    /// <summary>
+    /// Counts the strips the fixture's shared <see cref="Application"/> is holding. Only ever read
+    /// as a difference across one call: the collection is process-wide and every test in this
+    /// collection contributes to it, so the absolute number means nothing.
+    /// </summary>
+    private static int OpenStrips() => Application.Current.Windows.OfType<MiniWindow>().Count();
+
+    /// <summary>
+    /// Entering the mode by the call rather than by the setting - which is what the tray menu item
+    /// does - must build exactly one strip. It built two: the setting is announced synchronously,
+    /// so the update inside EnterMiniMode re-entered it through OnSettingsChanged while the field
+    /// was still null, and the outer call then overwrote that first strip with a second. Only the
+    /// tracked one was ever closed, leaving a strip on screen that no setting, checkbox or tray
+    /// tick admitted to.
+    /// </summary>
+    [Fact]
+    public void EnteringMiniModeByCallBuildsOneStripNotTwo() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        WidgetWindow window = new(model, settings);
+
+        int before = OpenStrips();
+        window.EnterMiniMode();
+        int entered = OpenStrips();
+
+        window.LeaveMiniMode();
+        int left = OpenStrips();
+
+        Assert.Equal(before + 1, entered);
+
+        // The other half of the same defect: leaving closes what this window tracks, so an
+        // untracked strip would still be up here with MiniMode already back to false.
+        Assert.Equal(before, left);
+        Assert.False(settings.Current.MiniMode);
+
+        model.Dispose();
+    });
+
+    private static void ClickTrayMiniMode(WidgetWindow window, MenuItem item) =>
+        typeof(WidgetWindow)
+            .GetMethod("TrayMini_Click", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [item, new RoutedEventArgs()]);
+
+    /// <summary>
+    /// The tray gesture end to end, twice: opening the menu takes the tick from the setting, the
+    /// click flips the tick, and the handler reads that new state back. Driven as a pair because
+    /// the complaint was the pair disagreeing - a strip plainly on screen under a menu item with no
+    /// tick against it - so the tick and the number of strips are asserted together at each step.
+    /// </summary>
+    [Fact]
+    public void TheTrayTickAndTheStripOnScreenAgreeAcrossAFullToggle() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        WidgetWindow window = new(model, settings);
+        MenuItem item = ((ContextMenu)window.Resources["TrayMenu"]).Items.OfType<MenuItem>().Single(entry => entry.IsCheckable);
+
+        int before = OpenStrips();
+
+        item.IsChecked = settings.Current.MiniMode;
+        item.IsChecked = !item.IsChecked;
+        ClickTrayMiniMode(window, item);
+
+        Assert.Equal(before + 1, OpenStrips());
+        Assert.True(settings.Current.MiniMode);
+
+        item.IsChecked = settings.Current.MiniMode;
+        item.IsChecked = !item.IsChecked;
+        ClickTrayMiniMode(window, item);
+
+        Assert.Equal(before, OpenStrips());
+        Assert.False(settings.Current.MiniMode);
+
+        window.HideToTray();
+        model.Dispose();
+    });
 }
