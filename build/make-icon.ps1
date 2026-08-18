@@ -17,16 +17,31 @@ $frames = New-Object System.Collections.Generic.List[byte[]]
 foreach ($size in $sizes) {
     $bitmap = New-Object System.Drawing.Bitmap($size, $size)
     $g = [System.Drawing.Graphics]::FromImage($bitmap)
-    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.Clear([System.Drawing.Color]::Transparent)
 
-    $s = $size / 16.0
-    $plate = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 24, 24, 27))
-    $g.FillRectangle($plate, 0, 0, $size, $size)
+    # The plate is filled with antialiasing OFF. GDI+ antialiases the outer edge of a rectangle
+    # drawn flush to the bitmap bounds, which left the top row and left column at 50% alpha and
+    # the corner pixel at 25% - one sixteenth of the 16 px frame, reading as a notch against a
+    # dark taskbar. An axis-aligned rectangle gains nothing from antialiasing anyway. It goes
+    # back on for the bars, whose fill widths are fractional and do benefit.
 
-    # Three bars at descending fill, the widget's own motif at icon scale.
-    $track = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 63, 63, 70))
-    $fill  = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 129, 140, 248))
+    # Palette: nayots navy-bg #04060D and ice-accent #99D1FF, per that project's BRAND.md. The
+    # motif stays the app's own three bars rather than becoming the nayots monogram - the bars are
+    # what this product is, and an icon that is purely the maker's mark would be identical across
+    # every application the maker ships. Only the colours are borrowed, so no brand mark is
+    # restyled and no brand rule is engaged. Previously #818CF8 on #18181B, an indigo that matched
+    # neither the brand nor the application's own #4CC2FF accent.
+    $s = $size / 16.0
+    $plate = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 4, 6, 13))
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::None
+    $g.FillRectangle($plate, 0, 0, $size, $size)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+
+    # Three bars at descending fill, the widget's own motif at icon scale. The track is the ice
+    # accent at low alpha rather than a hardcoded grey, so it stays a lift from whatever the plate
+    # is - the same reasoning TrayGlyphRenderer.TrackColor documents for the live tray glyph.
+    $track = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0x44, 153, 209, 255))
+    $fill  = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 153, 209, 255))
     $barHeight = [Math]::Max(1.0, 2.0 * $s)
     $left = 3.0 * $s
     $width = $size - (6.0 * $s)

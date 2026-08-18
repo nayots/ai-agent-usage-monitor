@@ -1,3 +1,23 @@
+<!--
+  Two variants rather than one, because the wordmark's ice-to-gold gradient is only legible on
+  deep navy: on GitHub's light theme the white middle of it would disappear. The transparent
+  master serves dark theme, the plated master serves light. Neither is resized here - the
+  lettering is 48px tall in both, and the plated file is taller only because it carries the
+  brand's required clear space. Masters copied verbatim from the nayots branding repository;
+  do not recolour, crop or rename them.
+
+  Deliberately NOT wrapped in a link to nayots.com. GitHub's HTML sanitizer lifts an <img> out
+  of any surrounding anchor and re-links it to the image file, and in doing so it lifts the img
+  out of the <picture> too - leaving an empty picture inside the link and a bare image beside
+  it, with the theme swap dead. Verified against the /markdown API. The site link lives in the
+  footer as text instead.
+-->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/nayots-wordmark-transparent-h48.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/nayots-wordmark-on-navy-h48.png">
+  <img src="docs/assets/nayots-wordmark-on-navy-h48.png" alt="nayots">
+</picture>
+
 # AI Usage Monitor
 
 A Windows desktop widget that shows live quota usage for the AI coding tools installed on your machine — Claude Code and Codex — so you can see how much of your plan's window you have left without opening a session and asking.
@@ -125,3 +145,7 @@ powershell -File build/publish.ps1             # the single-file release artifac
 ## Licence
 
 [MIT](LICENSE).
+
+---
+
+Built by [nayots](https://nayots.com).
