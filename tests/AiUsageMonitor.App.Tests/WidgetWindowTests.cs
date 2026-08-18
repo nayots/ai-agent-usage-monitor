@@ -392,6 +392,58 @@ public class WidgetWindowTests(WpfFixture wpf)
     });
 
     /// <summary>
+    /// A widget the filter has emptied keeps a body. Without one it shrinks to title bar plus
+    /// footer - a bar that reads as a broken window rather than as an empty one - and the only
+    /// account of what happened is the "0 providers" in the footer.
+    /// </summary>
+    [Fact]
+    public void AnEmptiedWidgetExplainsItselfInsteadOfShrinkingToABar() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        AppSettings hiding = AppSettings.Default with { HiddenProviders = ["claude-code", "codex"] };
+        MainViewModel model = Model(providers, hiding);
+        WidgetWindow window = new(model, Settings(hiding));
+
+        _ = Content(window);
+
+        FrameworkElement empty = (FrameworkElement)window.FindName("EmptyState");
+        TextBlock message = (TextBlock)window.FindName("EmptyStateMessage");
+        TextBlock remedy = (TextBlock)window.FindName("EmptyStateRemedy");
+
+        Assert.Equal(Visibility.Visible, empty.Visibility);
+        Assert.True(empty.ActualHeight > 40, $"The empty state rendered {empty.ActualHeight} tall.");
+        Assert.Equal("All providers are hidden.", message.Text);
+        Assert.Equal("Show one again in settings, under Providers.", remedy.Text);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// And it is gone the moment there is a card to show - including a card that comes back after
+    /// the empty state has already been on screen.
+    /// </summary>
+    [Fact]
+    public void TheEmptyStateLeavesAsSoonAsAProviderIsShownAgain() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        AppSettings hiding = AppSettings.Default with { HiddenProviders = ["claude-code", "codex"] };
+        MainViewModel model = Model(providers, hiding);
+        SettingsService settings = Settings(hiding);
+        WidgetWindow window = new(model, settings);
+
+        _ = Content(window);
+        FrameworkElement empty = (FrameworkElement)window.FindName("EmptyState");
+
+        Assert.Equal(Visibility.Visible, empty.Visibility);
+
+        settings.Update(current => current with { HiddenProviders = ["codex"] });
+
+        Assert.Equal(Visibility.Collapsed, empty.Visibility);
+
+        model.Dispose();
+    });
+
+    /// <summary>
     /// The flow as it is actually performed: the widget is already on screen when the box is
     /// unchecked. The card has to leave on the settings change and come back when it is ticked
     /// again, which is a different path from the one that builds the list at startup.

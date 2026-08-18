@@ -133,6 +133,30 @@ public class MiniWindowTests(WpfFixture wpf)
     });
 
     /// <summary>
+    /// And a strip with every provider hidden is otherwise the expand button alone - a stub with no
+    /// identity, which is the same complaint the widget's own empty body drew.
+    /// </summary>
+    [Fact]
+    public void AStripWithNothingToShowSaysSoInsteadOfShrinkingToItsButton() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers);
+        model.Providers[0].Apply(Snapshot([Window(62)]), Now, FreshnessPolicy.Default);
+        model.ApplySettings(AppSettings.Default with { HiddenProviders = ["claude-code", "codex"] });
+
+        FrameworkElement content = Rendered(model, Settings());
+        TextBlock message = Descendants(content)
+            .OfType<TextBlock>()
+            .Single(block => block.Name == "EmptyStateMessage");
+
+        Assert.Equal(Visibility.Visible, message.Visibility);
+        Assert.Equal("All providers are hidden.", message.Text);
+        Assert.True(message.ActualWidth > 0, "The strip's empty state rendered with no width.");
+
+        model.Dispose();
+    });
+
+    /// <summary>
     /// The strip is a projection of the cards, so a provider the user hid is not on it either.
     /// </summary>
     [Fact]

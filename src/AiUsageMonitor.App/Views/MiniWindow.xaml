@@ -70,6 +70,23 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
+      <!-- The strip's own answer to an empty filter, in the same words the widget uses. Without it
+           a strip whose providers are all hidden is the expand button and nothing else: a 38px stub
+           with no identity, which reads as a stray control rather than as this application. -->
+      <TextBlock x:Name="EmptyStateMessage" Text="{Binding EmptyStateText}" VerticalAlignment="Center"
+                 Margin="2,0,10,0" Foreground="{DynamicResource TextTertiaryBrush}">
+        <TextBlock.Style>
+          <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding HasVisibleProviders}" Value="False">
+                <Setter Property="Visibility" Value="Visible" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </TextBlock.Style>
+      </TextBlock>
+
       <Button DockPanel.Dock="Right" Style="{StaticResource TitleBarIconButtonStyle}"
               Width="20" Height="16" FontSize="11" VerticalAlignment="Center"
               Content="&#xE76C;" ToolTip="Show the full widget"

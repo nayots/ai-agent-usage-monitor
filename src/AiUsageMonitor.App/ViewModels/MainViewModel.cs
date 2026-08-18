@@ -75,6 +75,45 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// False when the filter has emptied the widget. Not an error: it is the ordinary shape of a
+    /// widget whose providers the user has all hidden, which is why the body answers it with an
+    /// explanation rather than with the blank strip between title bar and footer that it would
+    /// otherwise be.
+    /// </summary>
+    public bool HasVisibleProviders => Providers.Any(card => !card.IsHiddenByFilter);
+
+    /// <summary>
+    /// What emptied the widget, in the user's terms. The two causes need different remedies - one
+    /// is undone in settings, the other by installing a CLI - so they are never collapsed into one
+    /// sentence, and a widget emptied by both says so rather than naming whichever cause the code
+    /// happened to test first.
+    /// </summary>
+    public string EmptyStateText => EmptyState().Text;
+
+    /// <summary>Where to undo it. Null when there is nothing honest to point the user at.</summary>
+    public string? EmptyStateHint => EmptyState().Hint;
+
+    public bool HasEmptyStateHint => EmptyStateHint is not null;
+
+    private (string Text, string? Hint) EmptyState()
+    {
+        if (Providers.Count == 0)
+        {
+            return ("No providers to show.", null);
+        }
+
+        bool hiddenByUser = Providers.Any(card => card.IsHiddenByUser);
+        bool hiddenAsUnavailable = Providers.Any(card => !card.IsHiddenByUser && card.IsHiddenByFilter);
+
+        return (hiddenByUser, hiddenAsUnavailable) switch
+        {
+            (true, false) => ("All providers are hidden.", "Show one again in settings, under Providers."),
+            (false, true) => ("No providers are available on this machine.", "Providers that are not installed are hidden in settings."),
+            _ => ("No providers to show.", "They are hidden, or not available on this machine.")
+        };
+    }
+
+    /// <summary>
     /// The running build, stated in the footer because it is the one thing a bug report needs and
     /// the one thing nobody can look up from the outside - the executable is not code-signed and
     /// carries no visible identity beyond its file name.
@@ -146,7 +185,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         Tick();
-        Raise(nameof(FooterText));
+        RaiseFilterDerived();
     }
 
     public bool IsRefreshing
@@ -209,6 +248,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Everything derived from which cards the filter admits. One call rather than four scattered
+    /// ones: the footer count and the empty state are two readings of the same fact, and a site
+    /// that raised only the count would leave the body claiming the widget is empty while cards
+    /// sit in it.
+    /// </summary>
+    private void RaiseFilterDerived()
+    {
+        Raise(nameof(FooterText));
+        Raise(nameof(HasVisibleProviders));
+        Raise(nameof(EmptyStateText));
+        Raise(nameof(EmptyStateHint));
+        Raise(nameof(HasEmptyStateHint));
+    }
+
     public void Dispose()
     {
         _refresh.Refreshed -= OnRefreshed;
@@ -234,7 +288,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _dispatch(() =>
         {
             card.Apply(e.Snapshot, _clock(), _freshness);
-            Raise(nameof(FooterText));
+            RaiseFilterDerived();
         });
     }
 }

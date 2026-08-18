@@ -278,6 +278,106 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public void AWidgetWithACardToShowHasNoEmptyState()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+
+        model.ApplySettings(AppSettings.Default with { HiddenProviders = ["codex"] });
+
+        Assert.True(model.HasVisibleProviders);
+    }
+
+    /// <summary>
+    /// The state the user reported: everything hidden, and a widget that was title bar and footer
+    /// with nothing between them. The remedy names settings, because that is the only place the
+    /// cards can come back from.
+    /// </summary>
+    [Fact]
+    public void HidingEveryProviderSaysSoAndSaysWhereToUndoIt()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [])));
+
+        model.ApplySettings(AppSettings.Default with { HiddenProviders = ["claude-code", "codex"] });
+
+        Assert.False(model.HasVisibleProviders);
+        Assert.Equal("0 providers", model.FooterText);
+        Assert.Equal("All providers are hidden.", model.EmptyStateText);
+        Assert.Equal("Show one again in settings, under Providers.", model.EmptyStateHint);
+        Assert.True(model.HasEmptyStateHint);
+    }
+
+    /// <summary>
+    /// An empty widget on a machine with neither CLI installed is a different fact from an empty
+    /// widget the user emptied, and pointing that user at the visibility checkboxes would send them
+    /// somewhere that cannot help.
+    /// </summary>
+    [Fact]
+    public async Task AnEmptyWidgetBlamesTheAvailabilityFilterWhenThatIsWhatEmptiedIt()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.NotInstalled, [])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
+        await model.RefreshAsync(force: true);
+
+        model.ApplySettings(AppSettings.Default with { ShowUnavailableProviders = false });
+
+        Assert.False(model.HasVisibleProviders);
+        Assert.Equal("No providers are available on this machine.", model.EmptyStateText);
+        Assert.Equal("Providers that are not installed are hidden in settings.", model.EmptyStateHint);
+    }
+
+    /// <summary>
+    /// Emptied by both causes at once, which is the case a single-cause message gets wrong: naming
+    /// only the one the code tested first would tell half the truth about why the widget is bare.
+    /// </summary>
+    [Fact]
+    public async Task AWidgetEmptiedByBothCausesNamesNeitherAlone()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
+        await model.RefreshAsync(force: true);
+
+        model.ApplySettings(AppSettings.Default with
+        {
+            ShowUnavailableProviders = false,
+            HiddenProviders = ["claude-code"]
+        });
+
+        Assert.False(model.HasVisibleProviders);
+        Assert.Equal("No providers to show.", model.EmptyStateText);
+        Assert.Equal("They are hidden, or not available on this machine.", model.EmptyStateHint);
+    }
+
+    /// <summary>
+    /// The empty state is derived from the same fact as the footer count, so a change that reaches
+    /// one has to reach the other - including one that arrives with a snapshot rather than with a
+    /// settings change.
+    /// </summary>
+    [Fact]
+    public async Task ASnapshotThatEmptiesTheWidgetRaisesTheEmptyStateWithTheCount()
+    {
+        (MainViewModel model, _) = Build(
+            AppSettings.Default with { ShowUnavailableProviders = false },
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.NotInstalled, [])));
+
+        List<string> raised = [];
+        model.PropertyChanged += (_, e) => raised.Add(e.PropertyName!);
+
+        await model.RefreshAsync(force: true);
+
+        Assert.False(model.HasVisibleProviders);
+        Assert.Contains(nameof(MainViewModel.FooterText), raised);
+        Assert.Contains(nameof(MainViewModel.HasVisibleProviders), raised);
+        Assert.Contains(nameof(MainViewModel.EmptyStateText), raised);
+        Assert.Contains(nameof(MainViewModel.EmptyStateHint), raised);
+    }
+
+    [Fact]
     public void DensityReachesEveryCardFromTheSettingsItWasBuiltWith()
     {
         ProviderDescriptor[] providers =
