@@ -29,16 +29,24 @@ dotnet run --project src/AiUsageMonitor.Poc    # runs all provider probes, print
 powershell -File build/publish.ps1             # single self-contained .exe (~65 MB)
 ```
 
+`dotnet test` alone builds Debug; the release workflow runs `--configuration Release`, and the
+two are **not interchangeable**. This has already cost two failed release runs on a suite that
+was green locally: an async method whose awaits are all complete by the time it reaches them
+finishes *inline* rather than suspending, and Release is fast enough to take that branch where
+Debug is not. That is a different code path, not a flake — it found a real defect in
+`UpdateCheckService` (`222431b`) and a test that was betting on the race (`fe585fb`). Run
+`dotnet test --configuration Release` before tagging.
+
 Cutting a release (the tag is the trigger — everything else is automatic):
 
 ```powershell
 # 1. Bump <VersionPrefix> in Directory.Build.props and commit it.
 # 2. Tag that commit and push the tag — it must match the version you just bumped to:
-git tag v0.1.4
-git push origin v0.1.4
+git tag v0.1.5
+git push origin v0.1.5
 ```
 
-`v0.1.3` is the latest release (2026-08-18); the example above is therefore the next one.
+`v0.1.4` is the latest release (2026-08-18); the example above is therefore the next one.
 
 `.github/workflows/release.yml` verifies the tag against `<VersionPrefix>` **before** it
 builds, runs the tests, publishes the self-contained `.exe`, and attaches **three** assets
