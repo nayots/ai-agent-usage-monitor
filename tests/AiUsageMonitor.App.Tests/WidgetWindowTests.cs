@@ -364,6 +364,97 @@ public class WidgetWindowTests(WpfFixture wpf)
     });
 
     /// <summary>
+    /// PRD §28: a provider the user hid leaves the widget. The strip honoured this from the day it
+    /// was added; the card list - the surface the setting is actually named for - did not, so every
+    /// card rendered while the footer counted none of them.
+    /// </summary>
+    [Fact]
+    public void AProviderTheUserHidHasNoCardOnTheWidget() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        AppSettings hiding = AppSettings.Default with { HiddenProviders = ["codex"] };
+        MainViewModel model = Model(providers, hiding);
+        WidgetWindow window = new(model, Settings(hiding));
+
+        _ = Content(window);
+
+        ItemsControl list = (ItemsControl)window.FindName("ProviderList");
+        UIElement shown = Container(list, model, "Claude Code");
+        UIElement hidden = Container(list, model, "Codex");
+
+        Assert.Equal(Visibility.Visible, shown.Visibility);
+        // Collapsed rather than Hidden: a hidden provider must cost no height either, or the widget
+        // keeps a card-sized gap where the card used to be.
+        Assert.Equal(Visibility.Collapsed, hidden.Visibility);
+        Assert.Equal(0d, hidden.RenderSize.Height);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// The flow as it is actually performed: the widget is already on screen when the box is
+    /// unchecked. The card has to leave on the settings change and come back when it is ticked
+    /// again, which is a different path from the one that builds the list at startup.
+    /// </summary>
+    [Fact]
+    public void UncheckingAProviderWhileTheWidgetIsOpenTakesItsCardAway() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        SettingsService settings = Settings(AppSettings.Default);
+        WidgetWindow window = new(model, settings);
+
+        _ = Content(window);
+        ItemsControl list = (ItemsControl)window.FindName("ProviderList");
+        UIElement codex = Container(list, model, "Codex");
+
+        Assert.Equal(Visibility.Visible, codex.Visibility);
+
+        settings.Update(current => current with { HiddenProviders = ["codex"] });
+        Assert.Equal(Visibility.Collapsed, codex.Visibility);
+
+        settings.Update(current => current with { HiddenProviders = [] });
+        Assert.Equal(Visibility.Visible, codex.Visibility);
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// The same trigger carries PRD §15's availability filter, which is a separate product rule
+    /// reaching the widget through one binding - so it is pinned separately.
+    /// </summary>
+    [Fact]
+    public void AnAbsentProviderHasNoCardOnceUnavailableProvidersAreHidden() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        AppSettings filtered = AppSettings.Default with { ShowUnavailableProviders = false };
+        MainViewModel model = Model(providers, filtered);
+        WidgetWindow window = new(model, Settings(filtered));
+        model.Providers.Single(card => card.DisplayName == "Codex").Apply(
+            NotInstalled("Codex"),
+            DateTimeOffset.Now,
+            FreshnessPolicy.Default);
+
+        _ = Content(window);
+
+        ItemsControl list = (ItemsControl)window.FindName("ProviderList");
+
+        Assert.Equal(Visibility.Visible, Container(list, model, "Claude Code").Visibility);
+        Assert.Equal(Visibility.Collapsed, Container(list, model, "Codex").Visibility);
+
+        model.Dispose();
+    });
+
+    private static UIElement Container(ItemsControl list, MainViewModel model, string displayName) =>
+        (UIElement)list.ItemContainerGenerator.ContainerFromItem(
+            model.Providers.Single(card => card.DisplayName == displayName));
+
+    private static ProviderSnapshot NotInstalled(string name) => new(
+        ProviderName: name, Installed: false, Version: null, ExecutablePath: null,
+        State: ConnectionState.NotInstalled, Mechanism: "fake", Tier: MechanismTier.Official,
+        UpdateModel: "pull (poll)", Windows: [], RetrievedAt: DateTimeOffset.Now, Error: null, Notes: []);
+
+    /// <summary>
     /// The overlay scrollbar shares its cell with the content instead of taking a column beside it.
     /// A stock template would narrow every card by its width the moment the list outgrew the 520px
     /// ceiling, which is exactly when the cards have most to say.
