@@ -7,8 +7,8 @@ namespace AiUsageMonitor.App.Tests;
 /// Exercises real named mutexes and a real record file. The mutex name is unique per test so the
 /// suite never collides with itself or with a widget the developer has running.
 /// <para>
-/// The messenger is a fake for a second reason beyond assertion: the production one broadcasts to
-/// every top-level window in the session, so a test that used it could shut down the developer's own
+/// The messenger is a fake for a second reason beyond assertion: the production one posts a real
+/// quit message to a real process, so a test that used it could shut down the developer's own
 /// running widget.
 /// </para>
 /// </summary>
@@ -27,8 +27,20 @@ public sealed class InstanceCoordinatorTests : IDisposable
         public int ShowRequests { get; private set; }
         public int QuitRequests { get; private set; }
 
-        public void RequestShow() => ShowRequests++;
-        public void RequestQuit() => QuitRequests++;
+        public RunningInstance? ShowTarget { get; private set; }
+        public RunningInstance? QuitTarget { get; private set; }
+
+        public void RequestShow(RunningInstance? running)
+        {
+            ShowRequests++;
+            ShowTarget = running;
+        }
+
+        public void RequestQuit(RunningInstance running)
+        {
+            QuitRequests++;
+            QuitTarget = running;
+        }
     }
 
     private sealed class FakePrompts : IInstancePrompts
@@ -235,6 +247,26 @@ public sealed class InstanceCoordinatorTests : IDisposable
         {
             Assert.Equal(InstanceOutcome.Start, outcome);
             Assert.Null(new RunningInstanceFile(_recordPath).Read());
+        }
+    }
+
+    [Fact]
+    public void TheQuitIsAimedAtTheProcessTheRecordNames()
+    {
+        // A broadcast cannot reach the widget at all - it is an owned window - so the message has to
+        // be aimed, and the only thing that says where is the record.
+        InstanceCoordinator running = Coordinator(First, "0.1.5", new FakeMessenger(), NeverAsked());
+        running.Acquire(out SingleInstance? held);
+
+        using (held)
+        {
+            FakeMessenger messenger = new();
+            InstanceCoordinator upgraded = Coordinator(Second, "0.1.6", messenger, new FakePrompts(_ => true));
+
+            upgraded.Acquire(out _);
+
+            Assert.Equal(Environment.ProcessId, messenger.QuitTarget!.ProcessId);
+            Assert.Equal(First, messenger.QuitTarget.ExecutablePath);
         }
     }
 

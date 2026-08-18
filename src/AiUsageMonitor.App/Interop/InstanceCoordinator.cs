@@ -18,9 +18,13 @@ public enum InstanceOutcome
 /// <summary>How a starting instance talks to one that is already running.</summary>
 public interface IInstanceMessenger
 {
-    void RequestShow();
+    /// <param name="running">
+    /// The copy being addressed, so the message can be aimed at its process. Null only when nothing
+    /// on disk identifies it, which leaves an untargeted broadcast as the sole option.
+    /// </param>
+    void RequestShow(RunningInstance? running);
 
-    void RequestQuit();
+    void RequestQuit(RunningInstance running);
 }
 
 /// <summary>The two questions a takeover can put to the user.</summary>
@@ -87,11 +91,11 @@ public sealed class InstanceCoordinator
         // one. Either way there is nothing to identify, so behave as this application always has.
         if (running is null || IsThisExecutable(running) || !_prompts.ConfirmReplace(running))
         {
-            _messenger.RequestShow();
+            _messenger.RequestShow(running);
             return InstanceOutcome.Defer;
         }
 
-        _messenger.RequestQuit();
+        _messenger.RequestQuit(running);
 
         if (!WaitForRelease(out instance))
         {
@@ -140,7 +144,7 @@ public sealed class InstanceCoordinator
             return;
         }
 
-        _record.Write(new RunningInstance(_executablePath, _version));
+        _record.Write(new RunningInstance(_executablePath, _version, Environment.ProcessId));
     }
 
     /// <summary>

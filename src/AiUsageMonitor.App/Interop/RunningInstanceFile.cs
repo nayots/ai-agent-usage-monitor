@@ -3,8 +3,12 @@ using System.Text.Json;
 
 namespace AiUsageMonitor.App.Interop;
 
-/// <summary>Which executable, and which version of it, currently owns the single-instance mutex.</summary>
-public sealed record RunningInstance(string ExecutablePath, string Version);
+/// <summary>
+/// Which executable, which version of it, and which process currently owns the single-instance
+/// mutex. The process id is what lets a replacing instance aim a window message at this one; a
+/// record written before that field existed carries 0, which reads as "cannot be aimed at".
+/// </summary>
+public sealed record RunningInstance(string ExecutablePath, string Version, int ProcessId);
 
 /// <summary>
 /// The running instance's own description of itself, on disk.

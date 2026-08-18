@@ -21,12 +21,13 @@ public sealed class RunningInstanceFileTests : IDisposable
     {
         RunningInstanceFile file = new(_path);
 
-        file.Write(new RunningInstance(@"C:\downloads\widget-v2.exe", "0.1.6"));
+        file.Write(new RunningInstance(@"C:\downloads\widget-v2.exe", "0.1.6", 4321));
 
         RunningInstance? read = file.Read();
         Assert.NotNull(read);
         Assert.Equal(@"C:\downloads\widget-v2.exe", read!.ExecutablePath);
         Assert.Equal("0.1.6", read.Version);
+        Assert.Equal(4321, read.ProcessId);
     }
 
     [Fact]
@@ -34,8 +35,8 @@ public sealed class RunningInstanceFileTests : IDisposable
     {
         RunningInstanceFile file = new(_path);
 
-        file.Write(new RunningInstance(@"C:\a\widget.exe", "0.1.5"));
-        file.Write(new RunningInstance(@"C:\b\widget.exe", "0.1.6"));
+        file.Write(new RunningInstance(@"C:\a\widget.exe", "0.1.5", 11));
+        file.Write(new RunningInstance(@"C:\b\widget.exe", "0.1.6", 12));
 
         Assert.Equal(@"C:\b\widget.exe", file.Read()!.ExecutablePath);
     }
@@ -44,7 +45,7 @@ public sealed class RunningInstanceFileTests : IDisposable
     public void DeletingRemovesTheRecordAndIsSafeWhenAbsent()
     {
         RunningInstanceFile file = new(_path);
-        file.Write(new RunningInstance(@"C:\a\widget.exe", "0.1.5"));
+        file.Write(new RunningInstance(@"C:\a\widget.exe", "0.1.5", 13));
 
         file.Delete();
         file.Delete();
@@ -64,7 +65,7 @@ public sealed class RunningInstanceFileTests : IDisposable
     [Fact]
     public void ARecordWithNoExecutablePathReadsAsNoInstance()
     {
-        File.WriteAllText(_path, """{ "ExecutablePath": "", "Version": "0.1.6" }""");
+        File.WriteAllText(_path, """{ "ExecutablePath": "", "Version": "0.1.6", "ProcessId": 7 }""");
 
         Assert.Null(new RunningInstanceFile(_path).Read());
     }

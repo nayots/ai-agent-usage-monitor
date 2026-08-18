@@ -52,17 +52,47 @@ public sealed class SingleInstance : IDisposable
     }
 
     /// <summary>
-    /// Asks whichever instance already exists to show itself. Posted rather than sent, so a first
-    /// instance that is busy cannot block this one from exiting.
+    /// Posts to every top-level window of one process, returning false when it has none.
+    /// <para>
+    /// This exists because <see cref="Broadcast"/> cannot reach this application's own widget.
+    /// <c>HWND_BROADCAST</c> is documented to reach only <em>unowned</em> top-level windows, and the
+    /// widget sets <c>ShowInTaskbar="False"</c>, which makes WPF create a hidden owner window for it
+    /// — so the visible window is owned and every broadcast passes it by. Verified live: a broadcast
+    /// left the widget untouched where a post to its window shut it down immediately.
+    /// </para>
+    /// <para>
+    /// Posting to all of the process's top-level windows rather than hunting for the right one is
+    /// deliberate. The widget is hidden while it sits in the tray, WPF's own bookkeeping windows sit
+    /// beside it, and a registered message means nothing to any window that did not register it.
+    /// </para>
     /// </summary>
-    public static void BroadcastShow() => PostMessage(new IntPtr(HWND_BROADCAST), ShowMessage, IntPtr.Zero, IntPtr.Zero);
+    public static bool PostToProcess(int processId, uint message)
+    {
+        bool posted = false;
+
+        EnumWindows((handle, _) =>
+        {
+            GetWindowThreadProcessId(handle, out uint owner);
+
+            if (owner == (uint)processId)
+            {
+                PostMessage(handle, message, IntPtr.Zero, IntPtr.Zero);
+                posted = true;
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return posted;
+    }
 
     /// <summary>
-    /// Asks whichever instance already exists to exit, so this one can take the mutex. Cooperative
-    /// on purpose: the running copy shuts down through its own exit path, releasing its tray icon
-    /// and flushing its settings, neither of which survives a terminated process.
+    /// Best effort only — see <see cref="PostToProcess"/> for why this cannot reach a widget that
+    /// is already running. Kept for the one case with no process to aim at: a release that predates
+    /// the instance record and so cannot be identified at all.
     /// </summary>
-    public static void BroadcastQuit() => PostMessage(new IntPtr(HWND_BROADCAST), QuitMessage, IntPtr.Zero, IntPtr.Zero);
+    public static void Broadcast(uint message) =>
+        PostMessage(new IntPtr(HWND_BROADCAST), message, IntPtr.Zero, IntPtr.Zero);
 
     public void Dispose()
     {
@@ -75,4 +105,12 @@ public sealed class SingleInstance : IDisposable
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool PostMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 }
