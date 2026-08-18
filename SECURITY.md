@@ -7,7 +7,7 @@
 - **[Report a vulnerability](https://github.com/nayots/ai-agent-usage-monitor/security/advisories/new)** — GitHub's private advisory form, on this repository's Security tab. Preferred, because the whole exchange stays private until there is a fix.
 - **Email** the address on [the repository owner's GitHub profile](https://github.com/nayots).
 
-Useful to include: the version (Settings → Diagnostics → Application version), what an attacker gains, and the smallest sequence that shows it. A diagnostics report helps — it masks your user folder and user name, and no credential is read into that screen at all.
+Useful to include: the version (Settings → Diagnostics → Application version), what an attacker gains, and the smallest sequence that shows it. A diagnostics report helps — it replaces your user folder with `%USERPROFILE%` and your user name with `%USERNAME%` (where that name is three characters or longer), and no credential is read into that screen at all. It is plain text; read it before sending.
 
 **Never paste a token, an `Authorization` header, or the contents of `.credentials.json`** into a report, private or public. Nothing about a vulnerability here needs a live credential to demonstrate.
 
@@ -23,7 +23,7 @@ The Claude Code provider is the only part of this application that touches a cre
 
 - It reads `claudeAiOauth.accessToken` from `%USERPROFILE%\.claude\.credentials.json` — the file Claude Code itself already wrote — and holds it in memory for the duration of one request.
 - It sends that token as a bearer token to exactly one destination: `https://api.anthropic.com/api/oauth/usage`, over TLS. The HTTP client is configured with `AllowAutoRedirect = false` so a redirect cannot carry the token anywhere else.
-- The token is never logged, persisted, cached, displayed, copied to the clipboard, or included in an exception message, a provider note, or a diagnostics bundle. The diagnostics screen records only whether a token was found — `token: <present, redacted>`.
+- The token is never kept in a field, logged, persisted, cached, displayed, copied to the clipboard, or included in an exception message, a provider note, or a diagnostics bundle. The diagnostics screen records only whether a token was found — `token: <present, redacted>`.
 - The application never refreshes, rewrites or invalidates a credential. Token lifecycle stays Claude Code's job.
 
 The Codex provider handles no credential at all. It launches the `codex` executable already installed on the machine in `app-server` mode and speaks JSON-RPC to it over stdio; that process authenticates itself with its own stored session, which this application never reads.
@@ -51,7 +51,7 @@ Two publishes of the same commit are not byte-identical, so the checksum to comp
 **In scope** — anything that would make the application:
 
 - leak, persist, log or transmit a credential;
-- send a request anywhere other than `api.anthropic.com`;
+- send a request anywhere other than the two hardcoded destinations — the Anthropic usage endpoint and GitHub's public release listing — or send a provider credential anywhere other than the Anthropic usage endpoint;
 - write outside the user profile, or require elevation;
 - execute or evaluate anything derived from a provider's response;
 - present an unofficially obtained value as official, or show a fabricated number where a provider returned none.
