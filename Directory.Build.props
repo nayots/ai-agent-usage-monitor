@@ -20,7 +20,7 @@
     stability that depends on an endpoint this project does not control.
   -->
   <PropertyGroup>
-    <VersionPrefix>0.1.5</VersionPrefix>
+    <VersionPrefix>0.2.0</VersionPrefix>
     <Product>AI Usage Monitor</Product>
     <!-- Without this, MSBuild defaults AssemblyCompany to the assembly name, and the .exe's
          Details tab reports its own file name as the publisher. -->

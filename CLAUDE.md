@@ -42,11 +42,13 @@ Cutting a release (the tag is the trigger — everything else is automatic):
 ```powershell
 # 1. Bump <VersionPrefix> in Directory.Build.props and commit it.
 # 2. Tag that commit and push the tag — it must match the version you just bumped to:
-git tag v0.1.6
-git push origin v0.1.6
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
-`v0.1.5` is the latest release (2026-08-18); the example above is therefore the next one.
+`v0.2.0` is the latest release (2026-08-18); the example above is therefore the next patch. The
+version follows Conventional Commits against the range since the last tag — any `feat:` in it makes
+the bump a minor one, which is what took `v0.1.5` to `v0.2.0` rather than to `v0.1.6`.
 
 `.github/workflows/release.yml` verifies the tag against `<VersionPrefix>` **before** it
 builds, runs the tests, publishes the self-contained `.exe`, and attaches **three** assets
