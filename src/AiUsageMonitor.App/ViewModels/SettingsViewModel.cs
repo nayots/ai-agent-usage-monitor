@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using AiUsageMonitor.App.Interop;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Settings;
@@ -22,6 +23,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     // as a start is offering a shape nobody wants, and a hand-edited file can hold anything anyway.
     private static readonly int[] QuietStartPresets = [1080, 1140, 1200, 1260, 1320, 1380];
     private static readonly int[] QuietEndPresets = [300, 360, 420, 480, 540, 600];
+
+    private bool _isConfirmingReset;
+    private string? _resetResultText;
 
     private readonly SettingsService _settings;
     private readonly StartupRegistration _startup;
@@ -93,6 +97,17 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         // shell's application diagnostics page, against DiagnosticsViewModel.OpenLogsCommand.
         ResetPositionCommand = new RelayCommand(resetPosition);
         RecheckProvidersCommand = new RelayCommand(recheckProviders);
+
+        // Two presses, and no modal. There is no dialog anywhere in this application, and the
+        // widget hides itself when focus leaves the process - a message box is a window of its own
+        // and would be arguing with that. The confirmation is the button turning into a question.
+        ResetSettingsCommand = new RelayCommand(() =>
+        {
+            ResetResultText = null;
+            IsConfirmingReset = true;
+        });
+        CancelResetCommand = new RelayCommand(() => IsConfirmingReset = false);
+        ConfirmResetCommand = new RelayCommand(() => ResetSettings(resetPosition));
 
         _settings.Changed += OnSettingsChanged;
         _settings.PersistenceStateChanged += OnPersistenceStateChanged;
@@ -212,6 +227,30 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public ObservableCollection<ProviderPreferenceViewModel> ProviderPreferences { get; } = [];
 
     public string ProviderPreferencesHintText => "Hidden providers are not polled, and do not appear in the notification-area icon.";
+
+    /// <summary>
+    /// Whether the reset button has been pressed once and is waiting to be confirmed. Not persisted
+    /// and not carried across a settings window being closed: an unanswered question is not a state
+    /// worth remembering.
+    /// </summary>
+    public bool IsConfirmingReset
+    {
+        get => _isConfirmingReset;
+        private set => Set(ref _isConfirmingReset, value);
+    }
+
+    /// <summary>What the reset did, including where the previous settings went. Null until one runs.</summary>
+    public string? ResetResultText
+    {
+        get => _resetResultText;
+        private set => Set(ref _resetResultText, value);
+    }
+
+    public RelayCommand ResetSettingsCommand { get; }
+
+    public RelayCommand ConfirmResetCommand { get; }
+
+    public RelayCommand CancelResetCommand { get; }
 
     public RelayCommand ResetPositionCommand { get; }
 
@@ -376,6 +415,31 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     /// true: a settings change can come from anywhere, and every property here is a projection of
     /// the same record. The choice lists are separate objects and are refreshed by hand.
     /// </summary>
+    /// <summary>
+    /// Puts every application setting back to its default (PRD §19). Provider configuration is not
+    /// stored by this application and is not touched by any of this.
+    /// <para>
+    /// Three things happen that the settings file alone cannot do. The startup entry is cleared,
+    /// because it lives in the registry rather than in the file and would otherwise be read back on
+    /// the next load and silently undo its own reset. The widget is re-centred, because its position
+    /// has just been forgotten and a widget that stayed put would be the one visible thing the reset
+    /// appeared to miss. And the result names the backup, because a destructive action that cannot
+    /// be undone is one users are right to distrust.
+    /// </para>
+    /// </summary>
+    private void ResetSettings(Action resetPosition)
+    {
+        string? backup = _settings.Reset();
+        _startup.Disable();
+        resetPosition();
+
+        IsConfirmingReset = false;
+        ResetResultText = backup is null
+            ? "Settings are back to their defaults. There were no previous settings to save."
+            : "Settings are back to their defaults. The previous ones were kept beside the settings "
+              + $"file as {Path.GetFileName(backup)}.";
+    }
+
     private void OnSettingsChanged(object? sender, AppSettings settings)
     {
         Raise(null);

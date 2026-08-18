@@ -529,6 +529,63 @@ public class ViewLoadingTests(WpfFixture wpf)
         return content;
     }
 
+    /// <summary>
+    /// Resetting settings is application-scoped, so it must not appear on a provider's diagnostics
+    /// page - where "reset" would read as being about that provider, which is the one thing this
+    /// application never touches.
+    /// </summary>
+    [Fact]
+    public void ResettingSettingsIsOfferedOnlyOnTheApplicationDiagnosticsPage() => wpf.Invoke(() =>
+    {
+        SettingsShellViewModel shell = Shell();
+        SettingsWindow window = new(shell);
+        FrameworkElement content = (FrameworkElement)window.Content;
+        content.Measure(new Size(740, 560));
+        content.UpdateLayout();
+
+        StackPanel action = Descendants(content).OfType<StackPanel>().First(panel => panel.Name == "ResetSettingsAction");
+
+        shell.SelectedPage = shell.Pages.First(page => page.Kind == SettingsPageKind.ProviderDiagnostics);
+        content.UpdateLayout();
+        Assert.Equal(Visibility.Collapsed, action.Visibility);
+
+        shell.SelectedPage = shell.Pages.First(page => page.Kind == SettingsPageKind.ApplicationDiagnostics);
+        content.UpdateLayout();
+        Assert.Equal(Visibility.Visible, action.Visibility);
+
+        shell.Dispose();
+    });
+
+    [Fact]
+    public void TheResetButtonBecomesAQuestionBeforeAnythingIsReset() => wpf.Invoke(() =>
+    {
+        SettingsShellViewModel shell = Shell();
+        SettingsWindow window = new(shell);
+        FrameworkElement content = (FrameworkElement)window.Content;
+        shell.SelectedPage = shell.Pages.First(page => page.Kind == SettingsPageKind.ApplicationDiagnostics);
+        content.Measure(new Size(740, 560));
+        content.UpdateLayout();
+
+        Button reset = Descendants(content).OfType<Button>()
+            .First(button => AutomationProperties.GetName(button) == "Reset all settings");
+        StackPanel confirmation = Descendants(content).OfType<StackPanel>()
+            .First(panel => panel.Name == "ResetSettingsConfirmation");
+
+        Assert.Equal(Visibility.Visible, reset.Visibility);
+        Assert.Equal(Visibility.Collapsed, confirmation.Visibility);
+
+        reset.Command.Execute(null);
+        content.UpdateLayout();
+
+        Assert.Equal(Visibility.Collapsed, reset.Visibility);
+        Assert.Equal(Visibility.Visible, confirmation.Visibility);
+        Assert.Contains(
+            "Your Claude Code and Codex configuration is not touched.",
+            string.Join(" ", Texts(content)));
+
+        shell.Dispose();
+    });
+
     private static SettingsShellViewModel Shell()
     {
         IReadOnlyList<ProviderDescriptor> providers =

@@ -123,6 +123,50 @@
             </Style>
           </TextBlock.Style>
         </TextBlock>
+
+        <!-- Resetting application settings (PRD §19). Application-scoped, so it is restricted to the
+             application diagnostics page exactly as "Open logs folder" above is. Confirmed inline
+             rather than with a message box: this application has no dialogs anywhere, and the widget
+             hides itself when focus leaves the process, so a second window would be arguing with the
+             foreground hook. The confirmation is the button becoming a question. -->
+        <StackPanel x:Name="ResetSettingsAction" Margin="0,14,0,0">
+          <StackPanel.Style>
+            <Style TargetType="StackPanel">
+              <Setter Property="Visibility" Value="Collapsed" />
+              <Style.Triggers><DataTrigger Binding="{Binding SelectedPage.Kind}" Value="ApplicationDiagnostics"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+            </Style>
+          </StackPanel.Style>
+          <Button Content="Reset all settings…" Command="{Binding Settings.ResetSettingsCommand}" AutomationProperties.Name="Reset all settings">
+            <Button.Style>
+              <Style TargetType="Button" BasedOn="{StaticResource SettingsActionButtonStyle}">
+                <Setter Property="Visibility" Value="Visible" />
+                <Style.Triggers><DataTrigger Binding="{Binding Settings.IsConfirmingReset}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
+              </Style>
+            </Button.Style>
+          </Button>
+          <StackPanel x:Name="ResetSettingsConfirmation">
+            <StackPanel.Style>
+              <Style TargetType="StackPanel">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers><DataTrigger Binding="{Binding Settings.IsConfirmingReset}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+              </Style>
+            </StackPanel.Style>
+            <TextBlock TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}"
+                       Text="This puts every setting back to its default, forgets where the widget sits, and stops it starting with Windows. Your Claude Code and Codex configuration is not touched. The settings you have now are kept in a file you can restore." />
+            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+              <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Reset everything" Command="{Binding Settings.ConfirmResetCommand}" AutomationProperties.Name="Reset everything" />
+              <Button Margin="16,0,0,0" Style="{StaticResource SettingsActionButtonStyle}" Content="Cancel" Command="{Binding Settings.CancelResetCommand}" AutomationProperties.Name="Cancel reset" />
+            </StackPanel>
+          </StackPanel>
+          <TextBlock x:Name="ResetResult" Text="{Binding Settings.ResetResultText}" TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{DynamicResource TextTertiaryBrush}">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+                <Setter Property="Visibility" Value="Visible" />
+                <Style.Triggers><DataTrigger Binding="{Binding Settings.ResetResultText}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </StackPanel>
       </StackPanel>
     </Grid>
   </Grid>

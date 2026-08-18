@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -74,6 +75,52 @@ public sealed class AppSettingsStore
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             return QuarantineAndDefault();
+        }
+    }
+
+    /// <summary>
+    /// Copies the settings file aside and returns where it went, or null when there was nothing to
+    /// copy or the copy could not be made. The original is left exactly as it was.
+    /// <para>
+    /// This is the restore path behind resetting settings (PRD §19, "reversible where practical").
+    /// A failure here is deliberately not an error: the caller asked for their settings back, and
+    /// refusing because the safety net could not be built would leave them stuck with the state they
+    /// are trying to escape. The caller reports the absent backup instead.
+    /// </para>
+    /// </summary>
+    public string? BackUp()
+    {
+        if (!File.Exists(_path))
+        {
+            return null;
+        }
+
+        string stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+
+        try
+        {
+            // Two resets in one second must not silently overwrite the first backup, which would
+            // discard the very state the user might be coming back for.
+            for (int attempt = 0; attempt < 100; attempt++)
+            {
+                string candidate = attempt == 0
+                    ? $"{_path}.{stamp}.backup"
+                    : $"{_path}.{stamp}-{attempt}.backup";
+
+                if (File.Exists(candidate))
+                {
+                    continue;
+                }
+
+                File.Copy(_path, candidate);
+                return candidate;
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
         }
     }
 

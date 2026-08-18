@@ -52,10 +52,46 @@ public sealed class SettingsService
 
         Current = updated;
         Changed?.Invoke(this, updated);
+        Persist(updated);
+    }
 
+    /// <summary>
+    /// Puts every application setting back to its default and returns where the previous settings
+    /// were preserved, or null when there were none to preserve or they could not be copied
+    /// (PRD §19). Provider configuration is not stored here and is not touched.
+    /// <para>
+    /// Two departures from <see cref="Update"/>, both deliberate. Pinning survives, because it is
+    /// session state rather than a setting - see <see cref="AppSettings.AlwaysOnTop"/>. And the file
+    /// is rewritten even when the loaded record already equals the defaults: reset means "make the
+    /// file defaults", so state the record never carried - hand-edited keys, a value normalized on
+    /// read - must not survive it.
+    /// </para>
+    /// <para>
+    /// The startup registry entry is not reachable from here and is cleared by the caller. It is the
+    /// one application setting that does not live in this file, and a reset that left it behind
+    /// would be silently undone: the entry is read back from the registry on the next load.
+    /// </para>
+    /// </summary>
+    public string? Reset()
+    {
+        string? backup = _store.BackUp();
+        AppSettings defaults = AppSettings.Default with { AlwaysOnTop = Current.AlwaysOnTop };
+
+        if (defaults != Current)
+        {
+            Current = defaults;
+            Changed?.Invoke(this, defaults);
+        }
+
+        Persist(defaults);
+        return backup;
+    }
+
+    private void Persist(AppSettings settings)
+    {
         try
         {
-            _store.Save(updated);
+            _store.Save(settings);
             SetPersistenceFailed(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
