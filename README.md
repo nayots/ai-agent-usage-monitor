@@ -29,6 +29,22 @@ A small Windows desktop widget that shows live quota usage for the AI coding too
 [![Windows 11 x64](https://img.shields.io/badge/Windows%2011-x64-0078D4)](#-limitations)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-brightgreen)](#-is-it-safe)
 
+<!--
+  Rendered offscreen from the real WidgetWindow at 2x rather than screen-captured, so the image
+  is crisp on a HiDPI display: the widget is a fixed 360pt wide, and a 1x capture is soft on any
+  screen denser than the one it was taken on. The numbers are representative, but the shape is
+  not invented - it mirrors what the live providers actually return on a real install, down to
+  Codex reporting a single window whose label is its own raw token.
+
+  Same sanitizer rule as the wordmark above: NOT wrapped in a link. GitHub lifts an <img> out of
+  a surrounding anchor and out of the <picture> with it, which kills the theme swap.
+-->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshot-widget-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/screenshot-widget-light.png">
+  <img src="docs/assets/screenshot-widget-light.png" width="380" alt="The widget: a card for Claude Code showing 5 hour and 7 day quota windows, and a card for Codex showing its own window, each with a usage bar and a countdown to reset.">
+</picture>
+
 > 📦 The repository is called `ai-agent-usage-monitor`; the app calls itself **AI Usage Monitor**. Same thing.
 
 ---
