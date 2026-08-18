@@ -89,11 +89,11 @@ Everything applies immediately; there is no OK or Apply.
 | **Appearance** | Theme (Light / Dark / High contrast / follow Windows), density, colour bars by usage |
 | **Window** | Always on top, mini mode and its dock edge, global hotkey, start with Windows, reset window position |
 | **Providers** | Order, visibility, and a per-provider refresh interval |
-| **Refresh** | Refresh interval (default 60 s) and the age at which data is called stale (default 5 min) |
+| **Refresh** | Refresh interval (default 2 min) and the age at which data is called stale (default 5 min) |
 | **Notifications** | On or off, which usage thresholds alert, and quiet hours |
 | **Diagnostics** | Everything the app knows about each provider, plus a redacted copy button |
 
-**The refresh interval will not go below 60 seconds**, globally or per provider. Asking a provider for your quota far more often than it changes is how an application gets throttled, and a throttled provider tells you *less*, not more. A hand-edited smaller value in `settings.json` is read as 60 and left alone in the file.
+**The refresh interval will not go below 120 seconds**, globally or per provider. Asking a provider for your quota far more often than it changes is how an application gets throttled, and a throttled provider tells you *less*, not more. A hand-edited smaller value in `settings.json` is read as 120 and left alone in the file.
 
 ## Diagnostics, and reporting a problem
 
@@ -133,7 +133,7 @@ Requires the .NET 10 SDK (the feature band is pinned in `global.json`).
 
 ```powershell
 dotnet build                                   # warnings are errors
-dotnet test                                    # 725 tests
+dotnet test                                    # domain, infrastructure and app suites
 dotnet run --project src/AiUsageMonitor.Poc    # console probe against your real installs
 powershell -File build/publish.ps1             # the single-file release artifact
 ```
