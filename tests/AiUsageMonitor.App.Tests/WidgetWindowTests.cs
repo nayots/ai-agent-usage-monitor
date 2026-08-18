@@ -791,9 +791,9 @@ public class WidgetWindowTests(WpfFixture wpf)
         WidgetWindow window = new(model, Settings(AppSettings.Default));
 
         ContextMenu menu = Assert.IsType<ContextMenu>(window.Resources["TrayMenu"]);
-        string[] headers = [.. menu.Items.OfType<MenuItem>().Select(item => (string)item.Header)];
+        string[] headers = [.. menu.Items.OfType<MenuItem>().Select(item => item.Header as string ?? string.Empty)];
 
-        Assert.Equal(["Open", "Refresh all providers", "Settings", "Mini mode", "Diagnostics", "Exit"], headers);
+        Assert.Equal(["", "Open", "Refresh all providers", "Settings", "Mini mode", "Diagnostics", "Exit"], headers);
         Assert.True(menu.Items.OfType<MenuItem>().Single(item => (string)item.Header == "Mini mode").IsCheckable);
 
         model.Dispose();

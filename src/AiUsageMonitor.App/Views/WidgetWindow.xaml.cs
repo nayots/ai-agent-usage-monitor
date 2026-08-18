@@ -653,6 +653,23 @@ public partial class WidgetWindow : Window
             item.IsChecked = _settings.Current.MiniMode;
         }
 
+        // Set as the menu opens, for the same reason the mini-mode tick is: the verdict can change
+        // between two openings, and a stale item offering a version that is already installed is
+        // worse than no item at all.
+        UpdateStatus? status = _updates?.Status;
+        bool hasUpdate = status?.Availability == UpdateAvailability.UpdateAvailable;
+
+        foreach (FrameworkElement element in menu.Items.OfType<FrameworkElement>()
+                     .Where(item => Equals(item.Tag, "update")))
+        {
+            element.Visibility = hasUpdate ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        if (hasUpdate && menu.Items.OfType<MenuItem>().FirstOrDefault(item => Equals(item.Tag, "update")) is MenuItem update)
+        {
+            update.Header = UpdateCopy.TrayText(status!);
+        }
+
         menu.PlacementTarget = this;
         menu.Placement = PlacementMode.MousePoint;
         menu.StaysOpen = false;
@@ -899,6 +916,8 @@ public partial class WidgetWindow : Window
     private void TrayOpen_Click(object sender, RoutedEventArgs e) => ShowFromTray();
 
     private void TrayRefresh_Click(object sender, RoutedEventArgs e) => _ = _model.RefreshAsync(force: true, RefreshTrigger.ManualGlobal);
+
+    private void TrayUpdate_Click(object sender, RoutedEventArgs e) => Update_Click(sender, e);
 
     private void TraySettings_Click(object sender, RoutedEventArgs e)
     {

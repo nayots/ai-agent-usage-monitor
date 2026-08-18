@@ -12,6 +12,11 @@
         UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Window.Resources>
     <ContextMenu x:Key="TrayMenu">
+      <!-- Named, because the code-behind sets its header and visibility as the menu opens: x:Name
+           inside a resource dictionary generates no field to reach it by, which is the same reason
+           the mini-mode item is found by IsCheckable. -->
+      <MenuItem x:Name="TrayUpdateMenuItem" Tag="update" Visibility="Collapsed" Click="TrayUpdate_Click" />
+      <Separator x:Name="TrayUpdateSeparator" Tag="update" Visibility="Collapsed" />
       <MenuItem Header="Open" Click="TrayOpen_Click" />
       <MenuItem Header="Refresh all providers" Click="TrayRefresh_Click" />
       <MenuItem Header="Settings" Click="TraySettings_Click" />

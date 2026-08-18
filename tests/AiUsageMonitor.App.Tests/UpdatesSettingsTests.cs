@@ -65,4 +65,17 @@ public sealed class UpdatesSettingsTests
         Assert.Equal("Checked 1 hour ago", UpdateCopy.LastCheckedText(Now.AddHours(-1), Now));
         Assert.Equal("Checked 2 days ago", UpdateCopy.LastCheckedText(Now.AddDays(-2), Now));
     }
+
+    [Fact]
+    public void The_tray_item_names_the_version_from_parsed_numbers()
+    {
+        string text = UpdateCopy.TrayText(new UpdateStatus(
+            UpdateAvailability.UpdateAvailable,
+            ReleaseVersion.Parse("0.1.3"),
+            ReleaseVersion.Parse("0.1.4"),
+            Now,
+            null));
+
+        Assert.Equal("Update available (0.1.4)", text);
+    }
 }
