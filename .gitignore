@@ -71,10 +71,14 @@ $RECYCLE.BIN/
 #
 # They remain readable in this repository's history; untracking them stops them
 # accumulating in HEAD, it does not unpublish them.
-/CLAUDE.md
-/AGENTS.md
+#
+# CLAUDE.md, AGENTS.md and docs/codex-workflow.md are deliberately NOT in this
+# list. They are agent instructions, and they have to exist wherever the code is
+# checked out: a git worktree or a fresh clone contains tracked files only, so
+# ignoring them would hand an agent a tree with no architecture rules, no hard
+# constraints, and no procedure behind the delegation gate that reads
+# docs/codex-workflow.md before any Codex hand-off.
 docs/PRD.md
-docs/codex-workflow.md
 docs/pre-publication-checklist.md
 docs/design/
 docs/plans/
