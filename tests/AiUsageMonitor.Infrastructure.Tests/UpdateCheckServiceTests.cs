@@ -197,12 +197,17 @@ public sealed class UpdateCheckServiceTests
     [Fact]
     public async Task Shares_one_check_rather_than_starting_a_second()
     {
-        StubHandler handler = new(Body("v0.1.4"));
+        // The handler holds the first request open until both callers have arrived, so "still in
+        // flight" is a fact rather than a bet on the first check being slower than two method
+        // calls - a bet the release build loses.
+        TaskCompletionSource gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        StubHandler handler = new(Body("v0.1.4")) { Hold = gate.Task };
         UpdateCheckService service = new("0.1.3", new GitHubReleaseClient(handler));
 
         Task<UpdateStatus> first = service.CheckAsync(manual: false, Now, CancellationToken.None);
         Task<UpdateStatus> second = service.CheckAsync(manual: true, Now, CancellationToken.None);
 
+        gate.SetResult();
         await Task.WhenAll(first, second);
 
         Assert.Equal(1, handler.RequestCount);
@@ -279,13 +284,24 @@ public sealed class UpdateCheckServiceTests
         /// </summary>
         public bool Yields { get; init; } = true;
 
+        /// <summary>
+        /// Holds the request open until the test releases it. Set only by the shared-check test,
+        /// which needs the first check to still be running when the second caller arrives - a
+        /// bare <see cref="Task.Yield"/> leaves that to chance, and the release build is fast
+        /// enough to finish the first run in the gap between the two calls.
+        /// </summary>
+        public Task? Hold { get; init; }
+
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             RequestCount++;
 
-            // Yields so the two callers in the shared-check test are genuinely overlapping.
-            if (Yields)
+            if (Hold is not null)
+            {
+                await Hold.ConfigureAwait(false);
+            }
+            else if (Yields)
             {
                 await Task.Yield();
             }
