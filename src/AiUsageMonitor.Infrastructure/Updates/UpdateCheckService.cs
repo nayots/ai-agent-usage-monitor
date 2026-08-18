@@ -136,8 +136,17 @@ public sealed class UpdateCheckService
             }
 
             _lastAttempt = now;
-            _inFlight = RunAsync(now, cancellationToken);
-            return _inFlight;
+
+            Task<UpdateStatus> started = RunAsync(now, cancellationToken);
+
+            // Only park it if it is still running. A run that never suspends - every await already
+            // complete by the time it is reached - finishes inline, which means its finally has
+            // *already* cleared _inFlight by the time this assignment happens. Assigning
+            // unconditionally would leave a completed task parked there for the life of the
+            // process, and every later check, scheduled or manual, would return that stale answer
+            // without ever asking again.
+            _inFlight = started.IsCompleted ? null : started;
+            return started;
         }
     }
 

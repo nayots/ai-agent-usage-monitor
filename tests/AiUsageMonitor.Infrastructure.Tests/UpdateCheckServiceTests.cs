@@ -209,6 +209,25 @@ public sealed class UpdateCheckServiceTests
         Assert.Equal(await first, await second);
     }
 
+    [Fact]
+    public async Task Starts_a_second_check_after_one_that_finished_inline()
+    {
+        // The defect this guards was invisible in Debug and failed the release build. When a run
+        // never suspends - every await already complete by the time it is reached - it finishes
+        // inline, so its finally clears the in-flight slot *before* CheckAsync assigns it. The
+        // completed task then stayed parked there for the life of the process and every later
+        // check returned that stale answer without asking again. A handler that never yields
+        // makes the timing deterministic instead of a race the faster build happens to lose.
+        StubHandler handler = new(Body("v0.1.4")) { Yields = false };
+        UpdateCheckService service = new("0.1.3", new GitHubReleaseClient(handler));
+
+        await service.CheckAsync(manual: true, Now, CancellationToken.None);
+        UpdateStatus second = await service.CheckAsync(manual: true, Now.AddDays(1), CancellationToken.None);
+
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(Now.AddDays(1), second.LastCheckedUtc);
+    }
+
     private static UpdateCheckService Service(
         string running,
         string tag,
@@ -254,13 +273,22 @@ public sealed class UpdateCheckServiceTests
 
         public int RequestCount { get; private set; }
 
+        /// <summary>
+        /// Off only for the inline-completion test, which needs the whole run to finish without
+        /// ever suspending. Everywhere else this stays on.
+        /// </summary>
+        public bool Yields { get; init; } = true;
+
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             RequestCount++;
 
             // Yields so the two callers in the shared-check test are genuinely overlapping.
-            await Task.Yield();
+            if (Yields)
+            {
+                await Task.Yield();
+            }
 
             return Respond(request);
         }
