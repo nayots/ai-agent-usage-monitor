@@ -20,7 +20,7 @@
     stability that depends on an endpoint this project does not control.
   -->
   <PropertyGroup>
-    <VersionPrefix>0.1.2</VersionPrefix>
+    <VersionPrefix>0.1.3</VersionPrefix>
     <Product>AI Usage Monitor</Product>
     <Copyright>Copyright (c) 2026 Stoyan Grigorov</Copyright>
   </PropertyGroup>
