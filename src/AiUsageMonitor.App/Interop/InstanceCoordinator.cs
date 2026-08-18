@@ -51,6 +51,8 @@ public sealed class InstanceCoordinator
     private readonly TimeSpan _replaceTimeout;
     private readonly TimeSpan _pollInterval;
 
+    private bool _owns;
+
     public InstanceCoordinator(
         string mutexName,
         string? executablePath,
@@ -105,8 +107,20 @@ public sealed class InstanceCoordinator
     /// Call before releasing the mutex, never after. A replacing instance is polling for the mutex
     /// and writes its own record the moment it acquires one; releasing first would let it write a
     /// record that this call then deletes.
+    /// <para>
+    /// Releases only what this process claimed. Exit runs on every path, including the one where
+    /// <see cref="Acquire"/> deferred to a copy that is still running — and deleting that copy's
+    /// record would leave the next launch of a different executable with nothing to identify it by,
+    /// silently skipping the takeover offer for the rest of that copy's life.
+    /// </para>
     /// </summary>
-    public void Release() => _record.Delete();
+    public void Release()
+    {
+        if (_owns)
+        {
+            _record.Delete();
+        }
+    }
 
     private bool IsThisExecutable(RunningInstance running) =>
         _executablePath is not null
@@ -114,6 +128,10 @@ public sealed class InstanceCoordinator
 
     private void Claim()
     {
+        // Set even when nothing is written below: this process owns the mutex either way, so no
+        // other copy can be holding a record, and there is nothing of anyone else's left to delete.
+        _owns = true;
+
         // A process that cannot name its own executable cannot be told apart from another copy, and
         // a record claiming an empty path would make every later launch look like an upgrade.
         if (_executablePath is null)

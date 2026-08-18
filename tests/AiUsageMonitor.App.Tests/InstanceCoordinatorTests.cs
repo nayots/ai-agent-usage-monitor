@@ -238,6 +238,44 @@ public sealed class InstanceCoordinatorTests : IDisposable
         }
     }
 
+    [Fact]
+    public void DeferringDoesNotDeleteTheRunningInstancesRecord()
+    {
+        // App.OnExit runs on every exit path, this one included, and it calls Release. A coordinator
+        // that never acquired anything must therefore release nothing: deleting here would throw
+        // away a record that still belongs to the copy that is still running, and the next launch of
+        // a different executable would read null and silently skip the takeover offer.
+        InstanceCoordinator running = Coordinator(First, "0.1.5", new FakeMessenger(), NeverAsked());
+        running.Acquire(out SingleInstance? held);
+
+        using (held)
+        {
+            InstanceCoordinator second = Coordinator(First, "0.1.5", new FakeMessenger(), NeverAsked());
+            second.Acquire(out _);
+
+            second.Release();
+
+            Assert.Equal(First, new RunningInstanceFile(_recordPath).Read()!.ExecutablePath);
+        }
+    }
+
+    [Fact]
+    public void ABlockedTakeoverDoesNotDeleteTheRunningInstancesRecord()
+    {
+        InstanceCoordinator running = Coordinator(First, "0.1.5", new FakeMessenger(), NeverAsked());
+        running.Acquire(out SingleInstance? held);
+
+        using (held)
+        {
+            InstanceCoordinator upgraded = Coordinator(Second, "0.1.6", new FakeMessenger(), new FakePrompts(_ => true));
+            Assert.Equal(InstanceOutcome.Blocked, upgraded.Acquire(out _));
+
+            upgraded.Release();
+
+            Assert.Equal(First, new RunningInstanceFile(_recordPath).Read()!.ExecutablePath);
+        }
+    }
+
     public void Dispose()
     {
         try
