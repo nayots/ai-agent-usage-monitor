@@ -5,6 +5,7 @@ using AiUsageMonitor.Infrastructure.Diagnostics;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
+using AiUsageMonitor.Infrastructure.Updates;
 
 namespace AiUsageMonitor.App.ViewModels;
 
@@ -23,6 +24,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private bool _isRefreshing;
     private bool _isCompact;
+    private string? _updateFooterText;
 
     /// <param name="dispatch">
     /// Marshals a snapshot onto the UI thread. Defaults to running inline, which is what tests
@@ -131,6 +133,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// sitting above it rather than a fact about the application.
     /// </summary>
     public bool HasVersionText => VersionText is not null;
+
+    /// <summary>
+    /// The footer's version rendered as a link target when a newer release exists, and null
+    /// otherwise. A separate property rather than a mutation of <see cref="VersionText"/>: the
+    /// footer shows one or the other, and a single string would make either impossible to assert
+    /// without disturbing the other - the same reason the version is separate from the count.
+    /// </summary>
+    public string? UpdateFooterText => _updateFooterText;
+
+    public bool HasUpdate => _updateFooterText is not null;
+
+    /// <summary>
+    /// Takes a verdict from <c>UpdateCheckService</c>. Pushed in rather than subscribed to, so the
+    /// view model needs no reference to the service and stays constructible in a test with nothing
+    /// behind it.
+    /// </summary>
+    public void ApplyUpdateStatus(UpdateStatus status)
+    {
+        string? text = UpdateCopy.FooterText(status);
+
+        if (_updateFooterText == text)
+        {
+            return;
+        }
+
+        _updateFooterText = text;
+        Raise(nameof(UpdateFooterText));
+        Raise(nameof(HasUpdate));
+    }
 
     /// <summary>
     /// Prefixes a "v" only when the version starts with a digit - the same rule

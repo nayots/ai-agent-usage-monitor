@@ -98,11 +98,21 @@ public partial class WidgetWindow : Window
         // have its own interval or be hidden entirely. Pushed before the first refresh so a hidden
         // provider is never polled even once.
         _poll.Interval = TickCadence.Poll;
-        _poll.Tick += (_, _) => _ = _model.RefreshAsync(force: false, RefreshTrigger.Scheduled);
+        _poll.Tick += (_, _) =>
+        {
+            _ = _model.RefreshAsync(force: false, RefreshTrigger.Scheduled);
+            _ = CheckForUpdatesIfDueAsync();
+        };
         ApplyCadence(settings.Current);
         _dismiss.Tick += OnDismissTick;
 
         _settings.Changed += OnSettingsChanged;
+
+        if (_updates is not null)
+        {
+            _updates.StatusChanged += OnUpdateStatusChanged;
+            _model.ApplyUpdateStatus(_updates.Status);
+        }
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -197,6 +207,11 @@ public partial class WidgetWindow : Window
         }
 
         _settings.Changed -= OnSettingsChanged;
+
+        if (_updates is not null)
+        {
+            _updates.StatusChanged -= OnUpdateStatusChanged;
+        }
 
         UnregisterGlobalHotkey();
         SavePlacement();
@@ -539,6 +554,47 @@ public partial class WidgetWindow : Window
             // A machine with no registered browser is not a reason to take the widget down.
         }
     }
+
+    /// <summary>
+    /// Spec D1: the terminal action is the browser, not a download. The destination is the same
+    /// compile-time constant the settings page uses.
+    /// </summary>
+    private void Update_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(GitHubReleaseClient.ReleasePageUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Driven from the same 5-second tick as the provider poll rather than from a timer of its own.
+    /// The service owns the cadence and answers whether anything is due - so a second timer would
+    /// only be a second place for that answer to live.
+    /// </summary>
+    private async Task CheckForUpdatesIfDueAsync()
+    {
+        DateTimeOffset now = DateTimeOffset.Now;
+
+        if (_updates is null || !_updates.IsDue(now))
+        {
+            return;
+        }
+
+        UpdateStatus status = await _updates.CheckAsync(manual: false, now, CancellationToken.None);
+
+        _settings.Update(s => s with
+        {
+            LastUpdateCheckUtc = status.LastCheckedUtc,
+            LastUpdateCheckETag = _updates.ETag
+        });
+    }
+
+    private void OnUpdateStatusChanged(object? sender, UpdateStatus status) =>
+        Dispatcher.Invoke(() => _model.ApplyUpdateStatus(status));
 
     /// <summary>
     /// Written through the settings service rather than by assigning <see cref="Window.Topmost"/>

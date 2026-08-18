@@ -151,9 +151,32 @@
                        Style="{StaticResource CaptionTextStyle}"
                        Foreground="{DynamicResource TextTertiaryBrush}" />
             <TextBlock Text="{Binding VersionText}"
-                       Visibility="{Binding HasVersionText, Converter={StaticResource BooleanToVisibility}}"
-                       Style="{StaticResource CaptionTextStyle}"
-                       Foreground="{DynamicResource TextTertiaryBrush}" />
+                       Foreground="{DynamicResource TextTertiaryBrush}">
+              <TextBlock.Style>
+                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextStyle}">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                  <Style.Triggers>
+                    <MultiDataTrigger>
+                      <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding HasVersionText}" Value="True" />
+                        <Condition Binding="{Binding HasUpdate}" Value="False" />
+                      </MultiDataTrigger.Conditions>
+                      <Setter Property="Visibility" Value="Visible" />
+                    </MultiDataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </TextBlock.Style>
+            </TextBlock>
+            <!-- Secondary, not accent: Refresh stays the one accent action in this bar. Shown in
+                 place of the plain version, never beside it - two versions in one footer would read
+                 as two facts about the providers above rather than one about the application. -->
+            <Button Content="{Binding UpdateFooterText}"
+                    Style="{StaticResource LinkButtonStyle}"
+                    Foreground="{DynamicResource TextSecondaryBrush}"
+                    Click="Update_Click"
+                    ToolTip="A newer version is available — open its release page"
+                    AutomationProperties.Name="A newer version is available. Open its release page."
+                    Visibility="{Binding HasUpdate, Converter={StaticResource BooleanToVisibility}}" />
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
             <!-- Secondary, not accent. Refresh acts on what is already on screen and stays the one

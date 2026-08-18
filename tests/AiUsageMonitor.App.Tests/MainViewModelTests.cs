@@ -3,6 +3,7 @@ using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
+using AiUsageMonitor.Infrastructure.Updates;
 
 namespace AiUsageMonitor.App.Tests;
 
@@ -113,6 +114,45 @@ public class MainViewModelTests
     {
         Assert.Equal("1 provider", WithVersion("0.1.2").FooterText);
         Assert.Equal("1 provider", WithVersion("unknown").FooterText);
+    }
+
+    [Fact]
+    public void The_footer_shows_no_update_until_one_is_found()
+    {
+        MainViewModel model = Build().Model;
+
+        Assert.False(model.HasUpdate);
+        Assert.Null(model.UpdateFooterText);
+    }
+
+    [Fact]
+    public void The_footer_names_both_versions_when_behind()
+    {
+        MainViewModel model = Build().Model;
+
+        model.ApplyUpdateStatus(new UpdateStatus(
+            UpdateAvailability.UpdateAvailable,
+            ReleaseVersion.Parse("0.1.3"),
+            ReleaseVersion.Parse("0.1.4"),
+            DateTimeOffset.UnixEpoch,
+            null));
+
+        Assert.True(model.HasUpdate);
+        Assert.Equal("v0.1.3 → 0.1.4", model.UpdateFooterText);
+    }
+
+    [Fact]
+    public void The_footer_says_nothing_when_current_or_unknown()
+    {
+        MainViewModel model = Build().Model;
+
+        model.ApplyUpdateStatus(new UpdateStatus(
+            UpdateAvailability.Current, ReleaseVersion.Parse("0.1.3"), ReleaseVersion.Parse("0.1.3"), DateTimeOffset.UnixEpoch, null));
+        Assert.False(model.HasUpdate);
+
+        model.ApplyUpdateStatus(new UpdateStatus(
+            UpdateAvailability.Unknown, ReleaseVersion.Parse("0.1.3"), null, null, "offline"));
+        Assert.False(model.HasUpdate);
     }
 
     private static MainViewModel WithVersion(string version)
