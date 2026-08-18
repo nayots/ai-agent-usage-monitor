@@ -33,7 +33,7 @@ The Codex provider handles no credential at all. It launches the `codex` executa
 These are product constraints, enforced in the code rather than promised in prose:
 
 - **No website scraping, browser automation, cookie access, or browser-profile access.**
-- **No telemetry, no analytics, no crash reporting, no third-party transmission of any kind.** Nothing leaves your machine except the single request above.
+- **No telemetry, no analytics, no crash reporting.** No usage data, diagnostics or settings are ever transmitted to the author or to any third party. Besides the usage request above, the application makes exactly one other request: an anonymous, unauthenticated `GET` to `api.github.com`, at most once a day, asking whether a newer release of this application exists. It sends no version, no identifier, no machine information and no token — its `User-Agent` is the constant string `AiUsageMonitor` — and it can be switched off entirely in **Settings → Updates**. The application never downloads or installs a new version; it only offers to open the release page in your browser.
 - **No administrator privileges.** It refuses none because it asks for none.
 - **No modification of provider configuration.** It does not write to `~/.claude/settings.json`, `~/.codex/config.toml`, or any other file a provider owns.
 - **Nothing written outside your user profile.** Settings in `%APPDATA%\AiUsageMonitor`, logs in `%LOCALAPPDATA%\AiUsageMonitor\logs`, and one `HKCU\...\Run` entry that exists only if you switch on *Start with Windows*.
