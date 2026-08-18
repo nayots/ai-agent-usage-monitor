@@ -121,6 +121,33 @@ public sealed class UpdatesSettingsTests
     }
 
     [Fact]
+    public async Task The_spinner_outlives_a_check_that_returns_immediately()
+    {
+        // The complaint this answers: against a warm connection the check came back inside a
+        // frame, so the spinner appeared and vanished before it could be seen and the button
+        // looked inert. The floor is a floor, not a delay - it overlaps the request.
+        SettingsViewModel model = Model(Service(out _), minimumBusyTime: TimeSpan.FromMilliseconds(250));
+
+        Task running = model.CheckForUpdatesAsync();
+
+        // The check itself is already done; only the floor is still holding this open.
+        Assert.False(running.IsCompleted);
+        Assert.True(model.IsCheckingForUpdates);
+
+        await running;
+
+        Assert.False(model.IsCheckingForUpdates);
+    }
+
+    [Fact]
+    public void The_default_floor_is_long_enough_to_be_seen()
+    {
+        // Not a magic number check: below about a fifth of a second a spinner reads as a glitch
+        // rather than as work, which is the defect this exists to fix.
+        Assert.True(SettingsViewModel.DefaultMinimumBusyTime >= TimeSpan.FromMilliseconds(200));
+    }
+
+    [Fact]
     public async Task A_failed_check_still_clears_the_spinner()
     {
         SettingsViewModel model = Model(Service(out _, status: HttpStatusCode.ServiceUnavailable));
@@ -139,7 +166,7 @@ public sealed class UpdatesSettingsTests
         return new UpdateCheckService("0.1.3", new GitHubReleaseClient(handler));
     }
 
-    private static SettingsViewModel Model(UpdateCheckService updates)
+    private static SettingsViewModel Model(UpdateCheckService updates, TimeSpan? minimumBusyTime = null)
     {
         string path = Path.Combine(Path.GetTempPath(), "aium-upd-" + Guid.NewGuid().ToString("N"), "settings.json");
 
@@ -150,7 +177,11 @@ public sealed class UpdatesSettingsTests
             recheckProviders: () => { },
             providers: Providers,
             updates: updates,
-            clock: () => Now);
+            clock: () => Now,
+
+            // Zero unless a test is about the floor itself, so the suite does not spend the real
+            // one waiting for a spinner nobody is looking at.
+            minimumBusyTime: minimumBusyTime ?? TimeSpan.Zero);
     }
 
     private sealed class SilentProbe(string name) : IProviderProbe

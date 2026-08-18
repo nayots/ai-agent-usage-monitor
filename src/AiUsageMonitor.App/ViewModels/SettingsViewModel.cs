@@ -15,6 +15,14 @@ namespace AiUsageMonitor.App.ViewModels;
 /// </summary>
 public sealed class SettingsViewModel : ObservableObject, IDisposable
 {
+    /// <summary>
+    /// How long the update spinner stays up even when the check beats it. The request usually
+    /// comes back in a couple of hundred milliseconds, and a spinner that appears and vanishes
+    /// inside that reads as a flicker rather than as feedback - the button looks like it did
+    /// nothing at all. Two thirds of a revolution is enough to be read as motion.
+    /// </summary>
+    public static readonly TimeSpan DefaultMinimumBusyTime = TimeSpan.FromMilliseconds(600);
+
     // No 60 here. It is below AppSettings.MinimumRefreshSeconds, so choosing it would silently
     // resolve to 120 and leave the settings window showing a cadence the application is not using.
     private static readonly int[] RefreshPresets = [120, 300, 600];
@@ -34,6 +42,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private readonly bool _globalHotkeyUnavailable;
     private readonly UpdateCheckService _updates;
     private readonly Func<DateTimeOffset> _clock;
+    private readonly TimeSpan _minimumBusyTime;
     private bool _isCheckingForUpdates;
 
     public SettingsViewModel(
@@ -44,8 +53,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         IReadOnlyList<ProviderDescriptor> providers,
         bool globalHotkeyUnavailable = false,
         UpdateCheckService? updates = null,
-        Func<DateTimeOffset>? clock = null)
+        Func<DateTimeOffset>? clock = null,
+        TimeSpan? minimumBusyTime = null)
     {
+        _minimumBusyTime = minimumBusyTime ?? DefaultMinimumBusyTime;
+
         // A disabled fallback rather than a null check on every read: a test or a harness that does
         // not care about updates still gets a page that renders and a button that refuses.
         _updates = updates ?? new UpdateCheckService("unknown") { Enabled = false };
@@ -221,9 +233,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         try
         {
-            await _updates
-                .CheckAsync(manual: true, _clock(), CancellationToken.None)
-                .ConfigureAwait(true);
+            Task check = _updates.CheckAsync(manual: true, _clock(), CancellationToken.None);
+
+            // Both at once, not one after the other: the floor overlaps the request rather than
+            // being added to it, so a slow check is never made slower by it.
+            await Task.WhenAll(check, Task.Delay(_minimumBusyTime)).ConfigureAwait(true);
         }
         finally
         {
