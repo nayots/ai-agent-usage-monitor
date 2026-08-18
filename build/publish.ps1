@@ -61,7 +61,7 @@ if ($sizeMb -lt $minimumSizeMb) {
 
 # --- Release asset staging -------------------------------------------------------------
 # The published file is named after the assembly (AiUsageMonitor.App.exe), but the product
-# is called Quota Monitor everywhere the user can see it. A download sitting in a Downloads
+# is called AI Usage Monitor everywhere the user can see it. A download sitting in a Downloads
 # folder under the assembly name is not recognisably the thing they installed, so the
 # release asset carries the product name and its version instead.
 #
@@ -85,7 +85,7 @@ if (Test-Path $artifactsDir) {
 
 New-Item -ItemType Directory -Path $artifactsDir | Out-Null
 
-$assetName = "QuotaMonitor-v$version-win-x64.exe"
+$assetName = "AiUsageMonitor-v$version-win-x64.exe"
 $assetPath = Join-Path $artifactsDir $assetName
 Copy-Item -Path $exe.FullName -Destination $assetPath
 

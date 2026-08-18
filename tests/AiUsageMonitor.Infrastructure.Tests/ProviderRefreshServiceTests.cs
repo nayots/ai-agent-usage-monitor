@@ -1,6 +1,7 @@
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
+using AiUsageMonitor.Infrastructure.Settings;
 using Microsoft.Extensions.Logging;
 
 namespace AiUsageMonitor.Infrastructure.Tests;
@@ -874,7 +875,7 @@ public class ProviderRefreshServiceTests
     }
 
     [Fact]
-    public async Task Never_schedules_an_aligned_read_inside_the_sixty_second_floor()
+    public async Task Never_schedules_an_aligned_read_inside_the_minimum_refresh_floor()
     {
         // A reset 5 seconds away would otherwise produce a read 35 seconds after this one.
         ProviderDescriptor provider = Descriptor("Alpha", _ => Task.FromResult(
@@ -883,7 +884,9 @@ public class ProviderRefreshServiceTests
 
         await service.RefreshAllAsync(force: false, Now, CancellationToken.None);
 
-        Assert.Equal(Now.AddSeconds(60), service.ActivityFor(provider, Now).NextAttemptAt);
+        Assert.Equal(
+            Now.AddSeconds(AppSettings.MinimumRefreshSeconds),
+            service.ActivityFor(provider, Now).NextAttemptAt);
     }
 
     [Fact]

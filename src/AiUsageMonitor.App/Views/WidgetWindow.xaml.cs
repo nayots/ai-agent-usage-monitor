@@ -27,6 +27,13 @@ public partial class WidgetWindow : Window
     private readonly SettingsService _settings;
     private readonly ProviderRefreshService? _refresh;
     private readonly ThemeManager? _theme;
+    /// <summary>
+    /// The project's home. The only address this application ever hands to a browser, and it goes
+    /// there because the user clicked a link asking for it. Kept here beside the footer button that
+    /// uses it rather than in a settings file, so it cannot be repointed by editing one.
+    /// </summary>
+    private const string ProjectUrl = "https://github.com/nayots/ai-agent-usage-monitor";
+
     private readonly IReadOnlyList<ProviderDescriptor> _providers;
     private readonly EnvironmentReport _environment;
     private readonly StartupReport _startup;
@@ -102,7 +109,7 @@ public partial class WidgetWindow : Window
         DwmWindowChrome.UseRoundedCorners(handle);
         ApplyTitleBarTheme(handle);
 
-        _tray = new TrayIcon(this, "Quota Monitor");
+        _tray = new TrayIcon(this, "AI Usage Monitor");
         _tray.Activated += (_, _) => ShowFromTray();
         _tray.ContextMenuRequested += OnTrayContextMenuRequested;
         _tray.Show();
@@ -399,7 +406,7 @@ public partial class WidgetWindow : Window
             _settings,
             StartupRegistration.ForThisProcess(),
             resetPosition: ResetPlacement,
-            recheckProviders: () => _ = _model.RefreshAsync(force: true, RefreshTrigger.ManualGlobal),
+            recheckProviders: RecheckProviders,
             providers: _providers,
             globalHotkeyUnavailable: _globalHotkeyUnavailable);
 
@@ -466,6 +473,22 @@ public partial class WidgetWindow : Window
     }
 
     /// <summary>
+    /// The one action that means "look at this machine again" rather than "get me current numbers".
+    /// Each probe caches where its provider is installed and what version it reports, so without the
+    /// invalidation below a provider installed a moment ago would stay invisible until that cache
+    /// lapsed - which is the whole reason this button exists.
+    /// </summary>
+    private void RecheckProviders()
+    {
+        foreach (ProviderDescriptor provider in _providers)
+        {
+            provider.Probe.InvalidateInstallation();
+        }
+
+        _ = _model.RefreshAsync(force: true, RefreshTrigger.ManualGlobal);
+    }
+
+    /// <summary>
     /// UseShellExecute is required: without it the explorer.exe launch is treated as a raw process
     /// start and the folder argument is ignored.
     /// </summary>
@@ -494,6 +517,23 @@ public partial class WidgetWindow : Window
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e) => ShowSettings();
+
+    /// <summary>
+    /// Hands the project's address to whatever the user has set as their browser. This is an
+    /// ordinary hyperlink the user clicked, not the browser automation PRD §23 forbids: nothing is
+    /// read back, no page is driven, and the application never learns whether the browser opened.
+    /// </summary>
+    private void Project_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(ProjectUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            // A machine with no registered browser is not a reason to take the widget down.
+        }
+    }
 
     /// <summary>
     /// Written through the settings service rather than by assigning <see cref="Window.Topmost"/>
@@ -770,7 +810,7 @@ public partial class WidgetWindow : Window
         // hint is shown once ever, which is too scarce to spend on a window that is still visible.
         if (_mini is null && !_settings.Current.TrayHintShown)
         {
-            _tray?.Notify("Quota Monitor", "Still running in the notification area. Click the icon to bring it back.", silent: true);
+            _tray?.Notify("AI Usage Monitor", "Still running in the notification area. Click the icon to bring it back.", silent: true);
             _settings.Update(s => s with { TrayHintShown = true });
         }
     }

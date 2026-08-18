@@ -6,7 +6,9 @@ namespace AiUsageMonitor.App.ViewModels;
 
 public sealed class ProviderPreferenceViewModel : ObservableObject
 {
-    private static readonly int[] IntervalPresets = [0, 60, 120, 300, 600];
+    // 0 is "follow the global interval". No 60: it is below AppSettings.MinimumRefreshSeconds and
+    // would resolve to 120 while still displaying as the user's choice.
+    private static readonly int[] IntervalPresets = [0, 120, 300, 600];
 
     private readonly SettingsService _settings;
     private readonly Action<ProviderPreferenceViewModel, int> _move;

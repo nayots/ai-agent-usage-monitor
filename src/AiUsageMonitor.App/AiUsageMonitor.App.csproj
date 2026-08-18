@@ -7,7 +7,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <RootNamespace>AiUsageMonitor.App</RootNamespace>
     <AssemblyName>AiUsageMonitor.App</AssemblyName>
-    <AssemblyTitle>Quota Monitor</AssemblyTitle>
+    <AssemblyTitle>AI Usage Monitor</AssemblyTitle>
     <DebugType>embedded</DebugType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>

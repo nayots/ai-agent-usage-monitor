@@ -26,7 +26,12 @@ public sealed record EnvironmentReport(
             IsElevated: IsCurrentUserElevated());
     }
 
-    private static string CaptureApplicationVersion()
+    /// <summary>
+    /// The running build's version with the SDK's <c>+&lt;commit&gt;</c> build metadata stripped, or
+    /// "unknown" when it cannot be read. Public because the widget footer states the same version the
+    /// diagnostics bundle does, and two independent readings could disagree.
+    /// </summary>
+    public static string CaptureApplicationVersion()
     {
         try
         {

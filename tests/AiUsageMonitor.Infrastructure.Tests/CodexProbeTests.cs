@@ -149,7 +149,13 @@ public sealed class CodexProbeTests
         processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
         processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
         DateTime lastWrite = new(2026, 8, 13, 10, 0, 0, DateTimeKind.Utc);
-        var probe = new CodexProbe(processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite);
+        // Zero installation lifetime: these three exercise the mtime-keyed ProviderVersionCache,
+        // which now sits behind ProviderInstallationCache. Letting the outer cache answer would
+        // leave the inner one - the thing that stops a --version spawn once the outer lifetime
+        // lapses but the binary has not changed - with no coverage at all.
+        var probe = new CodexProbe(
+            processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite,
+            installations: new ProviderInstallationCache(TimeSpan.Zero));
 
         ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
         ProviderSnapshot second = await probe.ProbeAsync(CancellationToken.None);
@@ -168,7 +174,13 @@ public sealed class CodexProbeTests
         processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
         processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
         DateTime lastWrite = new(2026, 8, 13, 10, 0, 0, DateTimeKind.Utc);
-        var probe = new CodexProbe(processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite);
+        // Zero installation lifetime: these three exercise the mtime-keyed ProviderVersionCache,
+        // which now sits behind ProviderInstallationCache. Letting the outer cache answer would
+        // leave the inner one - the thing that stops a --version spawn once the outer lifetime
+        // lapses but the binary has not changed - with no coverage at all.
+        var probe = new CodexProbe(
+            processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite,
+            installations: new ProviderInstallationCache(TimeSpan.Zero));
 
         ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
         lastWrite = lastWrite.AddSeconds(1);
@@ -188,7 +200,13 @@ public sealed class CodexProbeTests
         processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
         processes.EnqueueSession(ExePath, "app-server", RateLimitFrame());
         DateTime lastWrite = new(2026, 8, 13, 10, 0, 0, DateTimeKind.Utc);
-        var probe = new CodexProbe(processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite);
+        // Zero installation lifetime: these three exercise the mtime-keyed ProviderVersionCache,
+        // which now sits behind ProviderInstallationCache. Letting the outer cache answer would
+        // leave the inner one - the thing that stops a --version spawn once the outer lifetime
+        // lapses but the binary has not changed - with no coverage at all.
+        var probe = new CodexProbe(
+            processes, () => ExePath, new ProviderVersionCache(), _ => lastWrite,
+            installations: new ProviderInstallationCache(TimeSpan.Zero));
 
         ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
         ProviderSnapshot second = await probe.ProbeAsync(CancellationToken.None);

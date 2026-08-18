@@ -13,7 +13,9 @@ namespace AiUsageMonitor.App.ViewModels;
 /// </summary>
 public sealed class SettingsViewModel : ObservableObject, IDisposable
 {
-    private static readonly int[] RefreshPresets = [60, 120, 300, 600];
+    // No 60 here. It is below AppSettings.MinimumRefreshSeconds, so choosing it would silently
+    // resolve to 120 and leave the settings window showing a cadence the application is not using.
+    private static readonly int[] RefreshPresets = [120, 300, 600];
     private static readonly int[] StalePresets = [60, 120, 300, 600, 1800, 3600];
 
     // Evening and morning, an hour apart. Deliberately not the full 24: a schedule offering 03:00

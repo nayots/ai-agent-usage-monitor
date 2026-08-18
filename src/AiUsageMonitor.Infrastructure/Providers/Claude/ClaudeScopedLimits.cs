@@ -127,25 +127,47 @@ public static class ClaudeScopedLimits
     }
 
     /// <summary>
+    /// The two vocabularies this endpoint uses for the same window. The <c>limits</c> array says
+    /// <c>session</c> and <c>weekly</c> where the top-level keys say <c>five_hour</c> and
+    /// <c>seven_day</c>, which is why <see cref="DuplicatesAnExistingWindow"/> matches on values
+    /// first and only consults this table when the values cannot decide.
+    /// <para>
+    /// Deliberately tiny, and deliberately not a general "normalize the name" step. It holds only
+    /// the pairs this endpoint has actually been observed to use. A kind Anthropic invents tomorrow
+    /// is absent from it, is therefore never suppressed, and renders under its own label - which is
+    /// the behaviour the domain requires of an unrecognised provider token.
+    /// </para>
+    /// </summary>
+    private static readonly Dictionary<string, string> EquivalentTopLevelIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["session"] = "five_hour",
+        ["weekly"] = "seven_day",
+    };
+
+    /// <summary>
     /// Whether this candidate is the same quota the shared extractor already found under a top-level
-    /// key. Matching is on reset instant plus percentage, NOT on name: the array uses a different
-    /// vocabulary from the top-level keys - "session" for "five_hour", "weekly" for "seven_day" - so a
-    /// name comparison would miss every real duplicate. A candidate with an unknown reset or unknown
-    /// usage can never be proven to be a duplicate and is therefore kept.
+    /// key.
+    /// <para>
+    /// The primary rule is reset instant plus percentage, and it is deliberately not a name
+    /// comparison: the array uses a different vocabulary from the top-level keys, so comparing names
+    /// alone would miss every real duplicate.
+    /// </para>
+    /// <para>
+    /// That rule needs a reset instant on both sides, and there is a common case where neither has
+    /// one. When a window rolls over, the endpoint reports it at 0% with no <c>resets_at</c> - there
+    /// is no active window left to reset - and from that moment the value comparison can no longer
+    /// fire at all. Observed 2026-08-17: a five-hour window that had just reset rendered twice, once
+    /// as "5 hour" and once as "session", both 0% and both with an empty resets-in column. So when
+    /// the values cannot decide, fall back to the small table of vocabularies this endpoint is known
+    /// to use for one window, and require the percentages to agree where both are known - a synonym
+    /// whose usage genuinely differs is not the same window and must not be hidden.
+    /// </para>
     /// </summary>
     private static bool DuplicatesAnExistingWindow(QuotaWindow candidate, IReadOnlyList<QuotaWindow> alreadyFound)
     {
-        if (candidate.ResetsAt is not DateTimeOffset candidateReset || candidate.UsedPercent is not double candidatePercent)
-        {
-            return false;
-        }
-
         foreach (QuotaWindow existing in alreadyFound)
         {
-            if (existing.ResetsAt is DateTimeOffset existingReset
-                && existing.UsedPercent is double existingPercent
-                && existingReset.ToUnixTimeSeconds() == candidateReset.ToUnixTimeSeconds()
-                && Math.Abs(existingPercent - candidatePercent) < 0.0001)
+            if (MatchesByValue(candidate, existing) || MatchesByKnownEquivalentId(candidate, existing))
             {
                 return true;
             }
@@ -153,4 +175,30 @@ public static class ClaudeScopedLimits
 
         return false;
     }
+
+    private static bool MatchesByValue(QuotaWindow candidate, QuotaWindow existing) =>
+        candidate.ResetsAt is DateTimeOffset candidateReset
+        && candidate.UsedPercent is double candidatePercent
+        && existing.ResetsAt is DateTimeOffset existingReset
+        && existing.UsedPercent is double existingPercent
+        && existingReset.ToUnixTimeSeconds() == candidateReset.ToUnixTimeSeconds()
+        && SamePercent(existingPercent, candidatePercent);
+
+    private static bool MatchesByKnownEquivalentId(QuotaWindow candidate, QuotaWindow existing)
+    {
+        if (!EquivalentTopLevelIds.TryGetValue(candidate.Id, out string? equivalent)
+            || !StringComparer.OrdinalIgnoreCase.Equals(equivalent, existing.Id))
+        {
+            return false;
+        }
+
+        // Two known names for one window still have to be reporting the same thing. If both state a
+        // usage and the two disagree, they are not interchangeable and the candidate survives to be
+        // seen rather than being silently folded into a number that contradicts it.
+        return candidate.UsedPercent is not double candidatePercent
+            || existing.UsedPercent is not double existingPercent
+            || SamePercent(existingPercent, candidatePercent);
+    }
+
+    private static bool SamePercent(double left, double right) => Math.Abs(left - right) < 0.0001;
 }

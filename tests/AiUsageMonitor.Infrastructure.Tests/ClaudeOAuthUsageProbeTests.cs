@@ -385,13 +385,18 @@ public sealed class ClaudeOAuthUsageProbeTests
         var handler = new StubHttpMessageHandler(_ => JsonResponse(
             HttpStatusCode.OK,
             """{"five_hour":{"utilization":42.5,"resets_at":"2026-08-17T12:00:00Z"}}"""));
+        // Zero installation lifetime: this exercises the mtime-keyed ProviderVersionCache, which now
+        // sits behind ProviderInstallationCache. Letting the outer cache answer would leave the inner
+        // one - the thing that stops a --version spawn once the outer lifetime lapses but the binary
+        // has not changed - with no coverage at all.
         var probe = new ClaudeOAuthUsageProbe(
             processes,
             handler,
             () => ExePath,
             () => WriteCredentials(directory, "token"),
             new ProviderVersionCache(),
-            _ => lastWrite);
+            _ => lastWrite,
+            installations: new ProviderInstallationCache(TimeSpan.Zero));
 
         ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
         ProviderSnapshot second = await probe.ProbeAsync(CancellationToken.None);

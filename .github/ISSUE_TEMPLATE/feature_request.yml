@@ -1,12 +1,12 @@
 name: Feature request
-description: Something Quota Monitor should do, or should do differently
+description: Something AI Usage Monitor should do, or should do differently
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
         A few things are permanently out of scope, so that asking for them is not a wasted
-        trip. Quota Monitor will not scrape a website, drive a browser, read browser cookies
+        trip. AI Usage Monitor will not scrape a website, drive a browser, read browser cookies
         or profiles, send telemetry or analytics anywhere, modify a provider's own
         configuration without asking first, require administrator rights, or display an
         estimated, remembered or extrapolated number as though a provider had reported it.

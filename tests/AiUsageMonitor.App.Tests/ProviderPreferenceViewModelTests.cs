@@ -100,8 +100,8 @@ public class ProviderPreferenceViewModelTests
         });
         ProviderPreferenceViewModel claude = model.ProviderPreferences.Single(provider => provider.Key == "claude-code");
 
-        Assert.Equal([0, 60, 120, 300, 600], claude.Intervals.Select(choice => choice.Value));
-        Assert.Equal(60, claude.Intervals.Single(choice => choice.IsSelected).Value);
+        Assert.Equal([0, 120, 300, 600], claude.Intervals.Select(choice => choice.Value));
+        Assert.Equal(120, claude.Intervals.Single(choice => choice.IsSelected).Value);
     }
 
     [Fact]

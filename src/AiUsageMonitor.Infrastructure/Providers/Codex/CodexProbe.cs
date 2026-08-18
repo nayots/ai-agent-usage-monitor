@@ -31,27 +31,43 @@ public sealed class CodexProbe : IProviderProbe
     private readonly IProcessRunner _processes;
     private readonly Func<string?> _locateExecutable;
     private readonly ProviderVersionCache _versions;
+    private readonly ProviderInstallationCache _installations;
     private readonly Func<string, DateTime> _lastWriteUtc;
+    private readonly Func<DateTimeOffset> _clock;
 
     public CodexProbe(
         IProcessRunner? processes = null,
         Func<string?>? locateExecutable = null,
         ProviderVersionCache? versions = null,
-        Func<string, DateTime>? lastWriteUtc = null)
+        Func<string, DateTime>? lastWriteUtc = null,
+        Func<DateTimeOffset>? clock = null,
+        ProviderInstallationCache? installations = null)
     {
         _processes = processes ?? DefaultProcessRunner.Instance;
         _locateExecutable = locateExecutable ?? CodexExecutableLocator.Locate;
         _versions = versions ?? new ProviderVersionCache();
+        _installations = installations ?? new ProviderInstallationCache();
         _lastWriteUtc = lastWriteUtc ?? File.GetLastWriteTimeUtc;
+        _clock = clock ?? (() => DateTimeOffset.UtcNow);
     }
+
+    /// <inheritdoc />
+    public void InvalidateInstallation() => _installations.Invalidate();
 
     public async Task<ProviderSnapshot> ProbeAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        string? exePath = _locateExecutable();
+
+        var notes = new List<string>();
+        ProviderInstallation installation = await DetectInstallationAsync(ct, notes).ConfigureAwait(false);
+        string? exePath = installation.ExecutablePath;
 
         if (exePath is null)
         {
+            notes.Add(
+                "Checked (in order): vendored codex.exe under %APPDATA%\\npm; codex.exe on PATH; " +
+                "vendored codex.exe under PATH directories that hold a codex.cmd or codex.ps1 shim.");
+
             return new ProviderSnapshot(
                 ProviderName: Name,
                 Installed: false,
@@ -64,15 +80,10 @@ public sealed class CodexProbe : IProviderProbe
                 Windows: [],
                 RetrievedAt: null,
                 Error: null,
-                Notes:
-                [
-                    "Checked (in order): vendored codex.exe under %APPDATA%\\npm; codex.exe on PATH; " +
-                    "vendored codex.exe under PATH directories that hold a codex.cmd or codex.ps1 shim."
-                ]);
+                Notes: notes);
         }
 
-        var notes = new List<string>();
-        string? version = await TryGetVersionAsync(exePath, ct, notes).ConfigureAwait(false);
+        string? version = installation.Version;
 
         try
         {
@@ -132,6 +143,33 @@ public sealed class CodexProbe : IProviderProbe
     }
 
     // ----- Version ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Where codex.exe is on this machine and what version it reports - from the last detection while
+    /// that is still within its lifetime, otherwise by looking again. Detection walks PATH and may
+    /// launch the executable, and none of that is a rate-limit read, so it runs on a cadence of its
+    /// own; see <see cref="ProviderInstallationCache"/>.
+    /// </summary>
+    private async Task<ProviderInstallation> DetectInstallationAsync(CancellationToken ct, List<string> notes)
+    {
+        if (_installations.TryGet(_clock(), out ProviderInstallation cached, out TimeSpan age))
+        {
+            notes.Add(
+                $"Installation and version re-used from a check {RelativeTime.FormatAge(age)}; this machine is "
+                + $"re-examined every {_installations.Lifetime.TotalMinutes:0} minutes, or at once via "
+                + "\"Re-check providers\" in the settings window.");
+            return cached;
+        }
+
+        string? exePath = _locateExecutable();
+        string? version = exePath is null
+            ? null
+            : await TryGetVersionAsync(exePath, ct, notes).ConfigureAwait(false);
+
+        var detected = new ProviderInstallation(exePath, version);
+        _installations.Store(detected, _clock());
+        return detected;
+    }
 
     private async Task<string?> TryGetVersionAsync(string exePath, CancellationToken ct, List<string> notes)
     {

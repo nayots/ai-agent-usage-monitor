@@ -18,6 +18,15 @@ under `docs/plans/` before delegating code changes.
 
 ## Executive summary
 
+> **Amended 2026-08-18 — the floor is now 120 seconds, not 60.** Every "60 seconds" below,
+> including the interval-preset tables and the acceptance criteria, should be read as 120.
+> The reason is empirical rather than theoretical: the 60-second cadence this document chose
+> drew repeated HTTP 429s from the Claude usage endpoint in ordinary all-day use, which is the
+> provider stating that 60 was not low enough. The 60-second preset was removed from both the
+> global and per-provider lists at the same time, exactly as this document removed 15 and 30.
+> Nothing else here changes — the throttle ladder, the `Retry-After` handling, the reset
+> alignment and the lock behaviour all stand as written.
+
 - Healthy provider polling remains **60 seconds**. Five-minute healthy polling was considered and
   rejected because it makes live usage data too slow.
 - The 15-second and 30-second interval choices should be removed. The effective minimum should be
@@ -369,6 +378,19 @@ the endpoint actually returned, so slice F is designed against evidence rather t
 Captured with a throwaway script outside the repository that read the local OAuth token, issued the
 same `GET /api/oauth/usage` the application issues, and printed **key paths and value types only**.
 Percentages, dollar amounts, and the token itself were never printed, stored, or committed.
+
+> **Amended 2026-08-18 — `resets_at` is not always a date-string.** The capture below was taken
+> while every window was mid-cycle. A window that has just **rolled over** is reported at 0% with
+> `resets_at: null` on both the top-level key and its `limits[]` restatement: with no active window,
+> there is nothing left to reset. The reset-instant-plus-percentage suppression this appendix
+> justifies therefore has a blind spot it cannot close on values alone — with no reset on either
+> side it can never fire, and the duplicate renders. Observed live: a just-reset five-hour window
+> shown twice, as `5 hour` and as `session`, both 0% with an empty resets-in column.
+>
+> `ClaudeScopedLimits` now falls back to a two-entry equivalence table (`session`→`five_hour`,
+> `weekly`→`seven_day`) when the values cannot decide, requiring the percentages to agree where both
+> are known. Read A.2 below with that in mind: the array still adds nothing but scoped windows, which
+> is what this appendix established and what the fallback is careful not to suppress.
 
 ### A.1 Response shape
 

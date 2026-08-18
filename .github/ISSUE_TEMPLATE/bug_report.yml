@@ -1,5 +1,5 @@
 name: Bug report
-description: Something Quota Monitor does wrong, shows wrong, or stops doing
+description: Something AI Usage Monitor does wrong, shows wrong, or stops doing
 labels: ["bug"]
 body:
   - type: markdown
@@ -9,7 +9,7 @@ body:
 
         **Never paste a credential.** Not a token, not an `Authorization` header, not the
         contents of `.credentials.json`, not a raw provider response that might contain one.
-        Quota Monitor never puts a credential into its own diagnostics, so the report asked
+        AI Usage Monitor never puts a credential into its own diagnostics, so the report asked
         for below is safe to share — but anything you paste from elsewhere is on you, and an
         issue here is public and permanently indexed.
 

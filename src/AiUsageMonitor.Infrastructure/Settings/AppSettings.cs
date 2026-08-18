@@ -32,11 +32,17 @@ public enum MiniDock
 public sealed record AppSettings
 {
     /// <summary>
-    /// The floor for every effective refresh interval, global or per-provider. 60 seconds because the
-    /// Claude Code mechanism is an undocumented first-party endpoint (CLAUDE.md) and the 15- and
-    /// 30-second choices this replaces permitted 5,760 and 2,880 requests a day against it.
+    /// The floor for every effective refresh interval, global or per-provider. The Claude Code
+    /// mechanism is an undocumented first-party endpoint (CLAUDE.md), so the ceiling on how often it
+    /// may be asked is the provider's to set and ours to stay under.
+    /// <para>
+    /// Raised from 60 to 120 seconds on 2026-08-18: a 60-second cadence drew repeated HTTP 429s from
+    /// the usage endpoint in ordinary all-day use, which is the provider saying the previous floor
+    /// was not low enough. 120 seconds halves the daily request count to 720 per provider. The
+    /// earlier 15- and 30-second choices this line has already replaced permitted 5,760 and 2,880.
+    /// </para>
     /// </summary>
-    public const int MinimumRefreshSeconds = 60;
+    public const int MinimumRefreshSeconds = 120;
 
     public ThemePreference Theme { get; init; } = ThemePreference.System;
 
@@ -109,8 +115,12 @@ public sealed record AppSettings
     [JsonIgnore]
     public TimeSpan StaleAfter => TimeSpan.FromSeconds(Math.Clamp(StaleAfterSeconds, 30, 3600));
 
-    /// <summary>Persisted as a plain number so the settings file stays readable and hand-editable.</summary>
-    public int RefreshIntervalSeconds { get; init; } = 60;
+    /// <summary>
+    /// Persisted as a plain number so the settings file stays readable and hand-editable. Defaults to
+    /// <see cref="MinimumRefreshSeconds"/>: the floor exists because the provider asked for it, so
+    /// starting anywhere below it would only be rewritten by <see cref="RefreshInterval"/> anyway.
+    /// </summary>
+    public int RefreshIntervalSeconds { get; init; } = MinimumRefreshSeconds;
 
     /// <summary>
     /// <see cref="RefreshIntervalSeconds"/> clamped for the same reason as <see cref="StaleAfter"/>:

@@ -22,7 +22,7 @@
   -->
   <PropertyGroup>
     <VersionPrefix>0.1.2</VersionPrefix>
-    <Product>Quota Monitor</Product>
+    <Product>AI Usage Monitor</Product>
     <Copyright>Copyright (c) 2026 Stoyan Grigorov</Copyright>
   </PropertyGroup>
 

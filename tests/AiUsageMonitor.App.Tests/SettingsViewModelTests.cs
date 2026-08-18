@@ -143,8 +143,8 @@ public class SettingsViewModelTests
 
     [Theory]
     [InlineData(60, 300, true)]
-    [InlineData(300, 60, false)]
-    [InlineData(60, 60, true)]
+    [InlineData(300, 120, false)]
+    [InlineData(120, 120, true)]
     public void TheStaleThresholdWarningReflectsTheClampedSettings(int staleAfterSeconds, int refreshIntervalSeconds, bool expected)
     {
         SettingsViewModel model = Model(
@@ -179,8 +179,9 @@ public class SettingsViewModelTests
 
         ChoiceViewModel selected = model.RefreshIntervals.Single(c => c.IsSelected);
 
-        Assert.Equal(60, selected.Value);
+        Assert.Equal(120, selected.Value);
         Assert.DoesNotContain(model.RefreshIntervals, choice => choice.Value == 30);
+        Assert.DoesNotContain(model.RefreshIntervals, choice => choice.Value == 60);
     }
 
     [Fact]

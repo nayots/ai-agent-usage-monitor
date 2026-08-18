@@ -1,8 +1,8 @@
-# Quota Monitor
+# AI Usage Monitor
 
 A Windows desktop widget that shows live quota usage for the AI coding tools installed on your machine — Claude Code and Codex — so you can see how much of your plan's window you have left without opening a session and asking.
 
-> The repository is called `ai-agent-usage-monitor`; the application calls itself **Quota Monitor**. Same thing.
+> The repository is called `ai-agent-usage-monitor`; the application calls itself **AI Usage Monitor**. Same thing.
 
 **Pre-1.0.** Windows 11, x64. No installer, no administrator rights, nothing written outside your own user profile.
 
@@ -21,12 +21,12 @@ A provider that is not installed shows as **Not installed** and costs nothing. Y
 
 ## Install
 
-1. Download `QuotaMonitor-v<version>-win-x64.exe` from the [latest release](../../releases/latest).
+1. Download `AiUsageMonitor-v<version>-win-x64.exe` from the [latest release](../../releases/latest).
 2. Run it. There is no installer and no setup step.
 
 That single file contains its own .NET runtime, so nothing else needs installing.
 
-**If your network blocks `.exe` downloads**, take `QuotaMonitor-v<version>-win-x64.zip` from the same release instead. It holds the identical executable plus its checksum file, built in the same release run. Extract both, then continue below. If your filter inspects inside archives, it will block this too — that is the filter working as intended, and the answer is your IT department, not a workaround.
+**If your network blocks `.exe` downloads**, take `AiUsageMonitor-v<version>-win-x64.zip` from the same release instead. It holds the identical executable plus its checksum file, built in the same release run. Extract both, then continue below. If your filter inspects inside archives, it will block this too — that is the filter working as intended, and the answer is your IT department, not a workaround.
 
 ### Windows will warn you, and here is why
 
@@ -35,7 +35,7 @@ The executable is **not code-signed**, so on first run Windows SmartScreen shows
 A signing certificate costs money annually and requires a verified publisher identity this project does not have. Rather than leave you to guess, here is what to check instead — every release publishes a SHA256 next to the binary:
 
 ```powershell
-Get-FileHash .\QuotaMonitor-v<version>-win-x64.exe -Algorithm SHA256
+Get-FileHash .\AiUsageMonitor-v<version>-win-x64.exe -Algorithm SHA256
 ```
 
 Compare the result against the contents of the matching `.sha256` file — on the release page if you downloaded the `.exe` directly, or the copy extracted from the `.zip`. If they differ, do not run it.

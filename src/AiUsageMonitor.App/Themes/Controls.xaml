@@ -262,4 +262,94 @@
       </Setter.Value>
     </Setter>
   </Style>
+
+  <!-- The widget's scrollbar.
+
+       Two things are wrong with the stock one here, and both are visible the moment the list
+       outgrows the 520px ceiling (tokens.md §3) - which an error notice on a provider card is
+       enough to do. It paints Windows' own light chrome inside a themed dark surface, and it
+       occupies a layout column, so every card silently narrows by its width at the exact moment
+       something has gone wrong and the cards have most to say.
+
+       This template fixes the second problem by putting the bar in the SAME grid cell as the
+       content rather than a column beside it. The thumb is 4px inside an 8px hit area, which sits
+       within the list's existing 10px WidgetBodyPadding, so it overlays padding rather than text.
+
+       Keyed, not implicit: the settings window is a resizable ordinary window where the standard
+       scrollbar is right, and an unkeyed style would reach it too. -->
+  <Style x:Key="OverlayScrollBarThumbStyle" TargetType="Thumb">
+    <Setter Property="OverridesDefaultStyle" Value="True" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <!-- Transparent outer border, painted inner one: the hit area stays a comfortable 8px
+               while the mark on screen is 4px. -->
+          <Border Background="Transparent" Padding="2,0">
+            <Border x:Name="Mark" Width="4" CornerRadius="2" Opacity="0.4"
+                    Background="{DynamicResource TextTertiaryBrush}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Mark" Property="Opacity" Value="0.75" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Mark" Property="Opacity" Value="0.95" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="OverlayScrollBarStyle" TargetType="ScrollBar">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <!-- No track brush and no line buttons. A track would draw a channel the design does not
+               have, and the arrows are 17px of chrome each for a list that is never more than a
+               few cards long. IsDirectionReversed is required on a vertical track: without it the
+               thumb travels the wrong way. MinHeight keeps the thumb grabbable on long content. -->
+          <Track x:Name="PART_Track" IsDirectionReversed="True" Focusable="False">
+            <Track.Thumb>
+              <Thumb Style="{StaticResource OverlayScrollBarThumbStyle}" MinHeight="24" />
+            </Track.Thumb>
+            <Track.IncreaseRepeatButton>
+              <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False" IsTabStop="False" />
+            </Track.IncreaseRepeatButton>
+            <Track.DecreaseRepeatButton>
+              <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False" IsTabStop="False" />
+            </Track.DecreaseRepeatButton>
+          </Track>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="WidgetScrollViewerStyle" TargetType="ScrollViewer">
+    <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollViewer">
+          <!-- One cell, two children: the bar floats over the content instead of displacing it. -->
+          <Grid>
+            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                    CanContentScroll="{TemplateBinding CanContentScroll}"
+                                    Margin="{TemplateBinding Padding}" />
+            <ScrollBar x:Name="PART_VerticalScrollBar"
+                       Style="{StaticResource OverlayScrollBarStyle}"
+                       Orientation="Vertical"
+                       HorizontalAlignment="Right"
+                       Value="{TemplateBinding VerticalOffset}"
+                       Maximum="{TemplateBinding ScrollableHeight}"
+                       ViewportSize="{TemplateBinding ViewportHeight}"
+                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
 </ResourceDictionary>

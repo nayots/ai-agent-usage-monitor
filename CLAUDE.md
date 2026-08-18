@@ -102,21 +102,30 @@ Missing data is `null` and surfaces as `Waiting`/`Unavailable` — **never** as 
 Implemented from `docs/specs/2026-08-14-provider-request-cadence-and-rate-limits.md`. The rules that are expensive to rediscover:
 
 - **"Throttle" and "rate limit" are different things here.** A *rate limit* is a quota window — the thing the widget displays, and literally what Codex's `account/rateLimits/read` returns. A *throttle* is the provider refusing a request because we asked too often. Never use one word for the other; `Domain/ThrottleAdvice.cs` exists under that name for exactly this reason.
-- **60 seconds is the effective polling floor**, global and per-provider (`AppSettings.MinimumRefreshSeconds`). A hand-edited sub-floor value resolves to 60 and is **never rewritten to disk** — same read-time-sanitize pattern as `EffectiveAlertThresholds`.
+- **120 seconds is the effective polling floor**, global and per-provider (`AppSettings.MinimumRefreshSeconds`), and is also the default interval. A hand-edited sub-floor value resolves to 120 and is **never rewritten to disk** — same read-time-sanitize pattern as `EffectiveAlertThresholds`. Raised from 60 on 2026-08-18 because a 60-second cadence drew repeated 429s from the Claude usage endpoint in ordinary use; the offered presets dropped 60 with it, so the settings window can never display a cadence the application is not using.
 - **A 429 is not a new `ConnectionState`.** It is `Error` plus a `ThrottleAdvice` on the snapshot. A provider-named `Retry-After` instant is honoured exactly (bounded at 1 h against a malformed header); with no usable header the *scheduler* applies 2 → 4 → 8 minutes. There is deliberately **no 15-minute starting fallback**.
 - **A throttle cooldown is the one gate a forced refresh may not bypass.** An ordinary failure backoff still yields to a manual retry — that is how a provider gets recovered by hand.
 - **One in-flight request per provider**, shared rather than skipped, so a manual refresh cannot flick the spinner off while a probe is still running. Claude and Codex stay concurrent with each other; no lock is held across a provider await.
 - **Reset alignment only ever moves a read earlier.** When a successful snapshot reports a
   future reset, `NextAttempt` may come forward to just after it (`ResetAlignmentBuffer`, 30 s),
-  never below the 60-second floor and never past what the interval already chose — so at the
-  default 60-second cadence it changes nothing, and it only earns its keep on a long interval.
+  never below the 120-second floor and never past what the interval already chose — so at the
+  default 120-second cadence it changes nothing, and it only earns its keep on a long interval.
   It is derived from each snapshot and never stored, so a revised reset instant needs no
   invalidation. Resets within one floor of each other collapse to a single read. **A reset at or
   before `now` is ignored** — aligning to a past instant re-schedules against that same instant
   forever, which is the one way this becomes the second polling loop it must never be.
+- **Detection has its own cadence, and it is not the polling cadence (added 2026-08-18).** Finding a provider's executable and reading its version is not a quota read, so it happens at startup and then at most every 30 minutes (`ProviderInstallationCache`), not on every poll. Two caches sit in a deliberate order and answer different questions: `ProviderInstallationCache` decides *whether to look at the machine at all*; `ProviderVersionCache`, keyed on path + last-write time, decides *whether looking has to spawn `--version`*. Keep both — drop the outer and every poll re-walks PATH; drop the inner and every 30-minute expiry re-launches an unchanged binary.
+- **Only "Re-check providers" invalidates a detection.** Not the footer Refresh, not the tray's "Refresh all providers", not a card retry. Refresh means "get me current numbers"; only the settings button means "look at this machine again", and it is the sole reason a 30-minute lifetime is acceptable. Two costs follow and are intended: a CLI installed, upgraded or removed mid-session is invisible until the lifetime lapses, and a `--version` that fails is held for the lifetime rather than retried on the next poll.
 - **Only `SessionLock`/`SessionUnlock` pause polling.** Never infer a lock from input idleness, a timer, or widget visibility. The manual triggers (`ManualGlobal`, `ManualCard`) are exempt from the pause — which is why a refresh's `RefreshTrigger` must match what actually caused it, not be hardcoded.
 
-Claude's usage response also carries a `limits[]` array that, on the observed account, **restates the top-level windows exactly** rather than adding new ones. `Providers/Claude/ClaudeScopedLimits.cs` normalizes it and suppresses duplicates by *reset instant + percentage* — never by name, because the array says `session`/`weekly` where the top level says `five_hour`/`seven_day`. Do not "fix" this by adding `percent` to `DuckTypedQuotaExtractor.PercentKeys`: that renders every window twice. Evidence is in Appendix A of the spec.
+Claude's usage response also carries a `limits[]` array that, on the observed account, **restates the top-level windows exactly** rather than adding new ones. `Providers/Claude/ClaudeScopedLimits.cs` normalizes it and suppresses duplicates. Do not "fix" any of this by adding `percent` to `DuckTypedQuotaExtractor.PercentKeys`: that renders every window twice. Evidence is in Appendix A of the spec.
+
+Suppression is *two* rules, in order, and the order is the point:
+
+1. **Reset instant + percentage.** The primary rule, and deliberately not a name comparison — the array says `session`/`weekly` where the top level says `five_hour`/`seven_day`, so names alone would miss every real duplicate.
+2. **A known-equivalent id**, consulted only when rule 1 cannot decide. Added 2026-08-18 for a case rule 1 structurally cannot catch: when a window rolls over, the endpoint reports it at 0% **with no `resets_at`**, and from that moment there is no reset instant on either side to compare. Observed live — a just-reset five-hour window rendered twice, as `5 hour` and as `session`, both 0% with an empty resets-in column. The table (`EquivalentTopLevelIds`) holds only `session`→`five_hour` and `weekly`→`seven_day`, and a match additionally requires the percentages to agree where both are known.
+
+Keep that table tiny and evidence-only. A kind the provider invents is absent from it, is therefore never suppressed, and renders under its own label — which is the domain rule that unrecognised provider tokens survive verbatim. Scoped entries carry their scope in the id (`weekly_opus`), so they never collide with the bare `weekly` and stay visible, which is correct: scoped windows are the one thing `limits[]` genuinely adds.
 
 ## Hard constraints
 

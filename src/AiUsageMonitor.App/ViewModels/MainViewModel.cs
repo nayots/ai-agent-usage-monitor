@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Linq;
 using AiUsageMonitor.Domain;
+using AiUsageMonitor.Infrastructure.Diagnostics;
 using AiUsageMonitor.Infrastructure.Providers;
 using AiUsageMonitor.Infrastructure.Refresh;
 using AiUsageMonitor.Infrastructure.Settings;
@@ -33,8 +34,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IReadOnlyList<ProviderDescriptor> providers,
         AppSettings settings,
         Func<DateTimeOffset> clock,
-        Action<Action>? dispatch = null)
+        Action<Action>? dispatch = null,
+        string? applicationVersion = null)
     {
+        VersionText = FormatVersion(applicationVersion ?? EnvironmentReport.CaptureApplicationVersion());
         _refresh = refresh;
         _providers = providers;
         _clock = clock;
@@ -69,6 +72,37 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             int visible = Providers.Count(card => !card.IsHiddenByFilter);
             return visible == 1 ? "1 provider" : $"{visible} providers";
         }
+    }
+
+    /// <summary>
+    /// The running build, stated in the footer because it is the one thing a bug report needs and
+    /// the one thing nobody can look up from the outside - the executable is not code-signed and
+    /// carries no visible identity beyond its file name.
+    /// <para>
+    /// Deliberately separate from <see cref="FooterText"/> rather than appended to it: "how many
+    /// providers" and "what build is this" are two facts, and a single string would make either
+    /// impossible to assert or re-word without disturbing the other.
+    /// </para>
+    /// </summary>
+    public string? VersionText { get; }
+
+    /// <summary>
+    /// False when the version could not be read. The footer then omits the version and its separator
+    /// entirely rather than rendering "unknown", which reads like a diagnosis of the providers
+    /// sitting above it rather than a fact about the application.
+    /// </summary>
+    public bool HasVersionText => VersionText is not null;
+
+    /// <summary>
+    /// Prefixes a "v" only when the version starts with a digit - the same rule
+    /// <see cref="ProviderCardViewModel"/> applies to a provider's version, and for the same reason:
+    /// "unknown" must never render as "vunknown".
+    /// </summary>
+    private static string? FormatVersion(string version)
+    {
+        string trimmed = version.Trim();
+
+        return trimmed.Length == 0 || !char.IsDigit(trimmed[0]) ? null : "v" + trimmed;
     }
 
     /// <summary>

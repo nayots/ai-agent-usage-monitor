@@ -26,4 +26,18 @@ public interface IProviderProbe
     bool MakesFirstPartyNetworkCall => false;
 
     Task<ProviderSnapshot> ProbeAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Forget whatever this probe remembers about where its provider is installed and what version
+    /// it reports, so the next probe looks at the machine again instead of reusing an earlier
+    /// answer. Called when the user explicitly asks for a re-check; a probe that remembers nothing
+    /// needs no implementation, which is why this defaults to doing nothing.
+    /// <para>
+    /// This is deliberately not wired to the ordinary refresh actions. "Refresh" means "get me
+    /// current numbers"; only "Re-check providers" means "look at this machine again".
+    /// </para>
+    /// </summary>
+    void InvalidateInstallation()
+    {
+    }
 }

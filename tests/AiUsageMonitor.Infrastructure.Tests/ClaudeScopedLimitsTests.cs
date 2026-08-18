@@ -165,11 +165,98 @@ public sealed class ClaudeScopedLimitsTests
     }
 
     [Fact]
-    public void ACandidateWithAnUnknownResetIsNeverTreatedAsADuplicate()
+    public void ACandidateWithAnUnknownResetAndNoKnownEquivalentSurvives()
     {
         IReadOnlyList<QuotaWindow> windows = Normalize(ExtractedWindows());
 
         Assert.Contains(windows, window => window.Id == "monthly_scoped_haiku");
+    }
+
+    /// <summary>
+    /// Observed 2026-08-17. A five-hour window that has just rolled over is reported at 0% with no
+    /// resets_at - there is no active window left to reset - so the reset-plus-percentage rule has
+    /// nothing to compare and the array's "session" entry rendered as a second row beside it.
+    /// </summary>
+    [Theory]
+    [InlineData("session", "five_hour")]
+    [InlineData("weekly", "seven_day")]
+    public void AResetLessCandidateIsSuppressedAgainstItsKnownTopLevelEquivalent(string kind, string topLevelId)
+    {
+        using JsonDocument document = JsonDocument.Parse(
+            $$"""{ "limits": [ { "kind": "{{kind}}", "percent": 0, "resets_at": null } ] }""");
+
+        IReadOnlyList<QuotaWindow> windows = ClaudeScopedLimits.Normalize(
+            document.RootElement,
+            [Window(topLevelId, 0.0, null, 0)]);
+
+        Assert.Empty(windows);
+    }
+
+    /// <summary>
+    /// Two names for one window still have to agree about it. A synonym reporting a different usage
+    /// is not interchangeable, and hiding it would leave one of two contradictory numbers on screen
+    /// with no sign the other existed.
+    /// </summary>
+    [Fact]
+    public void AResetLessSynonymReportingADifferentPercentageSurvives()
+    {
+        using JsonDocument document = JsonDocument.Parse(
+            """{ "limits": [ { "kind": "session", "percent": 40, "resets_at": null } ] }""");
+
+        IReadOnlyList<QuotaWindow> windows = ClaudeScopedLimits.Normalize(
+            document.RootElement,
+            [Window("five_hour", 0.0, null, 0)]);
+
+        Assert.Single(windows, window => window.Id == "session");
+    }
+
+    [Fact]
+    public void AResetLessCandidateSurvivesWhenItsEquivalentIsNotPresent()
+    {
+        using JsonDocument document = JsonDocument.Parse(
+            """{ "limits": [ { "kind": "session", "percent": 0, "resets_at": null } ] }""");
+
+        IReadOnlyList<QuotaWindow> windows = ClaudeScopedLimits.Normalize(
+            document.RootElement,
+            [Window("seven_day", 0.0, null, 0)]);
+
+        Assert.Single(windows, window => window.Id == "session");
+    }
+
+    /// <summary>
+    /// The equivalence table holds only the pairs this endpoint has been observed to use. A kind the
+    /// provider invents is not in it, is therefore never suppressed, and renders under its own label
+    /// - the domain rule that an unrecognised provider token is preserved verbatim.
+    /// </summary>
+    [Fact]
+    public void AResetLessCandidateWithAnUnrecognisedKindIsNeverSuppressed()
+    {
+        using JsonDocument document = JsonDocument.Parse(
+            """{ "limits": [ { "kind": "three_hour_nimbus", "percent": 0, "resets_at": null } ] }""");
+
+        IReadOnlyList<QuotaWindow> windows = ClaudeScopedLimits.Normalize(
+            document.RootElement,
+            [Window("five_hour", 0.0, null, 0)]);
+
+        Assert.Single(windows, window => window.Id == "three_hour_nimbus");
+    }
+
+    /// <summary>
+    /// A scoped entry carries its scope in its id ("weekly_scoped_opus"), which is not the bare
+    /// "weekly" the table knows. Scoped windows are the real additions the array contributes and
+    /// must never be folded into the unscoped window they sit beside.
+    /// </summary>
+    [Fact]
+    public void AResetLessScopedCandidateIsNotSuppressedByItsUnscopedEquivalent()
+    {
+        using JsonDocument document = JsonDocument.Parse(
+            """{ "limits": [ { "kind": "weekly", "scope": "opus", "percent": 0, "resets_at": null } ] }""");
+
+        IReadOnlyList<QuotaWindow> windows = ClaudeScopedLimits.Normalize(
+            document.RootElement,
+            [Window("seven_day", 0.0, null, 0)]);
+
+        Assert.Single(windows, window => window.Id == "weekly_opus");
     }
 
     [Fact]

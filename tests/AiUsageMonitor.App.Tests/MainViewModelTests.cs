@@ -75,6 +75,55 @@ public class MainViewModelTests
         Assert.Equal("2 providers", two.FooterText);
     }
 
+    [Theory]
+    [InlineData("0.1.2", "v0.1.2")]
+    [InlineData(" 0.1.2 ", "v0.1.2")]
+    [InlineData("1.0.0-beta.3", "v1.0.0-beta.3")]
+    public void AReadableVersionIsOfferedToTheFooterWithAPrefix(string captured, string expected)
+    {
+        MainViewModel model = WithVersion(captured);
+
+        Assert.Equal(expected, model.VersionText);
+        Assert.True(model.HasVersionText);
+    }
+
+    /// <summary>
+    /// EnvironmentReport returns "unknown" when the assembly carries no version. The footer must
+    /// then say nothing at all - "vunknown" is nonsense, and a bare "unknown" beside the provider
+    /// count reads as a diagnosis of the providers rather than a fact about the application.
+    /// </summary>
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AnUnreadableVersionIsOmittedRatherThanRendered(string captured)
+    {
+        MainViewModel model = WithVersion(captured);
+
+        Assert.Null(model.VersionText);
+        Assert.False(model.HasVersionText);
+    }
+
+    /// <summary>
+    /// The count and the version are separate bindings precisely so that neither can disturb the
+    /// other; this pins that they stay independent.
+    /// </summary>
+    [Fact]
+    public void TheProviderCountIsUnaffectedByTheVersion()
+    {
+        Assert.Equal("1 provider", WithVersion("0.1.2").FooterText);
+        Assert.Equal("1 provider", WithVersion("unknown").FooterText);
+    }
+
+    private static MainViewModel WithVersion(string version)
+    {
+        ProviderDescriptor[] providers =
+            [new("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, []))];
+        ProviderRefreshService service = new(providers, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60));
+
+        return new MainViewModel(service, providers, AppSettings.Default, () => Now, applicationVersion: version);
+    }
+
     [Fact]
     public async Task ARefreshRoutesEachSnapshotToItsOwnCard()
     {

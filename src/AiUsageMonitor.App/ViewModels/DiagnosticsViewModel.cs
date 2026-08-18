@@ -96,7 +96,7 @@ public sealed class DiagnosticsViewModel : ObservableObject
     {
         Rebuild();
         StringBuilder builder = new();
-        builder.AppendLine("Quota Monitor diagnostics");
+        builder.AppendLine("AI Usage Monitor diagnostics");
         builder.AppendLine(LocalInstant(_clock()));
 
         foreach (DiagnosticSection section in Sections)

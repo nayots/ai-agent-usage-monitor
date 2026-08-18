@@ -336,6 +336,70 @@ public class WidgetWindowTests(WpfFixture wpf)
         model.Dispose();
     });
 
+    /// <summary>
+    /// The footer carries four things in 360px. This pins that all of them are laid out and none has
+    /// been squeezed to nothing - the failure a XAML-only change makes silently.
+    /// </summary>
+    [Fact]
+    public void TheFooterFitsTheProviderCountTheVersionAndBothLinks() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+
+        _ = Content(window);
+
+        Button project = (Button)window.FindName("FooterProjectButton");
+        Button refresh = (Button)window.FindName("FooterRefreshButton");
+        FrameworkElement footer = (FrameworkElement)window.FindName("Footer");
+
+        Assert.Equal("GitHub", project.Content);
+        Assert.True(project.ActualWidth > 0, "The GitHub link rendered with no width.");
+        Assert.True(refresh.ActualWidth > 0, "The Refresh link rendered with no width.");
+        Assert.True(
+            project.ActualWidth + refresh.ActualWidth < footer.ActualWidth,
+            "The two footer links alone do not fit the footer.");
+
+        model.Dispose();
+    });
+
+    /// <summary>
+    /// The overlay scrollbar shares its cell with the content instead of taking a column beside it.
+    /// A stock template would narrow every card by its width the moment the list outgrew the 520px
+    /// ceiling, which is exactly when the cards have most to say.
+    /// </summary>
+    [Fact]
+    public void TheProviderListScrollBarDoesNotTakeLayoutWidthFromTheCards() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+
+        _ = Content(window);
+
+        ItemsControl list = (ItemsControl)window.FindName("ProviderList");
+        ScrollViewer viewer = Ancestor<ScrollViewer>(list);
+
+        // A stock ScrollViewer puts the bar in its own column, so a visible bar leaves the viewport
+        // narrower than the control. Overlaid, the two stay equal whether or not the bar is showing.
+        Assert.Equal(viewer.ActualWidth, viewer.ViewportWidth);
+
+        model.Dispose();
+    });
+
+    private static T Ancestor<T>(DependencyObject from) where T : DependencyObject
+    {
+        for (DependencyObject? at = VisualTreeHelper.GetParent(from); at is not null; at = VisualTreeHelper.GetParent(at))
+        {
+            if (at is T found)
+            {
+                return found;
+            }
+        }
+
+        throw new InvalidOperationException($"No {typeof(T).Name} above {from.GetType().Name}.");
+    }
+
     private static FrameworkElement Content(WidgetWindow window)
     {
         FrameworkElement content = (FrameworkElement)window.Content;
@@ -460,7 +524,7 @@ public class WidgetWindowTests(WpfFixture wpf)
         WidgetWindow window = new(model, Settings(configured), refresh, providers: providers);
 
         Assert.Contains("codex", refresh.HiddenProviderKeys);
-        Assert.Equal(TimeSpan.FromSeconds(60), refresh.IntervalFor(providers[0]));
+        Assert.Equal(TimeSpan.FromSeconds(120), refresh.IntervalFor(providers[0]));
         Assert.Equal(TimeSpan.FromSeconds(300), refresh.IntervalFor(providers[1]));
 
         model.Dispose();

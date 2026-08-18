@@ -135,6 +135,11 @@ bundle header). A downloaded file called `AiUsageMonitor.App.exe` sitting in a
 Downloads folder is not recognisably the thing the user installed. The version
 in the filename means two downloads never collide.
 
+> **Superseded 2026-08-18.** The product was renamed to **AI Usage Monitor**, so the
+> asset is now `AiUsageMonitor-v<version>-win-x64.exe`. The reasoning above is
+> unchanged — only the name it produces. Assets published before this date keep their
+> `QuotaMonitor-*` names.
+
 **Not renamed:** the assembly, the solution, the namespaces, or the repository.
 Renaming those is churn with no user-visible benefit.
 
