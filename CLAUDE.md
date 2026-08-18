@@ -148,7 +148,13 @@ Keep that table tiny and evidence-only. A kind the provider invents is absent fr
 Per PRD §4.1.1 and §23 — these are product requirements, not style preferences:
 
 - Credentials are used **in-memory only**, only against that provider's own first-party host over TLS. Never log, persist, cache, display, or copy a token; never put one in `Extra`, an exception message, or a diagnostic dump. This app never refreshes or rewrites a credential — token lifecycle stays the provider's job.
-- No website scraping, browser automation, cookie or browser-profile access, telemetry, analytics, or third-party transmission.
+- No website scraping, browser automation, cookie or browser-profile access, telemetry, or
+  analytics. **The PRD's actual prohibition (§23) is narrower than "no third-party transmission"**:
+  it forbids transmitting *usage data, diagnostics, or settings* to anyone but the provider's own
+  first-party host. The update check (`docs/specs/2026-08-18-update-check.md`) is the one permitted
+  third-party request and stays permitted only because it transmits none of the three — its
+  `User-Agent` is a constant carrying no version, and there is no query string, no identifier and no
+  token. **Adding the running version to that header would put the application in breach.** Do not.
 - Never modify provider configuration without explicit user approval, a preview, a backup, and a restore path (PRD §11). Currently moot in practice — the app's one Claude Code mechanism reads a credential file and calls an HTTP endpoint; it does not touch `~/.claude/settings.json` or any other provider configuration — but the constraint stands should config modification ever become necessary.
 - No administrator privileges.
 - Every mechanism carries a visible tier (Official/Unofficial). A value obtained unofficially must never be presented as official.

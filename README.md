@@ -103,7 +103,21 @@ Please include that report when opening an issue.
 
 ## Privacy
 
-What this application does over the network is exactly two things: it asks Codex's local `app-server` for your rate limits, and it makes one HTTPS request to `api.anthropic.com` for Claude Code's. Nothing else.
+What this application does over the network is exactly three things. Two are your usage: it asks
+Codex's local `app-server` for your rate limits, and it makes one HTTPS request to
+`api.anthropic.com` for Claude Code's. The third is the update check: once a day it asks
+`api.github.com` whether a newer release of *this* application exists.
+
+**The update check is anonymous.** It is an unauthenticated `GET` of a public release listing. It
+sends no version, no identifier, no machine information and no usage data — its `User-Agent` is the
+constant string `AiUsageMonitor`, deliberately carrying no version, so the request says nothing
+about you. The comparison happens on your computer. Turn it off in **Settings → Updates**, and no
+unattended request is ever made; the "Check now" button still works when you press it.
+
+The application never downloads, verifies or installs a new version. When one exists it offers to
+open the release page in your browser, and you do exactly what you did the first time.
+
+Nothing else.
 
 It does **not**:
 
