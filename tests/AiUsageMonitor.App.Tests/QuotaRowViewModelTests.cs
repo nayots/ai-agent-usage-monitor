@@ -170,4 +170,112 @@ public class QuotaRowViewModelTests
 
         Assert.Equal("nimbus_quill, usage not reported, no reset time reported, partial data", row.AccessibleName);
     }
+
+    private static QuotaWindow AheadOfPaceWindow() =>
+        Window(usedPercent: 44, resetsAt: Now.AddHours(126), duration: TimeSpan.FromHours(168));
+
+    [Fact]
+    public void RowAheadOfPaceStatesWhenTheQuotaRunsOut()
+    {
+        QuotaRowViewModel row = Row(AheadOfPaceWindow());
+
+        Assert.True(row.HasPaceWarning);
+        Assert.Equal("At this pace, spent ~3d early", row.PaceWarningText);
+    }
+
+    [Fact]
+    public void RowTrackingBehindPaceSaysNothing()
+    {
+        QuotaRowViewModel row = Row(Window(usedPercent: 37, resetsAt: Now.AddMinutes(114), duration: TimeSpan.FromHours(5)));
+
+        Assert.False(row.HasPaceWarning);
+        Assert.Null(row.PaceWarningText);
+    }
+
+    [Fact]
+    public void PaceWarningIsWithheldWhenTheSettingIsOff()
+    {
+        QuotaRowViewModel row = new(AheadOfPaceWindow(), colorBarsByUsage: true, mechanism: null, showPaceProjection: false);
+        row.Tick(Now);
+
+        Assert.False(row.HasPaceWarning);
+        Assert.Null(row.PaceWarningText);
+    }
+
+    [Fact]
+    public void PaceWarningIsWithheldOnAStaleRow()
+    {
+        QuotaRowViewModel row = new(AheadOfPaceWindow(), colorBarsByUsage: true) { IsStale = true };
+        row.Tick(Now);
+
+        Assert.False(row.HasPaceWarning);
+        Assert.Null(row.PaceWarningText);
+    }
+
+    [Fact]
+    public void PaceWarningDisappearsWhenTheRowGoesStaleBetweenTicks()
+    {
+        QuotaRowViewModel row = Row(AheadOfPaceWindow());
+        row.IsStale = true;
+
+        Assert.False(row.HasPaceWarning);
+        Assert.Null(row.PaceWarningText);
+    }
+
+    [Fact]
+    public void PaceWarningReturnsWhenTheRowIsFreshAgain()
+    {
+        QuotaRowViewModel row = Row(AheadOfPaceWindow());
+        row.IsStale = true;
+        row.IsStale = false;
+
+        Assert.True(row.HasPaceWarning);
+    }
+
+    [Fact]
+    public void PaceWarningAndLimitReachedAreNeverBothShown()
+    {
+        QuotaRowViewModel row = Row(Window(usedPercent: 100, resetsAt: Now.AddHours(126), duration: TimeSpan.FromHours(168)));
+
+        Assert.True(row.IsExhausted);
+        Assert.False(row.HasPaceWarning);
+    }
+
+    [Fact]
+    public void PaceWarningJoinsTheAccessibleName()
+    {
+        QuotaRowViewModel row = Row(AheadOfPaceWindow());
+
+        Assert.Contains("At this pace, spent ~3d early", row.AccessibleName);
+    }
+
+    [Fact]
+    public void PaceWarningIsAbsentFromTheAccessibleNameWhenThereIsNoWarning()
+    {
+        QuotaRowViewModel row = Row(Window(usedPercent: 37, resetsAt: Now.AddMinutes(114), duration: TimeSpan.FromHours(5)));
+
+        Assert.DoesNotContain("At this pace", row.AccessibleName);
+    }
+
+    [Fact]
+    public void PaceWarningIsAbsentBeforeTheFirstTick()
+    {
+        QuotaRowViewModel row = new(AheadOfPaceWindow(), colorBarsByUsage: true);
+
+        Assert.False(row.HasPaceWarning);
+    }
+
+    [Fact]
+    public void PaceWarningRaisesChangeNotificationsForBothProperties()
+    {
+        QuotaRowViewModel row = new(AheadOfPaceWindow(), colorBarsByUsage: true);
+        List<string?> raised = [];
+        row.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        row.Tick(Now);
+
+        Assert.Contains(nameof(QuotaRowViewModel.PaceWarningText), raised);
+        Assert.Contains(nameof(QuotaRowViewModel.HasPaceWarning), raised);
+        Assert.Contains(nameof(QuotaRowViewModel.AccessibleName), raised);
+    }
 }
