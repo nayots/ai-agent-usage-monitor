@@ -93,11 +93,73 @@ public sealed class CursorUsageEventsTests
     [Fact]
     public void AnEmptyPageEndsTheWalkRatherThanLoopingForever()
     {
+        // A genuinely empty billing cycle: the provider says there are no events and delivers
+        // none. Zero spend here is a real reading and must be shown as one.
+        var accumulator = new CursorEventAccumulator();
+
+        Assert.False(accumulator.AddPage(Page(0)));
+        Assert.True(accumulator.IsComplete);
+        Assert.Null(accumulator.Refusal);
+        Assert.Equal(0.0, accumulator.SpentCents, 3);
+    }
+
+    [Fact]
+    public void EventsPromisedButNotDeliveredNeverCountAsACompletedWalk()
+    {
+        // The provider claims 80 events and hands back an empty page. Treating that as complete
+        // would publish a confident $0.00 for someone who has actually spent money - the exact
+        // fabricated reading the missing-data rule exists to prevent.
         var accumulator = new CursorEventAccumulator();
 
         Assert.False(accumulator.AddPage(Page(80)));
+        Assert.False(accumulator.IsComplete);
+    }
+
+    [Fact]
+    public void AResponseWithNoEventsArrayIsRefusedRatherThanReadAsZero()
+    {
+        var accumulator = new CursorEventAccumulator();
+
+        Assert.False(accumulator.AddPage(
+            JsonDocument.Parse("""{"totalUsageEventsCount":80}""").RootElement.Clone()));
+
+        Assert.NotNull(accumulator.Refusal);
+        Assert.False(accumulator.IsComplete);
+    }
+
+    [Fact]
+    public void AnEmptyObjectIsRefusedToo()
+    {
+        var accumulator = new CursorEventAccumulator();
+
+        Assert.False(accumulator.AddPage(JsonDocument.Parse("{}").RootElement.Clone()));
+
+        Assert.NotNull(accumulator.Refusal);
+    }
+
+    [Fact]
+    public void AnUnstatedCountFallsBackToTheShortPageConvention()
+    {
+        // No totalUsageEventsCount at all. A short page is the only honest end-of-data signal
+        // left; a full one means there is probably more, so the walk must not stop.
+        var accumulator = new CursorEventAccumulator();
+
+        Assert.True(accumulator.AddPage(
+            JsonDocument.Parse($$"""{"usageEventsDisplay":[{{Event(5)}}]}""").RootElement.Clone()));
+
+        Assert.Null(accumulator.TotalReported);
         Assert.True(accumulator.IsComplete);
-        Assert.Null(accumulator.Refusal);
+    }
+
+    [Fact]
+    public void AFullPageWithNoStatedCountIsNotTreatedAsTheEnd()
+    {
+        string full = string.Join(",", Enumerable.Repeat(Event(1), CursorUsageEvents.PageSize));
+        var accumulator = new CursorEventAccumulator();
+
+        accumulator.AddPage(JsonDocument.Parse($$"""{"usageEventsDisplay":[{{full}}]}""").RootElement.Clone());
+
+        Assert.False(accumulator.IsComplete);
     }
 
     [Fact]

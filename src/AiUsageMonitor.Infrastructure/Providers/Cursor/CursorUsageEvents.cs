@@ -22,7 +22,12 @@ public sealed class CursorEventAccumulator
 
     public int EventCount { get; private set; }
 
-    public int TotalReported { get; private set; }
+    /// <summary>
+    /// The provider's own count of matching events, or null when it did not state one. Null is
+    /// deliberately not zero: "the provider says there are none" and "the provider did not say"
+    /// lead to opposite conclusions about whether a total can be trusted.
+    /// </summary>
+    public int? TotalReported { get; private set; }
 
     public string? Refusal { get; private set; }
 
@@ -52,10 +57,15 @@ public sealed class CursorEventAccumulator
             TotalReported = reported;
         }
 
+        // Every observed response carries this array, empty when there is nothing to report. Its
+        // absence is a response this application cannot read, and the difference matters: an
+        // absent array once meant "walk complete" with whatever had been summed so far, so a
+        // response claiming 80 events while delivering none produced a confident $0.00 - a
+        // fabricated reading of exactly the kind the missing-data rule exists to prevent.
         if (!page.TryGetProperty("usageEventsDisplay", out JsonElement events)
             || events.ValueKind != JsonValueKind.Array)
         {
-            IsComplete = true;
+            Refusal = "Cursor returned a usage response this application could not read.";
             return false;
         }
 
@@ -77,7 +87,14 @@ public sealed class CursorEventAccumulator
             added++;
         }
 
-        IsComplete = added == 0 || EventCount >= TotalReported;
+        // "Complete" means every event the provider says exists has been counted - never merely
+        // "the pages stopped arriving". When the provider stated a count, that is the target. When
+        // it did not, the only honest end-of-data signal left is a short page, the universal
+        // pagination convention: a full page means there is probably more.
+        IsComplete = TotalReported is int expected
+            ? EventCount >= expected
+            : added < CursorUsageEvents.PageSize;
+
         return added > 0;
     }
 
