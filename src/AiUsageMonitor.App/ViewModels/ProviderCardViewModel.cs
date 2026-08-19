@@ -13,6 +13,7 @@ public sealed class ProviderCardViewModel : ObservableObject
 {
     private readonly ProviderDescriptor _descriptor;
     private bool _colorBarsByUsage;
+    private bool _showPaceProjection = true;
     private bool _showWhenUnavailable = true;
     private bool _isHiddenByUser;
     private bool _isCompact;
@@ -81,6 +82,21 @@ public sealed class ProviderCardViewModel : ObservableObject
         set
         {
             if (Set(ref _colorBarsByUsage, value) && _snapshot is not null)
+            {
+                RebuildWindows();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds rows because their projection flags are immutable.
+    /// </summary>
+    public bool ShowPaceProjection
+    {
+        get => _showPaceProjection;
+        set
+        {
+            if (Set(ref _showPaceProjection, value) && _snapshot is not null)
             {
                 RebuildWindows();
             }
@@ -268,7 +284,7 @@ public sealed class ProviderCardViewModel : ObservableObject
 
         foreach (QuotaWindow window in QuotaOrdering.InProviderOrder(_rows))
         {
-            Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage, _snapshot?.Mechanism) { IsStale = RowsAreStale });
+            Windows.Add(new QuotaRowViewModel(window, _colorBarsByUsage, _snapshot?.Mechanism, _showPaceProjection) { IsStale = RowsAreStale });
         }
 
         Raise(nameof(HasWindows));

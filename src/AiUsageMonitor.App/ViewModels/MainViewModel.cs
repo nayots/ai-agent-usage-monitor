@@ -51,6 +51,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             ProviderCardViewModel card = new(provider, settings.ColorBarsByUsage, RetryOne)
             {
+                ShowPaceProjection = settings.ShowPaceProjection,
                 ShowWhenUnavailable = settings.ShowUnavailableProviders,
                 IsHiddenByUser = settings.IsProviderHidden(provider.Key),
                 IsCompact = _isCompact
@@ -195,6 +196,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         foreach (ProviderCardViewModel card in Providers)
         {
             card.ColorBarsByUsage = settings.ColorBarsByUsage;
+            card.ShowPaceProjection = settings.ShowPaceProjection;
             card.ShowWhenUnavailable = settings.ShowUnavailableProviders;
             card.IsCompact = IsCompact;
         }
