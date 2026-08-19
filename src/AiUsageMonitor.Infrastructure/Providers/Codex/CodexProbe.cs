@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
@@ -27,6 +28,22 @@ public sealed class CodexProbe : IProviderProbe
     private static readonly TimeSpan RateLimitsTimeout = TimeSpan.FromSeconds(10);
 
     private const string MechanismText = "codex app-server (JSON-RPC over stdio, JSONL) - account/rateLimits/read";
+
+    /// <summary>
+    /// How the app-server is launched. The sandbox and approval flags are defence-in-depth: this
+    /// probe only ever calls <c>account/rateLimits/read</c> and never opens a session, so nothing
+    /// it does today can be affected by them - but if a future version of the app-server ever acts
+    /// on its own, the process this application spawned is already capped at read-only with every
+    /// approval denied. Verified against codex-cli 0.144.6: accepted, and the rate-limit response
+    /// is byte-identical to the unflagged call.
+    ///
+    /// Order matters. <c>-s</c> and <c>-a</c> are flags of the top-level <c>codex</c> command, not
+    /// of the <c>app-server</c> subcommand, so they must precede it.
+    /// </summary>
+    public const string AppServerArguments = "-s read-only -a untrusted app-server";
+
+    private const string SpendLimitSlot = "individualLimit";
+    private const string SpendLimitLabel = "Spend limit";
 
     private readonly IProcessRunner _processes;
     private readonly Func<string?> _locateExecutable;
@@ -235,7 +252,7 @@ public sealed class CodexProbe : IProviderProbe
     {
         var notes = new List<string>();
 
-        using IProcessSession process = _processes.Start(exePath, "app-server");
+        using IProcessSession process = _processes.Start(exePath, AppServerArguments);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(RateLimitsTimeout);
 
@@ -284,25 +301,67 @@ public sealed class CodexProbe : IProviderProbe
         var windows = new List<QuotaWindow>();
         int order = 0;
 
+        // Result-level, a sibling of the buckets rather than a member of one: reset credits belong
+        // to the account, so every window carries them.
+        Dictionary<string, string> resetCredits = MapResetCredits(result);
+
         if (result.TryGetProperty("rateLimitsByLimitId", out JsonElement byId)
             && byId.ValueKind == JsonValueKind.Object
             && byId.EnumerateObject().Any())
         {
             foreach (JsonProperty entry in byId.EnumerateObject())
             {
-                AppendBucketWindows(windows, entry.Name, entry.Value, ref order);
+                AppendBucketWindows(windows, entry.Name, entry.Value, resetCredits, ref order);
             }
         }
         else if (result.TryGetProperty("rateLimits", out JsonElement single) && single.ValueKind == JsonValueKind.Object)
         {
             string limitId = TryGetString(single, "limitId") ?? "unknown";
-            AppendBucketWindows(windows, limitId, single, ref order);
+            AppendBucketWindows(windows, limitId, single, resetCredits, ref order);
         }
 
         return windows;
     }
 
-    private static void AppendBucketWindows(List<QuotaWindow> windows, string limitId, JsonElement bucket, ref int order)
+    /// <summary>
+    /// Credits that reset a rate limit early. Deliberately NOT a quota window - they are a way to
+    /// clear a limit, not a limit being consumed - so they ride along in <c>Extra</c> instead.
+    /// </summary>
+    private static Dictionary<string, string> MapResetCredits(JsonElement result)
+    {
+        var extra = new Dictionary<string, string>();
+
+        if (!result.TryGetProperty("rateLimitResetCredits", out JsonElement summary)
+            || summary.ValueKind != JsonValueKind.Object)
+        {
+            return extra;
+        }
+
+        if (TryGetLong(summary, "availableCount") is long availableCount)
+        {
+            extra["resetCredits.availableCount"] = availableCount.ToString(CultureInfo.InvariantCulture);
+        }
+
+        // A null "credits" and an empty one are different facts, and the protocol schema says so
+        // explicitly: null means only the count is known, [] means detail rows were fetched and
+        // none came back. Emitting this key only for a real array preserves that distinction -
+        // an absent key reads as "not reported", which is exactly what null means. The array may
+        // also be capped shorter than availableCount, so it is reported as its own number rather
+        // than being taken as a recount.
+        if (summary.TryGetProperty("credits", out JsonElement credits) && credits.ValueKind == JsonValueKind.Array)
+        {
+            extra["resetCredits.detailRows"] = credits.GetArrayLength().ToString(CultureInfo.InvariantCulture);
+        }
+
+        return extra;
+    }
+
+    private static void AppendBucketWindows(
+        List<QuotaWindow> windows,
+        string limitId,
+        JsonElement bucket,
+        Dictionary<string, string> resetCredits,
+        ref int order)
     {
         string? limitName = TryGetString(bucket, "limitName");
         string? planType = TryGetString(bucket, "planType");
@@ -318,7 +377,7 @@ public sealed class CodexProbe : IProviderProbe
             unlimitedCredits = TryGetBool(credits, "unlimited");
         }
 
-        var sharedExtra = new Dictionary<string, string>();
+        var sharedExtra = new Dictionary<string, string>(resetCredits);
         if (planType is not null)
         {
             sharedExtra["planType"] = planType;
@@ -356,6 +415,68 @@ public sealed class CodexProbe : IProviderProbe
             windows.Add(BuildWindow(limitId, "secondary", secondary, limitName, sharedExtra, order));
             order++;
         }
+
+        // A spend-control limit. Null on plus - the plan types that populate it are the business
+        // and enterprise seats the protocol's PlanType enum enumerates. Structurally it is a quota
+        // window (a percentage plus a reset instant), so it becomes one rather than a special case
+        // the UI would have to learn about.
+        if (bucket.TryGetProperty("individualLimit", out JsonElement individualLimit)
+            && individualLimit.ValueKind == JsonValueKind.Object)
+        {
+            windows.Add(BuildSpendLimitWindow(limitId, individualLimit, sharedExtra, order));
+            order++;
+        }
+    }
+
+    /// <summary>
+    /// Maps <c>individualLimit</c> (protocol type <c>SpendControlLimitSnapshot</c>) into a window.
+    /// </summary>
+    private static QuotaWindow BuildSpendLimitWindow(
+        string limitId, JsonElement slotEl, Dictionary<string, string> sharedExtra, int order)
+    {
+        // This field reports what is LEFT, not what has been spent, and inverting it is the whole
+        // job here: mapping remainingPercent straight through would render a barely-touched limit
+        // as nearly exhausted. Worth stating because the obvious external reference gets it wrong -
+        // OpenUsage's public docs describe this object as limit/used/resetsAt and do not mention
+        // remainingPercent at all. The generated protocol schema is the source of truth.
+        double? usedPercent = TryGetDouble(slotEl, "remainingPercent") is double remainingPercent
+            ? 100.0 - remainingPercent
+            : null;
+
+        var extra = new Dictionary<string, string>(sharedExtra)
+        {
+            ["limitId"] = limitId,
+            ["slot"] = SpendLimitSlot,
+        };
+
+        // Currency amounts, which the provider reports as strings. Kept verbatim rather than parsed
+        // into numbers this application would then have to guess a currency and a locale for.
+        if (TryGetString(slotEl, "limit") is string limit)
+        {
+            extra[$"{SpendLimitSlot}.limit"] = limit;
+        }
+
+        if (TryGetString(slotEl, "used") is string used)
+        {
+            extra[$"{SpendLimitSlot}.used"] = used;
+        }
+
+        return new QuotaWindow(
+            Id: $"{limitId}:{SpendLimitSlot}",
+            Label: SpendLimitLabel,
+            UsedPercent: usedPercent,
+            ResetsAt: TryGetUnixSeconds(slotEl, "resetsAt"),
+            // Structurally unknowable from this payload: it carries a reset instant and nothing
+            // that states how long the period runs for. Inferring "monthly" from the reset
+            // boundary would be a guess, so the elapsed marker (PRD ss16) is omitted instead -
+            // which is also why IsPartial below is unconditionally true.
+            WindowDuration: null,
+            Order: order,
+            IsPartial: true,
+            Extra: extra,
+            // Not an unrecognised provider token: this field's meaning is pinned by the generated
+            // protocol schema, so the label is this application's own words and renders as such.
+            LabelIsProviderToken: false);
     }
 
     private static QuotaWindow BuildWindow(
@@ -424,6 +545,11 @@ public sealed class CodexProbe : IProviderProbe
     private static double? TryGetDouble(JsonElement el, string propertyName) =>
         el.TryGetProperty(propertyName, out JsonElement v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out double d)
             ? d
+            : null;
+
+    private static long? TryGetLong(JsonElement el, string propertyName) =>
+        el.TryGetProperty(propertyName, out JsonElement v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out long l)
+            ? l
             : null;
 
     private static DateTimeOffset? TryGetUnixSeconds(JsonElement el, string propertyName) =>
