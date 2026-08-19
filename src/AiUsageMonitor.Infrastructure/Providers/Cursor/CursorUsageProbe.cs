@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using AiUsageMonitor.Domain;
@@ -268,7 +267,7 @@ public sealed class CursorUsageProbe : IProviderProbe
                 ? parsed
                 : -1;
 
-        var key = new CachedEventTotal(cycle.Start, cycle.End, reportedCount, TokenFingerprint(token), 0);
+        var key = new CachedEventTotal(cycle.Start, cycle.End, reportedCount, account.AccessTokenExpiresAt, 0);
         if (TryReuseTotal(key, out double cachedCents))
         {
             notes.Add($"Event count unchanged at {reportedCount}; the spend total was reused without refetching the pages.");
@@ -342,7 +341,8 @@ public sealed class CursorUsageProbe : IProviderProbe
                 && previous.CycleStart == key.CycleStart
                 && previous.CycleEnd == key.CycleEnd
                 && previous.EventCount == key.EventCount
-                && previous.AccountFingerprint == key.AccountFingerprint
+                && previous.SignInExpiresAt == key.SignInExpiresAt
+                && key.SignInExpiresAt is not null
                 && key.EventCount >= 0)
             {
                 spentCents = previous.SpentCents;
@@ -363,14 +363,28 @@ public sealed class CursorUsageProbe : IProviderProbe
     }
 
     /// <summary>
-    /// A spend total remembered only for as long as the process runs, keyed on the cycle, event
-    /// count, and a non-reversible fingerprint of the current sign-in. Nothing is written to disk.
+    /// A spend total remembered only for as long as the process runs, keyed on the cycle, the
+    /// event count, and which sign-in produced it. Nothing is written to disk.
+    /// <para>
+    /// The sign-in is identified by the token's own expiry instant, which is non-secret, already
+    /// extracted as printable metadata, and different for every fresh sign-in. It is deliberately
+    /// NOT a hash of the token: a record's generated <c>ToString</c> prints every property it
+    /// has, so a credential derivative stored here could reach a log through nothing more than
+    /// string interpolation - which is the whole reason the token itself is kept out of every
+    /// record in this provider. A stable fingerprint of a credential is also a tracking
+    /// identifier, and this application has no use for one.
+    /// </para>
+    /// <para>
+    /// An unknown expiry therefore never matches, so a sign-in this application cannot identify
+    /// re-reads its events rather than trusting a total that may belong to someone else.
+    /// </para>
     /// </summary>
     private sealed record CachedEventTotal(
-        DateTimeOffset? CycleStart, DateTimeOffset? CycleEnd, int EventCount, string AccountFingerprint, double SpentCents);
-
-    private static string TokenFingerprint(string token) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+        DateTimeOffset? CycleStart,
+        DateTimeOffset? CycleEnd,
+        int EventCount,
+        DateTimeOffset? SignInExpiresAt,
+        double SpentCents);
 
     private ProviderInstallation DetectInstallation(List<string> notes)
     {

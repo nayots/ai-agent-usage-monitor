@@ -180,6 +180,24 @@ public sealed class CursorUsageProbeTests
     }
 
     [Fact]
+    public async Task ASignInItCannotIdentifyIsNeverAssumedToBeTheSameOne()
+    {
+        // The cached total is keyed on the token's expiry instant, so a token whose expiry cannot
+        // be read identifies nobody. Reusing a total against an unidentifiable sign-in risks
+        // showing one person's spend to another; re-reading the events costs a request instead.
+        using var directory = new TempDirectory();
+        string path = WriteDatabase(directory, "not-a-jwt-at-all", membershipType: "enterprise", teamId: 13589081);
+        var handler = EnterpriseSeat(totalEvents: 2, pages: [Events(700.61, 470.0)]);
+        var probe = CreateProbe(handler, path);
+
+        await probe.ProbeAsync(CancellationToken.None);
+        int afterFirst = handler.FullPageRequests;
+        await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.True(handler.FullPageRequests > afterFirst);
+    }
+
+    [Fact]
     public async Task EventsBelongingToMoreThanOneAccountRefuseToProduceAFigure()
     {
         using var directory = new TempDirectory();
