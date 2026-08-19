@@ -15,12 +15,12 @@
     checkout can always name the version it is, and a diagnostics bundle pasted into a
     bug report provably names the release the user downloaded.
 
-    0.x is deliberate and is not modesty about the code: the Claude Code mechanism is
-    unofficial and undocumented and may break without notice, so a 1.0 would promise a
-    stability that depends on an endpoint this project does not control.
+    0.x is deliberate and is not modesty about the code: the Claude Code and Cursor
+    mechanisms are unofficial and undocumented and may break without notice, so a 1.0
+    would promise a stability that depends on endpoints this project does not control.
   -->
   <PropertyGroup>
-    <VersionPrefix>0.3.0</VersionPrefix>
+    <VersionPrefix>0.4.0</VersionPrefix>
     <Product>AI Usage Monitor</Product>
     <!-- Without this, MSBuild defaults AssemblyCompany to the assembly name, and the .exe's
          Details tab reports its own file name as the publisher. -->
