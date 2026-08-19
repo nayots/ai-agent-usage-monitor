@@ -123,6 +123,11 @@ public partial class WidgetWindow : Window
         DwmWindowChrome.UseRoundedCorners(handle);
         ApplyTitleBarTheme(handle);
 
+        // Here rather than only in ClampPlacement: this is the first moment the window has a handle
+        // for ScreenBounds to ask about, and it is still ahead of the first render. Waiting for
+        // OnContentRendered would paint one frame at the XAML cap before widening it.
+        ApplyHeightCap();
+
         _tray = new TrayIcon(this, "AI Usage Monitor");
         _tray.Activated += (_, _) => ShowFromTray();
         _tray.ContextMenuRequested += OnTrayContextMenuRequested;
@@ -1049,8 +1054,27 @@ public partial class WidgetWindow : Window
         Top = top;
     }
 
+    /// <summary>
+    /// Lets the widget grow to the screen it is on before scrolling. Applied before the clamp
+    /// below, with a layout pass between them, because the clamp positions the window from
+    /// <see cref="FrameworkElement.ActualHeight"/> — which does not reflect a new cap until the
+    /// layout that honours it has run.
+    /// </summary>
+    private void ApplyHeightCap()
+    {
+        double cap = WidgetHeightCap.For(ScreenBounds.WorkAreaFor(this).Height);
+
+        if (cap != MaxHeight)
+        {
+            MaxHeight = cap;
+            UpdateLayout();
+        }
+    }
+
     private void ClampPlacement()
     {
+        ApplyHeightCap();
+
         Rect fitted = PlacementClamp.Fit(
             new Rect(Left, Top, ActualWidth, ActualHeight),
             ScreenBounds.WorkAreaFor(this));

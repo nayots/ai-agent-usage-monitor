@@ -10,6 +10,9 @@
         FontFamily="{StaticResource WidgetFontFamily}"
         PreviewKeyDown="Window_PreviewKeyDown"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
+  <!-- MaxHeight here is only the value in force before the window has a handle. WidgetHeightCap
+       replaces it with one measured against the screen the widget is on, at OnSourceInitialized
+       and again whenever the display configuration changes. Keep the two numbers in step. -->
   <Window.Resources>
     <ContextMenu x:Key="TrayMenu">
       <!-- Named, because the code-behind sets its header and visibility as the menu opens: x:Name
