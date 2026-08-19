@@ -9,6 +9,24 @@ namespace AiUsageMonitor.Domain;
 /// be resolved to a duration. The UI must render these distinctly so a provider term is never
 /// mistaken for a label this application understands (PRD §7.2 item 10).
 /// </param>
+/// <param name="AmountText">
+/// What this window's consumption is in the provider's OWN unit, already composed for display —
+/// for example <c>"$11.71 of $100"</c> — or null when the provider measures only in percent.
+/// <para>
+/// This exists because a percentage is a lossy rendering of a window whose limit is not a
+/// percentage. A monthly spend ceiling is money; "12%" tells a reader nothing about whether they
+/// can afford this afternoon's work, and the bar beside it already conveys the fraction. Windows
+/// that are natively percentages — every rolling quota window — leave this null and lose nothing.
+/// </para>
+/// <para>
+/// It is a <em>string the adapter composed</em>, deliberately, and never a number plus a unit this
+/// layer would have to format. Only the adapter knows whether its payload stated a currency at
+/// all: Codex reports its spend limit as currency strings it has already formatted, and Cursor's
+/// enterprise ceiling arrives in a field that names dollars outright, while the same provider's
+/// individual figures carry no currency marker and therefore get no symbol invented for them.
+/// Deciding that here would mean guessing on behalf of a provider that did not say.
+/// </para>
+/// </param>
 public sealed record QuotaWindow(
     string Id,
     string Label,
@@ -18,7 +36,8 @@ public sealed record QuotaWindow(
     int Order,
     bool IsPartial,
     IReadOnlyDictionary<string, string> Extra,
-    bool LabelIsProviderToken)
+    bool LabelIsProviderToken,
+    string? AmountText = null)
 {
     /// <summary>
     /// Percent remaining, derived from <see cref="UsedPercent"/>. Null when usage is unknown.

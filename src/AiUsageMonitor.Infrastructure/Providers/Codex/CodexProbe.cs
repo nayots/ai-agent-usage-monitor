@@ -461,6 +461,16 @@ public sealed class CodexProbe : IProviderProbe
             extra[$"{SpendLimitSlot}.used"] = used;
         }
 
+        // The pair the row shows beneath the bar, in the provider's own words. These two arrive as
+        // currency STRINGS the provider has already formatted - which is the whole reason they can
+        // be shown at all. Nothing here parses them into numbers, so no currency and no locale is
+        // ever guessed; if the provider sends only one of the two, the row keeps its percentage
+        // rather than stating half a comparison.
+        string? amountText = extra.TryGetValue($"{SpendLimitSlot}.used", out string? usedText)
+            && extra.TryGetValue($"{SpendLimitSlot}.limit", out string? limitText)
+                ? $"{usedText} of {limitText}"
+                : null;
+
         return new QuotaWindow(
             Id: $"{limitId}:{SpendLimitSlot}",
             Label: SpendLimitLabel,
@@ -476,7 +486,8 @@ public sealed class CodexProbe : IProviderProbe
             Extra: extra,
             // Not an unrecognised provider token: this field's meaning is pinned by the generated
             // protocol schema, so the label is this application's own words and renders as such.
-            LabelIsProviderToken: false);
+            LabelIsProviderToken: false,
+            AmountText: amountText);
     }
 
     private static QuotaWindow BuildWindow(

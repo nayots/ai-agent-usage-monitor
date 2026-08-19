@@ -29,7 +29,7 @@ public class ViewLoadingTests(WpfFixture wpf)
         public Task<ProviderSnapshot> ProbeAsync(CancellationToken ct) => throw new NotSupportedException();
     }
 
-    private static QuotaWindow Window(double? used, bool token, bool withReset) => new(
+    private static QuotaWindow Window(double? used, bool token, bool withReset, string? amountText = null) => new(
         Id: token ? "nimbus_quill" : "five_hour",
         Label: token ? "nimbus_quill" : "5-hour window",
         UsedPercent: used,
@@ -38,7 +38,8 @@ public class ViewLoadingTests(WpfFixture wpf)
         Order: 0,
         IsPartial: !withReset,
         Extra: new Dictionary<string, string>(),
-        LabelIsProviderToken: token);
+        LabelIsProviderToken: token,
+        AmountText: amountText);
 
     private static ProviderSnapshot Snapshot(ConnectionState state, IReadOnlyList<QuotaWindow> windows) => new(
         ProviderName: "Claude Code", Installed: true, Version: "2.1.227", ExecutablePath: null,
@@ -264,6 +265,54 @@ public class ViewLoadingTests(WpfFixture wpf)
 
         Assert.Equal(Visibility.Visible, Named(view, "LimitReachedText").Visibility);
         Assert.Equal(Visibility.Collapsed, ((FrameworkElement)view.FindName("PaceWarningStrip")).Visibility);
+    });
+
+    [Fact]
+    public void QuotaRowShowsTheProvidersOwnAmountBeneathTheBar() => wpf.Invoke(() =>
+    {
+        QuotaRowViewModel row = new(
+            Window(11.7d, token: false, withReset: true, amountText: "$11.71 of $100"),
+            colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.Equal(Visibility.Visible, Named(view, "AmountLine").Visibility);
+        Assert.Equal("$11.71 of $100", Named(view, "AmountLine").Text);
+
+        // The percentage keeps the USED column. Both readings are on the row, which is the whole
+        // point: the bar carries the fraction, the amount carries the headroom.
+        Assert.Equal("12%", row.UsedText);
+    });
+
+    [Fact]
+    public void QuotaRowHidesTheAmountLineForAWindowThatIsNativelyAPercentage() => wpf.Invoke(() =>
+    {
+        QuotaRowViewModel row = new(Window(47d, token: false, withReset: true), colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.Equal(Visibility.Collapsed, Named(view, "AmountLine").Visibility);
+    });
+
+    [Fact]
+    public void TheAmountLineAndAPaceWarningCanBothBeOnTheSameRow() => wpf.Invoke(() =>
+    {
+        // They occupy different grid rows, so a spend window that is also ahead of pace shows
+        // both rather than drawing one on top of the other.
+        QuotaRowViewModel row = new(
+            Window(90d, token: false, withReset: true, amountText: "$90.00 of $100"),
+            colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.Equal(Visibility.Visible, Named(view, "AmountLine").Visibility);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)view.FindName("PaceWarningStrip")).Visibility);
+        Assert.True(
+            Named(view, "PaceText").TranslatePoint(default, view).Y > Named(view, "AmountLine").TranslatePoint(default, view).Y,
+            "the pace warning must sit below the amount line, not overlap it");
     });
 
     private static TextBlock Named(FrameworkElement view, string name) => (TextBlock)view.FindName(name);

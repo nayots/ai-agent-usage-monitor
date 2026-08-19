@@ -101,6 +101,43 @@ public sealed class CursorSpendWindowsTests
     }
 
     [Fact]
+    public void TheEventTotalCarriesTheProvidersOwnAmountForTheRowToShow()
+    {
+        QuotaWindow window = CursorSpendWindows.FromEventTotal(1170.61, 10000, DerivedCycle, "enterprise");
+
+        // A whole ceiling drops its ".00", exactly as Cursor's own dashboard writes the pair.
+        Assert.Equal("$11.71 of $100", window.AmountText);
+    }
+
+    [Fact]
+    public void AnUnevenCeilingKeepsItsCents()
+    {
+        QuotaWindow window = CursorSpendWindows.FromEventTotal(1170.61, 12550, DerivedCycle, "enterprise");
+
+        Assert.Equal("$11.71 of $125.50", window.AmountText);
+    }
+
+    [Fact]
+    public void NoCeilingMeansNoAmountRatherThanAnOpenEndedOne()
+    {
+        QuotaWindow window = CursorSpendWindows.FromEventTotal(1170.61, limitCents: 0, DerivedCycle, "enterprise");
+
+        Assert.Null(window.AmountText);
+    }
+
+    [Fact]
+    public void ThePlanUsagePathInventsNoCurrencyBecauseThePayloadNamesNone()
+    {
+        // planUsage reports bare numbers. Only the enterprise ceiling arrives in a field that says
+        // "Dollars", so only that path may print a "$". This row keeps its percentage.
+        QuotaWindow window = Assert.Single(CursorSpendWindows.FromPlanUsage(
+            Json("""{"planUsage":{"totalSpend":2500,"limit":10000}}"""), DerivedCycle, "pro"));
+
+        Assert.Null(window.AmountText);
+        Assert.Equal(25.0, window.UsedPercent!.Value, 3);
+    }
+
+    [Fact]
     public void AnEventTotalWithNoLimitIsUnknownNeverZero()
     {
         QuotaWindow window = CursorSpendWindows.FromEventTotal(1170.61, limitCents: 0, DerivedCycle, "enterprise");

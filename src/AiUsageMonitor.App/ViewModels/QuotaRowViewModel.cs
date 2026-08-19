@@ -60,6 +60,20 @@ public sealed class QuotaRowViewModel : ObservableObject
         : null;
 
     /// <summary>
+    /// The provider's own unit for this window - "$11.71 of $100" - shown beneath the bar, or null
+    /// when the provider measures only in percent.
+    /// <para>
+    /// It sits below the bar rather than in the USED column on purpose. That column is 42px and
+    /// shared by every card, so putting money in it would both clip and make one column mean two
+    /// different things across three providers. Here the percentage stays comparable across cards
+    /// and the amount adds what the percentage cannot: how much is actually left.
+    /// </para>
+    /// </summary>
+    public string? AmountText => _window.AmountText;
+
+    public bool HasAmountText => !string.IsNullOrWhiteSpace(_window.AmountText);
+
+    /// <summary>
     /// 100% used is the exhausted treatment whether or not bar tone by usage is on, per PRD §16.1.
     /// Neither provider reports a separate rate-limit-reached flag today, so the provider's own
     /// percentage is the signal — nothing is inferred beyond it.
@@ -103,7 +117,12 @@ public sealed class QuotaRowViewModel : ObservableObject
     {
         get
         {
-            string usage = UsedText is null ? "usage not reported" : UsedText + " used";
+            // Both, because the row shows both: the percentage in the USED column and the amount
+            // beneath the bar. A screen reader that announced only one of them would describe a
+            // row the sighted reader is not looking at.
+            string usage = AmountText is string amount
+                ? (UsedText is null ? amount : $"{UsedText} used, {amount}")
+                : UsedText is null ? "usage not reported" : UsedText + " used";
             string reset = CountdownText is null ? "no reset time reported" : "resets in " + CountdownText;
             string exactReset = _window.ResetsAt is DateTimeOffset resetsAt
                 ? ", resets at " + resetsAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)

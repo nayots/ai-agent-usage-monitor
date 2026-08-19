@@ -40,7 +40,20 @@ public static class CursorSpendWindows
 
     public static QuotaWindow FromEventTotal(
         double spentCents, double limitCents, CursorBillingCycle cycle, string? membershipType) =>
-        Build(CycleSpendId, SpendLabel, spentCents, limitCents, cycle, membershipType, "usage_events", order: 0);
+        Build(
+            CycleSpendId,
+            SpendLabel,
+            spentCents,
+            limitCents,
+            cycle,
+            membershipType,
+            "usage_events",
+            order: 0,
+            // The only path entitled to print a currency symbol. This ceiling comes from
+            // GetHardLimit's perUserMonthlyLimitDollars, a field that names its own unit, so "$" is
+            // the provider's statement rather than this application's assumption. The individual
+            // path's planUsage figures name no currency and therefore get no symbol invented.
+            amountText: UsdPair(spentCents, limitCents));
 
     private static (double Spent, double Limit)? Spend(
         JsonElement root, string objectName, string spentName, string limitName)
@@ -63,7 +76,8 @@ public static class CursorSpendWindows
         CursorBillingCycle cycle,
         string? membershipType,
         string source,
-        int order)
+        int order,
+        string? amountText = null)
     {
         double? usedPercent = limitCents > 0 ? spentCents / limitCents * 100.0 : null;
 
@@ -97,7 +111,8 @@ public static class CursorSpendWindows
             Order: order,
             IsPartial: cycle.End is null || cycle.Duration is null || usedPercent is null,
             Extra: extra,
-            LabelIsProviderToken: false);
+            LabelIsProviderToken: false,
+            AmountText: amountText);
     }
 
     private static double? Number(JsonElement parent, string propertyName) =>
@@ -108,4 +123,22 @@ public static class CursorSpendWindows
             : null;
 
     private static string Usd(double cents) => (cents / 100.0).ToString("0.00", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// "$11.71 of $100" - what the row shows beneath the bar instead of leaving the reader with a
+    /// bare percentage. Null when the ceiling is unknown, because "$11.71 of nothing" would state a
+    /// limit nobody reported.
+    /// <para>
+    /// The spend keeps its cents and a whole ceiling drops its "<c>.00</c>", which is how Cursor's
+    /// own dashboard writes the same pair. This line exists to be read at a glance, and "$100"
+    /// reads faster than "$100.00" while losing nothing.
+    /// </para>
+    /// </summary>
+    private static string? UsdPair(double spentCents, double limitCents) =>
+        limitCents > 0 ? $"${Usd(spentCents)} of ${Whole(limitCents)}" : null;
+
+    private static string Whole(double cents) =>
+        Math.Abs(cents % 100) < 0.001
+            ? (cents / 100.0).ToString("0", CultureInfo.InvariantCulture)
+            : Usd(cents);
 }

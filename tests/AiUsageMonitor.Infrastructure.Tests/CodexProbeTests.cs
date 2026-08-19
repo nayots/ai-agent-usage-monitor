@@ -282,6 +282,30 @@ public sealed class CodexProbeTests
         Assert.Equal("200.00", spend.Extra["individualLimit.limit"]);
         Assert.Equal("10.00", spend.Extra["individualLimit.used"]);
         Assert.Equal("individualLimit", spend.Extra["slot"]);
+
+        // The row shows this beneath the bar instead of leaving a spend limit expressed only as a
+        // percentage. Both halves are the provider's own already-formatted strings, passed through
+        // verbatim - nothing here parses a currency or picks a locale.
+        Assert.Equal("10.00 of 200.00", spend.AmountText);
+    }
+
+    [Fact]
+    public async Task ASpendLimitMissingHalfItsPairKeepsItsPercentageRatherThanStatingHalfAComparison()
+    {
+        FakeProcessRunner processes = WithVersion();
+        processes.EnqueueSession(
+            ExePath,
+            CodexProbe.AppServerArguments,
+            BucketFrame("""
+                "individualLimit":{"used":"10.00","remainingPercent":95,"resetsAt":1700000500}
+                """));
+        var probe = new CodexProbe(processes, () => ExePath);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+        QuotaWindow spend = snapshot.Windows.Single(w => w.Id == "default:individualLimit");
+
+        Assert.Null(spend.AmountText);
+        Assert.Equal(5.0, spend.UsedPercent!.Value, 3);
     }
 
     [Fact]

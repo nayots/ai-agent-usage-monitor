@@ -184,6 +184,15 @@ Two traps it must keep guarding:
 - `context_window.used_percentage` is context fill, **not** subscription quota. It is correctly excluded only because it lacks a reset key. Keep that assertion.
 - Unrecognised name tokens must be preserved verbatim, never dropped or reinterpreted. A provider inventing `three_hour_nimbus` must render with its own label.
 
+`QuotaWindow.AmountText` is how a window states its consumption in the provider's **own** unit —
+`"$11.71 of $100"` — beneath the bar, and it is null for every window whose native unit is already
+a percentage. It is a string the *adapter* composes, never a number this layer formats, because
+only the adapter knows whether its payload named a currency at all: Codex sends already-formatted
+currency strings, Cursor's enterprise ceiling arrives in a field named `perUserMonthlyLimitDollars`,
+and Cursor's individual figures name no currency and therefore get **no symbol invented for them**.
+The percentage is never displaced by it — the USED column is 42px and shared across every card, so
+it stays comparable while the amount adds the headroom a percentage cannot express.
+
 Missing data is `null` and surfaces as `Waiting`/`Unavailable` — **never** as `0`. A window duration is inferred only when it can be derived honestly; otherwise the elapsed-time marker (PRD §16) is omitted.
 
 ### Request cadence and throttling (added 2026-08-17)

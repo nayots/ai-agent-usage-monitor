@@ -14,7 +14,8 @@ public class QuotaRowViewModelTests
         DateTimeOffset? resetsAt = null,
         TimeSpan? duration = null,
         bool labelIsProviderToken = false,
-        IReadOnlyDictionary<string, string>? extra = null) => new(
+        IReadOnlyDictionary<string, string>? extra = null,
+        string? amountText = null) => new(
             Id: id,
             Label: label,
             UsedPercent: usedPercent,
@@ -23,7 +24,40 @@ public class QuotaRowViewModelTests
             Order: 0,
             IsPartial: resetsAt is null || duration is null,
             Extra: extra ?? new Dictionary<string, string>(),
-            LabelIsProviderToken: labelIsProviderToken);
+            LabelIsProviderToken: labelIsProviderToken,
+            AmountText: amountText);
+
+    [Fact]
+    public void AWindowWithNoNativeUnitShowsNoAmountLine()
+    {
+        // Every rolling quota window. A percentage IS its unit, so there is nothing to add.
+        QuotaRowViewModel row = Row(Window());
+
+        Assert.Null(row.AmountText);
+        Assert.False(row.HasAmountText);
+    }
+
+    [Fact]
+    public void AWindowWithANativeUnitOffersItAlongsideThePercentage()
+    {
+        QuotaRowViewModel row = Row(Window(usedPercent: 11.7, amountText: "$11.71 of $100"));
+
+        Assert.Equal("$11.71 of $100", row.AmountText);
+        Assert.True(row.HasAmountText);
+
+        // The percentage is NOT displaced: it stays in the USED column, which is shared and
+        // aligned across every card, so the three providers stay comparable at a glance.
+        Assert.Equal("12%", row.UsedText);
+    }
+
+    [Fact]
+    public void TheAccessibleNameCarriesBothReadings()
+    {
+        QuotaRowViewModel row = Row(Window(usedPercent: 11.7, amountText: "$11.71 of $100"));
+
+        Assert.Contains("12% used", row.AccessibleName, StringComparison.Ordinal);
+        Assert.Contains("$11.71 of $100", row.AccessibleName, StringComparison.Ordinal);
+    }
 
     private static QuotaRowViewModel Row(QuotaWindow window, bool colorBarsByUsage = true)
     {

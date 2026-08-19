@@ -17,6 +17,7 @@
     <Style x:Key="RowCountdownStyle" TargetType="TextBlock" BasedOn="{StaticResource NumericTextStyle}"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" /><Setter Property="TextAlignment" Value="Right" /><Style.Triggers><DataTrigger Binding="{Binding IsExhausted}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
     <Style x:Key="ExhaustedMarkStyle" TargetType="TextBlock"><Setter Property="FontSize" Value="10" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource StateBadBrush}" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
     <Style x:Key="ExhaustedTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodySmallTextStyle}"><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{DynamicResource StateBadBrush}" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
+    <Style x:Key="AmountTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodySmallTextStyle}"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
     <Style x:Key="PaceMarkStyle" TargetType="TextBlock"><Setter Property="FontSize" Value="10" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource StateWarnBrush}" /></Style>
     <Style x:Key="PaceTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodySmallTextStyle}"><Setter Property="Foreground" Value="{DynamicResource StateWarnBrush}" /></Style>
   </UserControl.Resources>
@@ -29,7 +30,11 @@
     <Border.Style><Style TargetType="Border"><Setter Property="Padding" Value="{DynamicResource QuotaRowPadding}" /><Style.Triggers><DataTrigger Binding="{Binding DataContext.IsCompact, RelativeSource={RelativeSource AncestorType=views:ProviderCardView}}" Value="True"><Setter Property="Padding" Value="{DynamicResource QuotaRowPaddingCompact}" /></DataTrigger></Style.Triggers></Style></Border.Style>
     <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="42" /><ColumnDefinition Width="8" /><ColumnDefinition Width="62" /></Grid.ColumnDefinitions>
-      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+      <!-- Row 0 the reading, row 1 the bar, row 2 the provider's own amount, row 3 the warnings.
+           The amount sits directly beneath the bar it qualifies, and above the warning strips
+           rather than between them - the two warning strips share row 3 as they always have,
+           because a window cannot be both exhausted and merely ahead of pace. -->
+      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
       <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center">
         <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource RowLabelStyle}"><Setter Property="Visibility" Value="Visible" /><Style.Triggers><DataTrigger Binding="{Binding IsProviderToken}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
       </TextBlock>
@@ -42,10 +47,11 @@
            row. Restating it as prose put the same value on screen twice, three columns apart. When
            the provider reports no reset time the column is simply blank, which is the honest
            reading: the limit is reached and nobody said when it lifts. -->
-      <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding IsExhausted, Converter={StaticResource BooleanToVisibility}}">
+      <TextBlock x:Name="AmountLine" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5" Margin="0,3,0,0" Text="{Binding AmountText}" Style="{StaticResource AmountTextStyle}" Visibility="{Binding HasAmountText, Converter={StaticResource BooleanToVisibility}}" />
+      <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding IsExhausted, Converter={StaticResource BooleanToVisibility}}">
         <TextBlock x:Name="LimitReachedMark" Text="&#x2715;" VerticalAlignment="Center" Style="{StaticResource ExhaustedMarkStyle}" /><TextBlock x:Name="LimitReachedText" Text="Limit reached" Margin="5,0,0,0" Style="{StaticResource ExhaustedTextStyle}" />
       </StackPanel>
-      <StackPanel x:Name="PaceWarningStrip" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasPaceWarning, Converter={StaticResource BooleanToVisibility}}">
+      <StackPanel x:Name="PaceWarningStrip" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasPaceWarning, Converter={StaticResource BooleanToVisibility}}">
         <TextBlock x:Name="PaceMark" Text="&#x26A0;" VerticalAlignment="Top" Style="{StaticResource PaceMarkStyle}" /><TextBlock x:Name="PaceText" Text="{Binding PaceWarningText}" Margin="5,0,0,0" TextWrapping="Wrap" Style="{StaticResource PaceTextStyle}" />
       </StackPanel>
     </Grid>
