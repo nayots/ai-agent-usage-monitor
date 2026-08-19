@@ -73,4 +73,40 @@ public class QuotaFormattingTests
     {
         Assert.Equal("0m 00s", QuotaFormatting.FormatCountdown(TimeSpan.FromMinutes(-30)));
     }
+
+    [Fact]
+    public void FormatProjectedShortfall_IsNull_WhenThereIsNoProjection()
+    {
+        Assert.Null(QuotaFormatting.FormatProjectedShortfall(null));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void FormatProjectedShortfall_IsNull_WhenTheShortfallIsNotPositive(int hours)
+    {
+        Assert.Null(QuotaFormatting.FormatProjectedShortfall(TimeSpan.FromHours(hours)));
+    }
+
+    [Theory]
+    [InlineData(94, "~3d")]
+    [InlineData(24, "~1d")]
+    [InlineData(23.99, "~23h")]
+    [InlineData(2.92, "~2h")]
+    [InlineData(1, "~1h")]
+    [InlineData(0.999, "~59m")]
+    [InlineData(0.75, "~45m")]
+    public void FormatProjectedShortfall_RendersOneCoarseUnitTruncated(double hours, string expected)
+    {
+        Assert.Equal(expected, QuotaFormatting.FormatProjectedShortfall(TimeSpan.FromHours(hours)));
+    }
+
+    [Theory]
+    [InlineData(30, "~1m")]
+    [InlineData(59, "~1m")]
+    [InlineData(60, "~1m")]
+    public void FormatProjectedShortfall_FloorsAtOneMinute(int seconds, string expected)
+    {
+        Assert.Equal(expected, QuotaFormatting.FormatProjectedShortfall(TimeSpan.FromSeconds(seconds)));
+    }
 }

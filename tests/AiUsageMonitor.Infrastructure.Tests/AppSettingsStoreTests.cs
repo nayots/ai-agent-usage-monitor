@@ -12,6 +12,7 @@ public class AppSettingsStoreTests
 
         Assert.Equal(ThemePreference.System, defaults.Theme);
         Assert.True(defaults.ColorBarsByUsage);
+        Assert.True(defaults.ShowPaceProjection);
         Assert.False(defaults.AlwaysOnTop);
         Assert.False(defaults.StartWithWindows);
         Assert.True(defaults.GlobalHotkeyEnabled);
@@ -80,6 +81,7 @@ public class AppSettingsStoreTests
         {
             Theme = ThemePreference.Dark,
             ColorBarsByUsage = false,
+            ShowPaceProjection = false,
             StartWithWindows = true,
             GlobalHotkeyEnabled = false,
             Density = WidgetDensity.Compact,
@@ -96,6 +98,7 @@ public class AppSettingsStoreTests
         AppSettings loaded = store.Load().Settings;
         Assert.Equal(written.Theme, loaded.Theme);
         Assert.Equal(written.ColorBarsByUsage, loaded.ColorBarsByUsage);
+        Assert.Equal(written.ShowPaceProjection, loaded.ShowPaceProjection);
         Assert.Equal(written.StartWithWindows, loaded.StartWithWindows);
         Assert.Equal(written.GlobalHotkeyEnabled, loaded.GlobalHotkeyEnabled);
         Assert.Equal(written.Density, loaded.Density);

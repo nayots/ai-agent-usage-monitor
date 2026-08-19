@@ -495,4 +495,18 @@ public class MainViewModelTests
         Assert.Same(codexCard, model.Providers[1]);
         Assert.False(codexCard.IsHiddenByFilter);
     }
+
+    [Fact]
+    public async Task ThePaceProjectionSettingReachesEveryCard()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.Connected, [Window()])));
+        await model.RefreshAsync(force: true);
+
+        Assert.True(model.Providers[0].ShowPaceProjection);
+
+        model.ApplySettings(AppSettings.Default with { ShowPaceProjection = false });
+
+        Assert.False(model.Providers[0].ShowPaceProjection);
+    }
 }

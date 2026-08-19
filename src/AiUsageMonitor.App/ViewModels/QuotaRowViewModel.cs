@@ -15,11 +15,19 @@ public sealed class QuotaRowViewModel : ObservableObject
     private string? _countdownText;
     private double? _elapsedFraction;
     private bool _isStale;
+    private readonly bool _showPaceProjection;
+    private DateTimeOffset? _lastTick;
+    private string? _paceWarningText;
 
-    public QuotaRowViewModel(QuotaWindow window, bool colorBarsByUsage, string? mechanism = null)
+    public QuotaRowViewModel(
+        QuotaWindow window,
+        bool colorBarsByUsage,
+        string? mechanism = null,
+        bool showPaceProjection = true)
     {
         _window = window;
         ColorBarsByUsage = colorBarsByUsage;
+        _showPaceProjection = showPaceProjection;
         DetailText = BuildDetailText(mechanism);
     }
 
@@ -64,7 +72,32 @@ public sealed class QuotaRowViewModel : ObservableObject
 
     public double? ElapsedFraction { get => _elapsedFraction; private set => Set(ref _elapsedFraction, value); }
 
-    public bool IsStale { get => _isStale; set => Set(ref _isStale, value); }
+    public bool IsStale
+    {
+        get => _isStale;
+        set
+        {
+            if (Set(ref _isStale, value))
+            {
+                RefreshPace();
+            }
+        }
+    }
+
+    public string? PaceWarningText
+    {
+        get => _paceWarningText;
+        private set
+        {
+            if (Set(ref _paceWarningText, value))
+            {
+                Raise(nameof(HasPaceWarning));
+                Raise(nameof(AccessibleName));
+            }
+        }
+    }
+
+    public bool HasPaceWarning => _paceWarningText is not null;
 
     public string AccessibleName
     {
@@ -76,7 +109,8 @@ public sealed class QuotaRowViewModel : ObservableObject
                 ? ", resets at " + resetsAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
                 : string.Empty;
             string partial = IsPartial ? ", partial data" : string.Empty;
-            return $"{Label}, {usage}, {reset}{partial}{exactReset}";
+            string pace = _paceWarningText is null ? string.Empty : ", " + _paceWarningText;
+            return $"{Label}, {usage}, {reset}{partial}{exactReset}{pace}";
         }
     }
 
@@ -120,8 +154,25 @@ public sealed class QuotaRowViewModel : ObservableObject
     /// </summary>
     public void Tick(DateTimeOffset now)
     {
+        _lastTick = now;
         CountdownText = QuotaFormatting.FormatCountdown(_window.TimeUntilReset(now));
         ElapsedFraction = _window.ElapsedFraction(now);
+        RefreshPace();
         Raise(nameof(AccessibleName));
+    }
+
+    private void RefreshPace()
+    {
+        if (!_showPaceProjection || _isStale || _lastTick is not DateTimeOffset now)
+        {
+            PaceWarningText = null;
+            return;
+        }
+
+        PaceWarningText =
+            QuotaPace.For(_window, now) is PaceProjection projection
+            && QuotaFormatting.FormatProjectedShortfall(projection.Shortfall) is string shortfall
+                ? $"At this pace, spent {shortfall} early"
+                : null;
     }
 }

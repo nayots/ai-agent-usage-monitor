@@ -677,4 +677,24 @@ public class ProviderCardViewModelTests
         Assert.Contains(nameof(ProviderCardViewModel.ShowStatusLine), raised);
         Assert.True(card.ShowStatusLine);
     }
+
+    [Fact]
+    public void TurningThePaceProjectionOffRebuildsTheRowsWithoutIt()
+    {
+        QuotaWindow aheadOfPace = new(
+            Id: "seven_day", Label: "7 day", UsedPercent: 44,
+            ResetsAt: Now.AddHours(126), WindowDuration: TimeSpan.FromHours(168),
+            Order: 0, IsPartial: false, Extra: new Dictionary<string, string>(),
+            LabelIsProviderToken: false);
+
+        ProviderCardViewModel card = Card();
+        card.Apply(Snapshot(windows: [aheadOfPace], retrievedAt: Now), Now, Policy);
+        card.Windows[0].Tick(Now);
+        Assert.True(card.Windows[0].HasPaceWarning);
+
+        card.ShowPaceProjection = false;
+        card.Windows[0].Tick(Now);
+
+        Assert.False(card.Windows[0].HasPaceWarning);
+    }
 }

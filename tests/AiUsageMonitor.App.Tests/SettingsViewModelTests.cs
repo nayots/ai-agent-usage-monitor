@@ -458,4 +458,26 @@ public class SettingsViewModelTests
         Assert.Contains("Reaching 100% still notifies.", summary);
         model.Dispose();
     }
+
+    [Fact]
+    public void SettingThePaceProjectionWritesItThrough()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        model.ShowPaceProjection = false;
+
+        Assert.False(service.Current.ShowPaceProjection);
+        model.Dispose();
+    }
+
+    [Fact]
+    public void ThePaceProjectionFollowsAnExternalSettingsChange()
+    {
+        SettingsViewModel model = Model(out SettingsService service);
+
+        service.Update(s => s with { ShowPaceProjection = false });
+
+        Assert.False(model.ShowPaceProjection);
+        model.Dispose();
+    }
 }

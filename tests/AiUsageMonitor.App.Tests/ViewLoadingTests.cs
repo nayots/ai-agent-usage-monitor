@@ -223,6 +223,49 @@ public class ViewLoadingTests(WpfFixture wpf)
         Assert.Same(greyed, Named(view, "LimitReachedMark").Foreground);
     });
 
+    [Fact]
+    public void QuotaRowRendersThePaceWarningInTheWarningTone() => wpf.Invoke(() =>
+    {
+        QuotaRowViewModel row = new(
+            new QuotaWindow(
+                Id: "seven_day", Label: "7 day", UsedPercent: 44,
+                ResetsAt: Now.AddHours(126), WindowDuration: TimeSpan.FromHours(168),
+                Order: 0, IsPartial: false, Extra: new Dictionary<string, string>(),
+                LabelIsProviderToken: false),
+            colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.Equal(Visibility.Visible, Named(view, "PaceText").Visibility);
+        Assert.Equal("At this pace, spent ~3d early", Named(view, "PaceText").Text);
+        Assert.Same(view.FindResource("StateWarnBrush"), Named(view, "PaceText").Foreground);
+        Assert.Same(view.FindResource("StateWarnBrush"), Named(view, "PaceMark").Foreground);
+    });
+
+    [Fact]
+    public void QuotaRowHidesThePaceWarningWhenThereIsNothingToSay() => wpf.Invoke(() =>
+    {
+        QuotaRowViewModel row = new(Window(10d, token: false, withReset: true), colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)view.FindName("PaceWarningStrip")).Visibility);
+    });
+
+    [Fact]
+    public void QuotaRowNeverShowsThePaceWarningBesideLimitReached() => wpf.Invoke(() =>
+    {
+        QuotaRowViewModel row = new(Window(100d, token: false, withReset: true), colorBarsByUsage: true);
+        row.Tick(Now);
+
+        QuotaRowView view = ControlLoadingTests.Measured(new QuotaRowView { DataContext = row, Width = 320 });
+
+        Assert.Equal(Visibility.Visible, Named(view, "LimitReachedText").Visibility);
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)view.FindName("PaceWarningStrip")).Visibility);
+    });
+
     private static TextBlock Named(FrameworkElement view, string name) => (TextBlock)view.FindName(name);
 
     /// <summary>Every string this element actually puts on screen, in visual-tree order.</summary>
