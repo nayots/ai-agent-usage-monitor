@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using AiUsageMonitor.Domain;
@@ -406,6 +407,174 @@ public sealed class ClaudeOAuthUsageProbeTests
         Assert.Contains("Version 2.1.227 (cached; executable unchanged since it was read).", second.Notes);
     }
 
+    [Fact]
+    public async Task ExpiredAccessTokenSkipsTheRequestAndSaysHowToRepairIt()
+    {
+        // The credential file states its own expiry, so this failure is knowable locally. Sending
+        // the request anyway would spend a call that can only come back 401 - and every call counts
+        // toward the throttling that put a 120-second floor on this provider.
+        using var directory = new TempDirectory();
+        DateTimeOffset now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        string path = WriteCredentials(directory, "token", $"""
+            "expiresAt":{UnixMs(now.AddHours(-1))},"refreshTokenExpiresAt":{UnixMs(now.AddDays(20))}
+            """);
+        var probe = CreateProbe(handler, path, () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(0, handler.RequestCount);
+        Assert.Equal(ConnectionState.Unavailable, snapshot.State);
+        Assert.Equal(
+            "Claude Code's stored sign-in has expired — run any Claude Code session to refresh it",
+            snapshot.Error);
+        Assert.Empty(snapshot.Windows);
+    }
+
+    [Fact]
+    public async Task ExpiredRefreshTokenAsksForAFreshSignInInstead()
+    {
+        // Claude Code repairs an expired access token on its next run - but only while the refresh
+        // token still lives. Once that is gone, "just run claude" is wrong advice.
+        using var directory = new TempDirectory();
+        DateTimeOffset now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        string path = WriteCredentials(directory, "token", $"""
+            "expiresAt":{UnixMs(now.AddHours(-1))},"refreshTokenExpiresAt":{UnixMs(now.AddHours(-1))}
+            """);
+        var probe = CreateProbe(handler, path, () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(0, handler.RequestCount);
+        Assert.Equal(
+            "Claude Code's sign-in has fully expired — run \"claude\" and sign in again",
+            snapshot.Error);
+    }
+
+    [Fact]
+    public async Task AnExpiryInsideTheSkewAllowanceCountsAsAlreadyExpired()
+    {
+        using var directory = new TempDirectory();
+        DateTimeOffset now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        string path = WriteCredentials(directory, "token", $""" "expiresAt":{UnixMs(now.AddSeconds(5))} """);
+        var probe = CreateProbe(handler, path, () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(0, handler.RequestCount);
+        Assert.Equal(ConnectionState.Unavailable, snapshot.State);
+    }
+
+    [Theory]
+    // The interlock: the pre-flight check may only ever skip a call it is CONFIDENT would fail.
+    // Anything it cannot read as a real millisecond instant is unknown, and unknown must behave
+    // exactly as this code did before the check existed - otherwise a misread field silently
+    // disables a working widget.
+    [InlineData("", "no expiry recorded at all")]
+    [InlineData(""" "expiresAt":0 """, "a sentinel zero")]
+    [InlineData(""" "expiresAt":1787149093 """, "seconds where milliseconds were expected")]
+    [InlineData(""" "expiresAt":"1787149093285" """, "a string where a number was expected")]
+    [InlineData(""" "expiresAt":99999999999999 """, "a value beyond the plausible range")]
+    public async Task AnUnreadableExpiryStillIssuesTheRequest(string expiryProperty, string because)
+    {
+        using var directory = new TempDirectory();
+        DateTimeOffset now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(
+            HttpStatusCode.OK,
+            """{"five_hour":{"utilization":42.5,"resets_at":"2026-08-19T17:00:00Z"}}"""));
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token", expiryProperty), () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Equal(ConnectionState.Connected, snapshot.State);
+        Assert.NotEmpty(because);
+    }
+
+    [Fact]
+    public async Task AnUnexpiredTokenIsUsedExactlyAsBefore()
+    {
+        using var directory = new TempDirectory();
+        DateTimeOffset now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(
+            HttpStatusCode.OK,
+            """{"five_hour":{"utilization":42.5,"resets_at":"2026-08-19T17:00:00Z"}}"""));
+        string path = WriteCredentials(directory, "token", $""" "expiresAt":{UnixMs(now.AddHours(7))} """);
+        var probe = CreateProbe(handler, path, () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Equal(ConnectionState.Connected, snapshot.State);
+    }
+
+    [Fact]
+    public async Task PlanLabelsFromTheCredentialFileLandOnEveryWindow()
+    {
+        // Mirrors what the Codex adapter already does with planType, and costs no extra request:
+        // these arrive in the same local read that produced the token.
+        using var directory = new TempDirectory();
+        DateTimeOffset now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(
+            HttpStatusCode.OK,
+            """
+            {"five_hour":{"utilization":42.5,"resets_at":"2026-08-19T17:00:00Z"},
+             "seven_day":{"utilization":11.0,"resets_at":"2026-08-24T00:00:00Z"}}
+            """));
+        string path = WriteCredentials(directory, "token", """
+            "subscriptionType":"max","rateLimitTier":"default_claude_max_20x"
+            """);
+        var probe = CreateProbe(handler, path, () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(2, snapshot.Windows.Count);
+        Assert.All(snapshot.Windows, window =>
+        {
+            Assert.Equal("max", window.Extra["subscriptionType"]);
+            Assert.Equal("default_claude_max_20x", window.Extra["rateLimitTier"]);
+        });
+    }
+
+    [Fact]
+    public async Task AbsentPlanLabelsAddNoKeys()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(
+            HttpStatusCode.OK,
+            """{"five_hour":{"utilization":42.5,"resets_at":"2026-08-19T17:00:00Z"}}"""));
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"));
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        QuotaWindow window = Assert.Single(snapshot.Windows);
+        Assert.False(window.Extra.ContainsKey("subscriptionType"));
+        Assert.False(window.Extra.ContainsKey("rateLimitTier"));
+    }
+
+    [Fact]
+    public async Task NoteAboutASkippedRequestNeverCarriesTheExpiryInstantOrTheToken()
+    {
+        using var directory = new TempDirectory();
+        DateTimeOffset now = new(2026, 8, 19, 12, 0, 0, TimeSpan.Zero);
+        const string sentinel = "sk-ant-oat01-SENTINEL-DO-NOT-LEAK";
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        long expiry = UnixMs(now.AddHours(-1));
+        string path = WriteCredentials(directory, sentinel, $""" "expiresAt":{expiry} """);
+        var probe = CreateProbe(handler, path, () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        string text = SnapshotText(snapshot);
+        Assert.DoesNotContain(sentinel, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(expiry.ToString(CultureInfo.InvariantCulture), text, StringComparison.Ordinal);
+        Assert.Contains("token: <present, redacted>", snapshot.Notes);
+    }
+
+    private static long UnixMs(DateTimeOffset instant) => instant.ToUnixTimeMilliseconds();
+
     private static ClaudeOAuthUsageProbe CreateProbe(HttpMessageHandler handler, string credentialsPath, Func<DateTimeOffset>? clock = null)
     {
         var processes = new FakeProcessRunner();
@@ -426,6 +595,19 @@ public sealed class ClaudeOAuthUsageProbeTests
     {
         string path = directory.File("credentials.json");
         File.WriteAllText(path, """{"claudeAiOauth":{"accessToken":"TOKEN"}}""".Replace("TOKEN", token));
+        return path;
+    }
+
+    /// <summary>As above, plus whatever else belongs inside the claudeAiOauth object.</summary>
+    private static string WriteCredentials(TempDirectory directory, string token, string extraProperties)
+    {
+        string trimmed = extraProperties.ReplaceLineEndings(string.Empty).Trim();
+        string path = directory.File("credentials.json");
+        File.WriteAllText(
+            path,
+            """{"claudeAiOauth":{"accessToken":"TOKEN"EXTRA}}"""
+                .Replace("TOKEN", token)
+                .Replace("EXTRA", trimmed.Length == 0 ? string.Empty : "," + trimmed));
         return path;
     }
 

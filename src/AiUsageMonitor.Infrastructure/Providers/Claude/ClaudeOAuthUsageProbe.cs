@@ -51,6 +51,22 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private const string ThrottledMessage =
         "Anthropic is asking this app to slow down — the next check is scheduled automatically.";
 
+    // Both rendered verbatim on the card. The distinction is the point: one of these is fixed by
+    // using Claude Code at all, the other cannot be and needs a deliberate sign-in.
+    private const string SignInNeedsRefreshMessage =
+        "Claude Code's stored sign-in has expired — run any Claude Code session to refresh it";
+
+    private const string SignInExpiredMessage =
+        "Claude Code's sign-in has fully expired — run \"claude\" and sign in again";
+
+    /// <summary>How much clock skew to allow before treating a stored expiry as already past.</summary>
+    private static readonly TimeSpan ExpirySkewAllowance = TimeSpan.FromSeconds(30);
+
+    // 2000-01-01 and 2100-01-01 as unix milliseconds. See TryGetUnixMilliseconds for why a value
+    // outside this range is treated as unknown rather than as an expiry.
+    private const long MinPlausibleUnixMs = 946_684_800_000L;
+    private const long MaxPlausibleUnixMs = 4_102_444_800_000L;
+
     private static readonly HttpClient Client = CreateClient();
 
     private readonly IProcessRunner _processes;
@@ -147,7 +163,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         // The token lives only in this local variable for the lifetime of this method call. It is
         // read once, used once to build the Authorization header below, and then never touched
         // again - it is never assigned into a field, Notes, Extra, or any exception message.
-        string? token = ReadAccessToken(credentialsPath, credentialsFileExists, notes);
+        string? token = ReadAccessToken(credentialsPath, credentialsFileExists, notes, out ClaudeAccountMetadata account);
         if (token is null)
         {
             // Missing file / missing claudeAiOauth.accessToken -> Unavailable, never an exception.
@@ -160,6 +176,21 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
                 null,
                 "Claude Code is installed but has not stored a sign-in on this machine.",
                 notes);
+        }
+
+        // The credential file states its own expiry, so a spent token can be recognised without
+        // spending a request to be told so. Deliberately never records the instant itself - the
+        // fact is what is useful, and notes end up in diagnostic dumps.
+        if (ExpiredSignInMessage(account, _clock()) is string expiredMessage)
+        {
+            notes.Add(
+                "The stored sign-in had already expired when this check ran, so no request was sent - "
+                + "an expired token can only be rejected, and every call counts toward this endpoint's throttling.");
+            notes.Add(expiredMessage == SignInExpiredMessage
+                ? "The refresh token has expired too, so Claude Code cannot repair this by itself."
+                : "The refresh token is still usable, so running any Claude Code session will restore this.");
+
+            return Snapshot(true, version, exePath, ConnectionState.Unavailable, [], null, expiredMessage, notes);
         }
 
         try
@@ -221,7 +252,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
                 .ToList();
 
             IReadOnlyList<QuotaWindow> scoped = ClaudeScopedLimits.Normalize(doc.RootElement, topLevel);
-            IReadOnlyList<QuotaWindow> windows = [.. topLevel, .. scoped];
+            IReadOnlyList<QuotaWindow> windows = WithAccountLabels([.. topLevel, .. scoped], account);
 
             notes.Add($"{windows.Count} quota window(s) discovered.");
             notes.Add(scoped.Count == 0
@@ -415,9 +446,17 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     /// value); the caller maps that into <see cref="ConnectionState.Unavailable"/>. Only ever records
     /// the presence/absence of the token in <paramref name="notes"/> - literally "token: &lt;present,
     /// redacted&gt;" or "token: &lt;absent&gt;" - never the value, its prefix, or its length.
+    ///
+    /// The token is returned as a bare string and the non-secret fields beside it come back
+    /// separately in <paramref name="metadata"/>. Keeping them in two places is deliberate: see
+    /// <see cref="ClaudeAccountMetadata"/> for why the credential must never share a container with
+    /// anything this application is willing to print.
     /// </summary>
-    private static string? ReadAccessToken(string credentialsPath, bool fileExists, List<string> notes)
+    private static string? ReadAccessToken(
+        string credentialsPath, bool fileExists, List<string> notes, out ClaudeAccountMetadata metadata)
     {
+        metadata = ClaudeAccountMetadata.Empty;
+
         if (!fileExists)
         {
             notes.Add($"No credentials file at {credentialsPath}. token: <absent>");
@@ -450,6 +489,12 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
                 return null;
             }
 
+            metadata = new ClaudeAccountMetadata(
+                AccessTokenExpiresAt: TryGetUnixMilliseconds(oauth, "expiresAt"),
+                RefreshTokenExpiresAt: TryGetUnixMilliseconds(oauth, "refreshTokenExpiresAt"),
+                SubscriptionType: TryGetNonEmptyString(oauth, "subscriptionType"),
+                RateLimitTier: TryGetNonEmptyString(oauth, "rateLimitTier"));
+
             notes.Add("token: <present, redacted>");
             return token;
         }
@@ -458,7 +503,102 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             // Exception type name only - never ex.Message, which for a JsonException could echo a
             // parse-position snippet of file content.
             notes.Add($"credentials.json could not be read or parsed ({ex.GetType().Name}). token: <absent>");
+            metadata = ClaudeAccountMetadata.Empty;
             return null;
+        }
+    }
+
+    private static string? TryGetNonEmptyString(JsonElement el, string propertyName) =>
+        el.TryGetProperty(propertyName, out JsonElement v)
+        && v.ValueKind == JsonValueKind.String
+        && !string.IsNullOrWhiteSpace(v.GetString())
+            ? v.GetString()
+            : null;
+
+    /// <summary>
+    /// Reads a unix-millisecond instant, or null when the value is absent, not a number, or outside
+    /// the plausible range.
+    ///
+    /// The range check is a safety interlock, not tidiness. The only consumer of these instants
+    /// decides whether to skip a network request, so a misread value - a seconds-based timestamp, a
+    /// sentinel zero, a field the provider repurposes - could silently stop the widget working at
+    /// all. Anything that does not look like a real millisecond instant is reported as UNKNOWN, and
+    /// unknown always falls through to attempting the request.
+    /// </summary>
+    private static DateTimeOffset? TryGetUnixMilliseconds(JsonElement el, string propertyName)
+    {
+        if (!el.TryGetProperty(propertyName, out JsonElement v)
+            || v.ValueKind != JsonValueKind.Number
+            || !v.TryGetInt64(out long milliseconds)
+            || milliseconds < MinPlausibleUnixMs
+            || milliseconds > MaxPlausibleUnixMs)
+        {
+            return null;
+        }
+
+        return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+    }
+
+    /// <summary>
+    /// The message to show instead of sending a request that the local credential file already says
+    /// would fail, or null to go ahead and send it.
+    ///
+    /// Skipping is only ever an optimisation over the 401 path that already exists, so it is applied
+    /// strictly: an unknown expiry, or one still in the future, sends the request as before. The
+    /// value of stopping here is that a doomed request is not free - every call counts toward the
+    /// throttling that put a 120-second floor on this provider in the first place.
+    /// </summary>
+    private static string? ExpiredSignInMessage(ClaudeAccountMetadata metadata, DateTimeOffset now)
+    {
+        if (metadata.AccessTokenExpiresAt is not DateTimeOffset expiresAt
+            || expiresAt > now + ExpirySkewAllowance)
+        {
+            return null;
+        }
+
+        // The access token is spent. Whether that repairs itself is entirely down to the refresh
+        // token, so an unknown refresh expiry takes the optimistic branch - telling someone to sign
+        // in again when they did not have to is worse advice than telling them to run the tool.
+        return metadata.RefreshTokenExpiresAt is DateTimeOffset refreshExpiresAt && refreshExpiresAt <= now
+            ? SignInExpiredMessage
+            : SignInNeedsRefreshMessage;
+    }
+
+    /// <summary>
+    /// Copies the account-level facts from the credential file onto every window, mirroring what the
+    /// Codex adapter does with <c>planType</c>. Costs no request - these arrive in the same read that
+    /// produced the token. Never overwrites a key the response itself supplied: payload data is more
+    /// specific than anything inferred from a local file, so it wins.
+    /// </summary>
+    private static IReadOnlyList<QuotaWindow> WithAccountLabels(
+        IReadOnlyList<QuotaWindow> windows, ClaudeAccountMetadata metadata)
+    {
+        var accountExtra = new Dictionary<string, string>();
+        AddIfPresent(accountExtra, "subscriptionType", metadata.SubscriptionType);
+        AddIfPresent(accountExtra, "rateLimitTier", metadata.RateLimitTier);
+
+        if (accountExtra.Count == 0)
+        {
+            return windows;
+        }
+
+        return [.. windows.Select(window =>
+        {
+            var merged = new Dictionary<string, string>(window.Extra);
+            foreach (KeyValuePair<string, string> entry in accountExtra)
+            {
+                merged.TryAdd(entry.Key, entry.Value);
+            }
+
+            return window with { Extra = merged };
+        })];
+
+        static void AddIfPresent(Dictionary<string, string> target, string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                target[key] = value;
+            }
         }
     }
 
