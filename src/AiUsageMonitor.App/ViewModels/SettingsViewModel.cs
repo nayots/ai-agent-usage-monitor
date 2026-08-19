@@ -152,6 +152,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => _settings.Update(s => s with { ColorBarsByUsage = value });
     }
 
+    public bool ShowPaceProjection
+    {
+        get => _settings.Current.ShowPaceProjection;
+        set => _settings.Update(s => s with { ShowPaceProjection = value });
+    }
+
     public bool NotifyOnQuotaEvents
     {
         get => _settings.Current.NotifyOnQuotaEvents;
