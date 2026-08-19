@@ -17,6 +17,8 @@
     <Style x:Key="RowCountdownStyle" TargetType="TextBlock" BasedOn="{StaticResource NumericTextStyle}"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" /><Setter Property="TextAlignment" Value="Right" /><Style.Triggers><DataTrigger Binding="{Binding IsExhausted}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /><Setter Property="FontWeight" Value="SemiBold" /></DataTrigger><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
     <Style x:Key="ExhaustedMarkStyle" TargetType="TextBlock"><Setter Property="FontSize" Value="10" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource StateBadBrush}" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
     <Style x:Key="ExhaustedTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodySmallTextStyle}"><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{DynamicResource StateBadBrush}" /><Style.Triggers><DataTrigger Binding="{Binding IsStale}" Value="True"><Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" /></DataTrigger></Style.Triggers></Style>
+    <Style x:Key="PaceMarkStyle" TargetType="TextBlock"><Setter Property="FontSize" Value="10" /><Setter Property="FontWeight" Value="Bold" /><Setter Property="Foreground" Value="{DynamicResource StateWarnBrush}" /></Style>
+    <Style x:Key="PaceTextStyle" TargetType="TextBlock" BasedOn="{StaticResource BodySmallTextStyle}"><Setter Property="Foreground" Value="{DynamicResource StateWarnBrush}" /></Style>
   </UserControl.Resources>
   <Border x:Name="RowFrame" BorderBrush="{DynamicResource WidgetRowDividerBrush}" BorderThickness="0,1,0,0">
     <!-- Density comes from the card above rather than from this row's own view model, which is a
@@ -42,6 +44,9 @@
            reading: the limit is reached and nobody said when it lifts. -->
       <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding IsExhausted, Converter={StaticResource BooleanToVisibility}}">
         <TextBlock x:Name="LimitReachedMark" Text="&#x2715;" VerticalAlignment="Center" Style="{StaticResource ExhaustedMarkStyle}" /><TextBlock x:Name="LimitReachedText" Text="Limit reached" Margin="5,0,0,0" Style="{StaticResource ExhaustedTextStyle}" />
+      </StackPanel>
+      <StackPanel x:Name="PaceWarningStrip" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasPaceWarning, Converter={StaticResource BooleanToVisibility}}">
+        <TextBlock x:Name="PaceMark" Text="&#x26A0;" VerticalAlignment="Top" Style="{StaticResource PaceMarkStyle}" /><TextBlock x:Name="PaceText" Text="{Binding PaceWarningText}" Margin="5,0,0,0" TextWrapping="Wrap" Style="{StaticResource PaceTextStyle}" />
       </StackPanel>
     </Grid>
   </Border>
