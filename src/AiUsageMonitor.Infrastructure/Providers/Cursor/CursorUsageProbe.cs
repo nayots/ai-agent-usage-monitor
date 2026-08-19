@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -230,7 +232,7 @@ public sealed class CursorUsageProbe : IProviderProbe
         CancellationToken ct)
     {
         CursorCall hardLimit = await PostAsync(
-            "GetHardLimit", $$"""{"teamId":{{teamId}}}""", token, ct).ConfigureAwait(false);
+            "GetHardLimit", TeamRequest(teamId), token, ct).ConfigureAwait(false);
         if (Reject(hardLimit, true, version, exePath, notes) is ProviderSnapshot rejected)
         {
             return rejected;
@@ -246,14 +248,15 @@ public sealed class CursorUsageProbe : IProviderProbe
 
         DateTimeOffset windowStart = cycle.Start ?? _clock().AddDays(-31);
         DateTimeOffset windowEnd = _clock();
-        string range =
-            $$""""teamId":{{teamId}},"startDate":"{{windowStart.ToUnixTimeMilliseconds()}}","endDate":"{{windowEnd.ToUnixTimeMilliseconds()}}"""";
 
         // One cheap request answers "has anything happened since last time?". Only a changed count
         // pays for the pages, which is what keeps an idle widget from re-downloading a month of
         // events every two minutes.
         CursorCall probe = await PostAsync(
-            "GetFilteredUsageEvents", $$"""{{{range}},"page":1,"pageSize":1}""", token, ct).ConfigureAwait(false);
+            "GetFilteredUsageEvents",
+            EventsRequest(teamId, windowStart, windowEnd, page: 1, pageSize: 1),
+            token,
+            ct).ConfigureAwait(false);
         if (Reject(probe, true, version, exePath, notes) is ProviderSnapshot probeRejected)
         {
             return probeRejected;
@@ -279,7 +282,7 @@ public sealed class CursorUsageProbe : IProviderProbe
         {
             CursorCall pageCall = await PostAsync(
                 "GetFilteredUsageEvents",
-                $$"""{{{range}},"page":{{page}},"pageSize":{{CursorUsageEvents.PageSize}}}""",
+                EventsRequest(teamId, windowStart, windowEnd, page, CursorUsageEvents.PageSize),
                 token,
                 ct).ConfigureAwait(false);
             if (Reject(pageCall, true, version, exePath, notes) is ProviderSnapshot pageRejected)
@@ -409,6 +412,45 @@ public sealed class CursorUsageProbe : IProviderProbe
     }
 
     private readonly record struct CursorCall(HttpStatusCode Status, JsonElement? Json, RetryConditionHeaderValue? RetryAfter);
+
+    /// <summary>
+    /// Request bodies are WRITTEN as JSON, never assembled as text.
+    /// <para>
+    /// This is not fastidiousness. The first version of this method built the body from a raw
+    /// string literal, and the quote-delimiter arithmetic silently ate the opening quote of the
+    /// first property name and the closing quote of the last value. It compiled, and every unit
+    /// test passed, because the test double matched the body with substring checks instead of
+    /// parsing it - so the defect only appeared against the live endpoint, as an HTTP 400. A
+    /// writer cannot emit malformed JSON, which removes the whole class of failure rather than
+    /// this one instance of it.
+    /// </para>
+    /// </summary>
+    private static string EventsRequest(long teamId, DateTimeOffset start, DateTimeOffset end, int page, int pageSize) =>
+        WriteJson(writer =>
+        {
+            writer.WriteNumber("teamId", teamId);
+
+            // The endpoint expects these two as decimal STRINGS of unix milliseconds, not numbers.
+            writer.WriteString("startDate", start.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
+            writer.WriteString("endDate", end.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
+            writer.WriteNumber("page", page);
+            writer.WriteNumber("pageSize", pageSize);
+        });
+
+    private static string TeamRequest(long teamId) => WriteJson(writer => writer.WriteNumber("teamId", teamId));
+
+    private static string WriteJson(Action<Utf8JsonWriter> write)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            write(writer);
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
 
     private async Task<CursorCall> PostAsync(string method, string body, string token, CancellationToken ct)
     {

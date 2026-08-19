@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers.Cursor;
 using Microsoft.Data.Sqlite;
@@ -107,6 +108,66 @@ public sealed class CursorUsageProbeTests
         Assert.Equal("cursor:cycle_spend", window.Id);
         Assert.Equal(11.7061, window.UsedPercent!.Value, 3);
         Assert.Equal("11.71", window.Extra["cursor.spentUsd"]);
+    }
+
+    [Fact]
+    public async Task EveryRequestBodyIsValidJsonCarryingTheFieldsTheEndpointExpects()
+    {
+        // The regression guard. An earlier build assembled these bodies as text and emitted
+        // {teamId":13589081,...,"endDate":"1787157508588,"page":1,...} - the opening quote of the
+        // first property and the closing quote of the last value both eaten by raw-string
+        // delimiters. It compiled, and every test here passed, because the double matched the body
+        // with substring checks. The live endpoint answered HTTP 400.
+        using var directory = new TempDirectory();
+        string path = WriteDatabase(directory, LiveToken, membershipType: "enterprise", teamId: 13589081);
+        var handler = EnterpriseSeat(totalEvents: 2, pages: [Events(700.61, 470.0)]);
+        var probe = CreateProbe(handler, path);
+
+        await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.NotEmpty(handler.Bodies);
+        foreach ((string method, string body) in handler.Bodies)
+        {
+            JsonElement request = RoutingHandler.ParseRequest(body);
+            Assert.Equal(JsonValueKind.Object, request.ValueKind);
+
+            if (method == "GetFilteredUsageEvents")
+            {
+                Assert.Equal(13589081, request.GetProperty("teamId").GetInt64());
+
+                // Both instants are decimal strings of unix milliseconds, not numbers.
+                Assert.Equal(JsonValueKind.String, request.GetProperty("startDate").ValueKind);
+                Assert.Equal(JsonValueKind.String, request.GetProperty("endDate").ValueKind);
+                Assert.True(long.TryParse(request.GetProperty("startDate").GetString(), out long start));
+                Assert.True(long.TryParse(request.GetProperty("endDate").GetString(), out long end));
+                Assert.True(start < end, "the requested range must run forwards");
+                Assert.True(request.GetProperty("page").GetInt32() >= 1);
+                Assert.True(request.GetProperty("pageSize").GetInt32() >= 1);
+            }
+
+            if (method == "GetHardLimit")
+            {
+                Assert.Equal(13589081, request.GetProperty("teamId").GetInt64());
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TheEventRangeStartsAtTheBillingCycleStart()
+    {
+        using var directory = new TempDirectory();
+        string path = WriteDatabase(directory, LiveToken, membershipType: "enterprise", teamId: 13589081);
+        var handler = EnterpriseSeat(totalEvents: 2, pages: [Events(700.61, 470.0)]);
+        var probe = CreateProbe(handler, path);
+
+        await probe.ProbeAsync(CancellationToken.None);
+
+        (string _, string body) = handler.Bodies.First(b => b.Method == "GetFilteredUsageEvents");
+        JsonElement request = RoutingHandler.ParseRequest(body);
+        long start = long.Parse(request.GetProperty("startDate").GetString()!);
+
+        // The cycle end is 2026-09-01, so the derived start is 2026-08-01.
+        Assert.Equal(new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(), start);
     }
 
     [Fact]
@@ -440,6 +501,7 @@ public sealed class CursorUsageProbeTests
         public List<string> Methods { get; } = [];
         public List<string> Paths { get; } = [];
         public List<string> Hosts { get; } = [];
+        public List<(string Method, string Body)> Bodies { get; } = [];
         public AuthenticationHeaderValue? Authorization { get; private set; }
 
         public void SetEvents(int totalEvents, string[] pages)
@@ -461,18 +523,21 @@ public sealed class CursorUsageProbeTests
             Methods.Add(method);
 
             string body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
+            Bodies.Add((method, body));
 
             if (method == "GetFilteredUsageEvents")
             {
-                bool isCountProbe = body.Contains("\"pageSize\":1,", StringComparison.Ordinal)
-                    || body.EndsWith("\"pageSize\":1}", StringComparison.Ordinal);
-                if (isCountProbe)
+                // PARSED, never substring-matched. Reading the body as text is what let a
+                // malformed request - one that the live endpoint answered with HTTP 400 - pass
+                // every test in this file.
+                JsonElement payload = ParseRequest(body);
+                if (Number(payload, "pageSize") == 1)
                 {
                     return Json($$"""{"totalUsageEventsCount":{{_totalEvents}},"usageEventsDisplay":[]}""");
                 }
 
                 FullPageRequests++;
-                int page = ExtractPage(body);
+                int page = Number(payload, "page") ?? 1;
                 string events = page >= 1 && page <= _pages.Length ? _pages[page - 1] : string.Empty;
                 return Json($$"""{"totalUsageEventsCount":{{_totalEvents}},"usageEventsDisplay":[{{events}}]}""");
             }
@@ -485,18 +550,30 @@ public sealed class CursorUsageProbeTests
             return Fallback?.Invoke(request) ?? Json("{}");
         }
 
-        private static int ExtractPage(string body)
+        /// <summary>
+        /// Parses a request body, failing the test outright if it is not valid JSON. Every request
+        /// this application sends must be machine-readable; a body the endpoint would reject is a
+        /// defect the test double must surface, not tolerate.
+        /// </summary>
+        public static JsonElement ParseRequest(string body)
         {
-            int index = body.IndexOf("\"page\":", StringComparison.Ordinal);
-            if (index < 0)
+            try
             {
-                return 1;
+                return JsonDocument.Parse(body).RootElement.Clone();
             }
-
-            string tail = body[(index + 7)..];
-            int end = tail.IndexOfAny([',', '}']);
-            return int.TryParse(end < 0 ? tail : tail[..end], out int page) ? page : 1;
+            catch (JsonException ex)
+            {
+                throw new Xunit.Sdk.XunitException($"Request body was not valid JSON: {body} -- {ex.Message}");
+            }
         }
+
+        private static int? Number(JsonElement request, string propertyName) =>
+            request.ValueKind == JsonValueKind.Object
+            && request.TryGetProperty(propertyName, out JsonElement value)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out int number)
+                ? number
+                : null;
 
         private static HttpResponseMessage Json(string body) => new(HttpStatusCode.OK)
         {

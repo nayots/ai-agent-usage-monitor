@@ -3,6 +3,7 @@ using System.Text;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers.Claude;
 using AiUsageMonitor.Infrastructure.Providers.Codex;
+using AiUsageMonitor.Infrastructure.Providers.Cursor;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -13,7 +14,7 @@ try
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
     CancellationToken ct = cts.Token;
 
-    IProviderProbe[] probes = [new CodexProbe(), new ClaudeOAuthUsageProbe()];
+    IProviderProbe[] probes = [new CodexProbe(), new ClaudeOAuthUsageProbe(), new CursorUsageProbe()];
     Task<(ProviderSnapshot Snapshot, double ElapsedMs)>[] tasks =
         probes.Select(p => RunTimedAsync(p, ct)).ToArray();
 
