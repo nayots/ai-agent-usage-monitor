@@ -32,6 +32,6 @@
 
     <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Color bars by usage" IsChecked="{Binding ColorBarsByUsage, Mode=TwoWay}" AutomationProperties.Name="Color bars by usage" />
     <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Show pace projection" IsChecked="{Binding ShowPaceProjection, Mode=TwoWay}" AutomationProperties.Name="Show pace projection" />
-    <TextBlock Text="On a window being spent faster than time is passing, states when the quota runs out at the current pace." TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
+    <TextBlock Text="On a window being spent faster than time is passing, states how far before its reset the quota runs out at the current pace." TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
   </StackPanel>
 </UserControl>
