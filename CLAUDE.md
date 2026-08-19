@@ -41,20 +41,30 @@ Cutting a release (the tag is the trigger — everything else is automatic):
 
 ```powershell
 # 1. Bump <VersionPrefix> in Directory.Build.props and commit it.
-# 2. Tag that commit and push the tag — it must match the version you just bumped to:
-git tag v0.2.1
-git push origin v0.2.1
+# 2. Write docs/release-notes/v<version>.md and commit it.
+# 3. Push main, then tag that commit and push the tag — it must match the version bumped in 1:
+git tag v0.4.1
+git push origin v0.4.1
 ```
 
-`v0.2.0` is the latest release (2026-08-18); the example above is therefore the next patch. The
+`v0.4.0` is the latest release (2026-08-19); the example above is therefore the next patch. The
 version follows Conventional Commits against the range since the last tag — any `feat:` in it makes
 the bump a minor one, which is what took `v0.1.5` to `v0.2.0` rather than to `v0.1.6`.
 
 The user-scoped `/release` skill computes that version and the changelog, and knows to push the tag
-alone here rather than create the release itself. **What it does not know is step 1** — it has no
-concept of `<VersionPrefix>`, because the other project it was written for derives its version from
-tags instead of a file. Bump and commit that yourself before invoking it, or the tag-verification
-step fails the run in seconds.
+alone here rather than create the release itself. **What it does not know is steps 1 and 2**, and
+both fail quietly in different directions:
+
+- It has no concept of `<VersionPrefix>`, because the other project it was written for derives its
+  version from tags instead of a file. Bump and commit that yourself before invoking it, or the
+  tag-verification step fails the run in seconds. That one is loud.
+- It has no concept of `docs/release-notes/` either, and **that one is silent**. The workflow
+  prefers `docs/release-notes/<tag>.md` and falls back to `--generate-notes` when the file is
+  absent, so a forgotten file costs a release page that lists commits instead of describing what
+  shipped — a green run with a worse result, which is why nothing will tell you. The workflow only
+  ever sees the tagged tree, so the file has to be committed **before** the tag is pushed; adding
+  it afterwards means retagging. The tag's own annotated message is the grouped changelog and is a
+  different artifact from the notes file — writing one is not writing the other.
 
 `.github/workflows/release.yml` verifies the tag against `<VersionPrefix>` **before** it
 builds, runs the tests, publishes the self-contained `.exe`, and attaches **three** assets
