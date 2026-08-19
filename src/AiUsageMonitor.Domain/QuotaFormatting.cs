@@ -53,6 +53,30 @@ public static class QuotaFormatting
         return string.Create(CultureInfo.InvariantCulture, $"{span.Minutes}m {span.Seconds:D2}s");
     }
 
+    /// <summary>
+    /// One coarse unit for a projected shortfall: "~3d", "~2h", "~45m". Returns null for a
+    /// null, zero, or negative span, so callers can omit the line entirely.
+    /// </summary>
+    public static string? FormatProjectedShortfall(TimeSpan? shortfall)
+    {
+        if (shortfall is not TimeSpan span || span <= TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        if (span.TotalDays >= 1)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"~{(int)span.TotalDays}d");
+        }
+
+        if (span.TotalHours >= 1)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"~{(int)span.TotalHours}h");
+        }
+
+        return string.Create(CultureInfo.InvariantCulture, $"~{Math.Max(1, (int)span.TotalMinutes)}m");
+    }
+
     private static string Round(double value) =>
         Math.Round(value, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture);
 }
