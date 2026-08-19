@@ -22,7 +22,7 @@
 
 **See how much of your AI coding plan you have left — without opening a session to ask.** 📊
 
-A small Windows desktop widget that shows live quota usage for the AI coding tools already installed on your machine: **Claude Code** and **Codex**. It sits in your notification area, and one glance tells you where you stand.
+A small Windows desktop widget that shows live quota usage for the AI coding tools already installed on your machine: **Claude Code**, **Codex** and **Cursor**. It sits in your notification area, and one glance tells you where you stand.
 
 [![Latest release](https://img.shields.io/github/v/release/nayots/ai-agent-usage-monitor?label=latest%20release)](../../releases/latest)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
@@ -34,7 +34,12 @@ A small Windows desktop widget that shows live quota usage for the AI coding too
   is crisp on a HiDPI display: the widget is a fixed 360pt wide, and a 1x capture is soft on any
   screen denser than the one it was taken on. The numbers are representative, but the shape is
   not invented - it mirrors what the live providers actually return on a real install, down to
-  Codex reporting a single window whose label is its own raw token.
+  Codex reporting a single window whose label is its own raw token, and Cursor reporting one
+  spend window whose money line the real adapter composed rather than the harness.
+
+  The pace projection is switched off in this image deliberately. It fires only on a window
+  burning faster than its clock, so whether a warning appeared at all would be decided by the
+  numbers picked for the picture rather than by anything the reader is being shown.
 
   Same sanitizer rule as the wordmark above: NOT wrapped in a link. GitHub lifts an <img> out of
   a surrounding anchor and out of the <picture> with it, which kills the theme swap.
@@ -42,7 +47,7 @@ A small Windows desktop widget that shows live quota usage for the AI coding too
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshot-widget-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="docs/assets/screenshot-widget-light.png">
-  <img src="docs/assets/screenshot-widget-light.png" width="380" alt="The widget: a card for Claude Code showing 5 hour and 7 day quota windows, and a card for Codex showing its own window, each with a usage bar and a countdown to reset.">
+  <img src="docs/assets/screenshot-widget-light.png" width="380" alt="The widget: a card for Claude Code showing 5 hour and 7 day quota windows, a card for Codex showing its own window, and a card for Cursor showing a monthly spend window reading $11.71 of $100 - each with a usage bar and a countdown to reset.">
 </picture>
 
 > 📦 The repository is called `ai-agent-usage-monitor`; the app calls itself **AI Usage Monitor**. Same thing.
@@ -115,9 +120,9 @@ If a provider isn't installed, its card simply says *Not installed*. If a reques
 
 - ❌ No telemetry, analytics or crash reports — **nothing is ever sent to the author**
 - ❌ No website scraping, no browser automation, no access to browser cookies or profiles
-- ❌ Neither HTTP client follows redirects, and both destinations are hardcoded — a response can't send the app somewhere else
+- ❌ No HTTP client follows redirects, and every destination is hardcoded — a response can't send the app somewhere else
 - ❌ Never writes, refreshes, rotates or modifies your credentials — token lifecycle stays your provider's job
-- ❌ Never writes to Claude Code's or Codex's own configuration files
+- ❌ Never writes to any provider's own configuration files or local databases
 - ❌ No administrator rights, no service, no driver, no scheduled task
 - ❌ No quota history, no database, no account to create, no sign-in
 
@@ -175,7 +180,7 @@ Being straight about what that proves: a match means your copy is byte-for-byte 
 
 > ⚠️ **The Claude Code and Cursor mechanisms are undocumented and may stop working without notice.** Neither is a published API and neither carries a stability guarantee. The app labels both *Unofficial* everywhere they appear, and when one breaks its card goes to a plain error state rather than showing you something comforting and wrong.
 >
-> Cursor's card shows your **spend against your monthly ceiling** — that is the limit Cursor actually enforces — as an ordinary percentage bar, the same as every other provider.
+> Cursor's card shows your **spend against your monthly ceiling** — that is the limit Cursor actually enforces — on the same percentage bar as every other provider, with the money itself (`$11.71 of $100`) written underneath. A percentage tells you where you are; the amount tells you what is left.
 
 You don't need all three. A provider that isn't installed simply shows **Not installed** and costs nothing. 🤷
 
@@ -183,7 +188,8 @@ You don't need all three. A provider that isn't installed simply shows **Not ins
 
 ## 🖥️ Using it
 
-- 🃏 **Cards** — one per provider: name, version, mechanism tier, connection state, and a bar per quota window with its usage and a countdown to reset.
+- 🃏 **Cards** — one per provider: name, version, mechanism tier, connection state, and a bar per quota window with its usage and a countdown to reset. Where a window's real limit is money rather than a percentage, the amount is written beneath its bar.
+- 📉 **Pace projection** — when a window is burning faster than its clock, the row says how early it will run out at that rate. It stays quiet until a tenth of the window has elapsed, and speaks only when the projection lands meaningfully before the reset rather than on a few minutes' drift. Switch it off in Appearance.
 - ❎ **Closing hides it.** The close button, `Alt+F4` and the system menu all hide the widget to the notification area. Only **Exit** in the tray menu ends the process.
 - 📍 **The tray icon is a live readout** — a miniature of the bars, redrawn as the state changes, coloured to stay legible against your taskbar rather than against the app's theme.
 - ⌨️ **`Ctrl+Alt+Q`** brings the widget back from anywhere. If another application already owns that shortcut, Settings says so instead of failing quietly. Can be switched off.
@@ -199,7 +205,7 @@ Everything applies immediately. There is no OK, no Apply, no restart. ⚡
 
 | | |
 |---|---|
-| 🎨 **Appearance** | Theme (System / Light / Dark — Windows High Contrast is detected and always wins), density, colour bars by usage |
+| 🎨 **Appearance** | Theme (System / Light / Dark — Windows High Contrast is detected and always wins), density, colour bars by usage, pace projection |
 | 🪟 **Window** | Always on top, mini mode and its dock edge, global hotkey, start with Windows, reset window position |
 | 🔌 **Providers** | Order, visibility, and a per-provider refresh interval |
 | 🔄 **Refresh** | Refresh interval (default 2 min) and the age at which data is called stale (default 5 min) |
@@ -227,7 +233,7 @@ Worth knowing before you download:
 - 🪟 **Windows only.** WPF and Windows-specific APIs throughout; there is no macOS or Linux build.
 - 💻 **x64.** It runs under emulation on Windows on ARM; there's no native ARM64 build.
 - 🕰️ **No history.** Every value is instantaneous. Your numbers are never recorded, charted or kept between runs.
-- ⚠️ **The Claude Code mechanism is unofficial** and can break whenever the endpoint changes.
+- ⚠️ **The Claude Code and Cursor mechanisms are unofficial** and can break whenever either endpoint changes.
 - 🧩 **Quota windows are whatever the provider reports.** Their number, names and durations are discovered at runtime, not hardcoded — so a provider adding a new window shows up without an app update, and one whose name the app doesn't recognise is displayed with the provider's own raw label rather than a guess.
 - ⏳ Reset times appear only where the provider reports them. A window's length is worked out from its own name where that is unambiguous (`five_hour` → 5 hours) and left off where it isn't — never invented.
 - 🧪 **Pre-1.0.** It works, it's used daily, and the version number stays honest about depending on an unofficial endpoint.
