@@ -62,9 +62,24 @@ jobs:
               throw "Expected the .exe, its .sha256 and the .zip in artifacts/, found $($assets.Count)."
           }
 
+          # Hand-written notes when the tag has them. --generate-notes only ever produces a commit
+          # list and a compare link, which records the diff rather than describing the release --
+          # it cannot say what a change is for, and a reader deciding whether to upgrade needs
+          # exactly that. The file must be committed before the tag is pushed, since the workflow
+          # only ever sees the tagged tree. Falling back keeps a forgotten file from failing a
+          # release: worse notes are recoverable, a lost build is not.
+          $notesPath = Join-Path 'docs/release-notes' "$env:GITHUB_REF_NAME.md"
+          if (Test-Path -LiteralPath $notesPath) {
+              Write-Host "Using the hand-written notes at $notesPath."
+              $notesArgs = @('--notes-file', $notesPath)
+          } else {
+              Write-Host "No notes at $notesPath; falling back to generated notes."
+              $notesArgs = @('--generate-notes')
+          }
+
           gh release create $env:GITHUB_REF_NAME @($assets.ForEach({ $_.FullName })) `
             --title $env:GITHUB_REF_NAME `
-            --generate-notes `
+            $notesArgs `
             --verify-tag
 
           if ($LASTEXITCODE -ne 0) {
