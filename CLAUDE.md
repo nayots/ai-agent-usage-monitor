@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Windows desktop widget (WPF) that shows live quota/usage for locally installed AI coding tools — Claude Code and Codex. `docs/PRD.md` is the authoritative spec; read it before non-trivial work. **It is local-only and not in the repository** — see "Where process documents live" below. In a fresh clone or a git worktree it will not be there; recover it from history rather than proceeding without it, and never regenerate it from scratch.
+A Windows desktop widget (WPF) that shows live quota/usage for locally installed AI coding tools — Claude Code, Codex and Cursor. `docs/PRD.md` is the authoritative spec; read it before non-trivial work. **It is local-only and not in the repository** — see "Where process documents live" below. In a fresh clone or a git worktree it will not be there; recover it from history rather than proceeding without it, and never regenerate it from scratch.
 
 The repo has **four** projects, layered in one direction:
 
@@ -82,12 +82,13 @@ codex app-server generate-ts --out <dir>    # TS bindings name the methods far m
 
 ## Provider mechanisms (empirically verified — do not re-derive)
 
-Verified against Claude Code **2.1.226** and codex-cli **0.144.6** on Windows 11.
+Verified against Claude Code **2.1.226**, codex-cli **0.144.6** and Cursor **3.16.29** on Windows 11.
 
 | Provider | Mechanism | Tier | Update model |
 |---|---|---|---|
 | Codex | `codex app-server` → JSON-RPC `account/rateLimits/read` | Official | Pull (poll) |
 | Claude Code | `GET api.anthropic.com/api/oauth/usage` + local OAuth token | **Unofficial** | Pull (poll) |
+| Cursor | local `state.vscdb` (read-only) → `api2.cursor.sh` DashboardService | **Unofficial** | Pull (poll) |
 
 ### Codex — JSON-RPC over stdio
 
@@ -120,6 +121,53 @@ The only mechanism this app uses: read `claudeAiOauth.accessToken` from the loca
 **statusLine was evaluated and rejected — do not re-add it as a fallback.** The statusLine JSON contract (`rate_limits` piped on stdin) was investigated and proven parseable, then rejected as a product mechanism because it is push-only (fires only inside an interactive session, never under `-p`), requires a user-approved modification of the user's existing `~/.claude/settings.json` statusLine configuration to tee the data out, and produces data that is stale whenever no session is running — the common case for a persistent desktop widget. The recorded sample in `fixtures/claude-statusline-sample.json` is kept solely as regression coverage for the duck-typed extractor's `used_percentage` dialect, asserted in `DuckTypedQuotaExtractorTests`, not as evidence the mechanism is supported. `fixtures/claude-usage-limits-sample.json` is a synthetic-only usage-endpoint shape fixture for Claude adapter normalization tests; its percentages and reset instants are not captured account data.
 
 Investigated and confirmed to carry **no** quota data: hook payloads, OpenTelemetry metrics, all non-interactive CLI output (`-p --output-format json` has token counts and cost only), and `~/.claude/stats-cache.json`. Add statusLine to this "carries no usable signal for this app" list too — not because it lacks quota data (it has some), but because it cannot be relied upon as described above.
+
+### Cursor — local SQLite plus a dashboard API
+
+Two halves, both required: read the access token Cursor stored in
+`%APPDATA%\Cursor\User\globalStorage\state.vscdb`, then call `api2.cursor.sh`. Unofficial, and
+labelled so everywhere. Verified live on Cursor 3.16.29, enterprise seat, 2026-08-19.
+
+Findings that cost real time to establish — do not re-derive:
+
+- **`GetCurrentPeriodUsage` returns neither `planUsage` nor `spendLimitUsage` on an enterprise
+  seat.** It returns `{"billingCycleStart":"…","billingCycleEnd":"…","displayThreshold":100}` and
+  nothing else, with **start equal to end**. Every field `openusage.sh` documents for that endpoint
+  is absent there. A single-path design built on it renders an empty card, which is why the adapter
+  falls through to the event total when it yields no usable figures — decided by what the payload
+  carries, never by the plan's name.
+- **`GetHardLimit` needs the `teamId`.** Without it: `{"hardLimit":2147483647}`, a sentinel. With
+  it: `perUserMonthlyLimitDollars`. The `teamId` comes from `cursorAuth/cachedTeam` **locally** —
+  no request needed, and `full_stripe_profile` is not called at all.
+- **`GetAggregatedUsageEvents` is empty (`{}`) on enterprise**, with `teamId:-1` and with the real
+  team id alike. The spend must be summed from `GetFilteredUsageEvents`.
+- **`GetFilteredUsageEvents` is already scoped to the caller** — one distinct `owningUser` across
+  all 80 events observed. So **`GetTeamMembers` and `GetTeamSpend` must never be called**: both
+  return the organisation's full roster, real names and work email addresses, to compute one
+  percentage. `GetTeamSpend` was confirmed to do exactly that. If a page ever carries more than one
+  owner, the adapter refuses to report a figure rather than showing a team's spend as one person's.
+- **The access token lives 60 days** and is **never refreshed** — `/oauth/token` is never called
+  and `cursorAuth/refreshToken` is never even read (PRD §4.1.1). The JWT `exp` is decoded locally
+  to skip a request that could only fail; an unreadable expiry always falls through and sends it.
+- `cursorAuth/cachedEmail`, `cachedScopedProfile` and `cachedTeam.name` are deliberately **not
+  read**.
+- Instants arrive as **unix-millisecond strings** (`"1788220800000"`) though `openusage.sh`
+  documents RFC3339 for the same fields. The parser accepts both. A `billingCycleStart` is trusted
+  only when it is strictly earlier than **both** the end beside it and the end in use — the
+  degenerate start equals its own companion end while still preceding `planInfo`'s later end, so
+  comparing against the used end alone would report a 13-day "month".
+- The state database is **WAL mode and open for writing** while Cursor runs. `Mode=ReadOnly` reads
+  it correctly; never `immutable=1`, which would license SQLite to ignore the log.
+- **`SQLitePCLRaw.bundle_e_sqlite3` is pinned as a security fix, not a tidy-up candidate.**
+  `Microsoft.Data.Sqlite` 10.0.0 resolves a transitive `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 carrying
+  a high-severity advisory (NU1903); with `TreatWarningsAsErrors` that **fails the build**.
+- **Request bodies are written with `Utf8JsonWriter`, never assembled as text.** The first version
+  used a raw string literal whose quote delimiters silently ate the opening quote of the first
+  property and the closing quote of the last value. It compiled and every unit test passed — the
+  test double matched bodies by substring — and only the live endpoint caught it, with HTTP 400.
+- **The individual/pro path is unverified.** Both seats available when it was written were
+  `enterprise`. It is implemented from `openusage.sh` plus a working script's DTOs and degrades to
+  `Unsupported` rather than to a wrong number.
 
 ## Architecture rules
 
@@ -183,7 +231,7 @@ Per PRD §4.1.1 and §23 — these are product requirements, not style preferenc
 - Never modify provider configuration without explicit user approval, a preview, a backup, and a restore path (PRD §11). Currently moot in practice — the app's one Claude Code mechanism reads a credential file and calls an HTTP endpoint; it does not touch `~/.claude/settings.json` or any other provider configuration — but the constraint stands should config modification ever become necessary.
 - No administrator privileges.
 - Every mechanism carries a visible tier (Official/Unofficial). A value obtained unofficially must never be presented as official.
-- **User- and machine-agnostic (added 2026-08-11).** Someone who is not the author, on a Windows machine that is not the author's, must be able to download the GitHub release artifact and run it. No hardcoded user paths — resolve per-user locations at runtime via `Environment.GetFolderPath`. The release artifact stays self-contained, never the framework-dependent build, which requires the .NET 10 Desktop Runtime preinstalled. Both providers must degrade to `NotInstalled` where absent, never crash.
+- **User- and machine-agnostic (added 2026-08-11).** Someone who is not the author, on a Windows machine that is not the author's, must be able to download the GitHub release artifact and run it. No hardcoded user paths — resolve per-user locations at runtime via `Environment.GetFolderPath`. The release artifact stays self-contained, never the framework-dependent build, which requires the .NET 10 Desktop Runtime preinstalled. Every provider must degrade to `NotInstalled` where absent, never crash.
 
 ## Conventions
 

@@ -80,18 +80,20 @@ You're about to run an unsigned executable that reads an OAuth token off your di
 
 ### 🌐 Everything that leaves your machine
 
-Three requests. That's the whole list.
+Four requests. That's the whole list.
 
 | Request | Goes to | Carries |
 |---|---|---|
 | 📈 Your Claude Code quota | `api.anthropic.com` — Anthropic's own server | The OAuth token Claude Code already stored, over TLS |
 | 📈 Your Codex quota | Codex's own `app-server`, launched **on your machine** | Nothing from this app. Codex then asks OpenAI for your limits itself, exactly as it does in a normal session |
+| 📈 Your Cursor spend | `api2.cursor.sh` — Cursor's own server | The access token Cursor already stored, over TLS |
 | 🔔 Update check, once a day | `api.github.com` | **Nothing about you.** No version, no identifier, no machine information, no token |
 
-**Every HTTP request this app makes lives in exactly two files** —
-[`ClaudeOAuthUsageProbe.cs`](src/AiUsageMonitor.Infrastructure/Providers/Claude/ClaudeOAuthUsageProbe.cs)
+**Every HTTP request this app makes lives in exactly three files** —
+[`ClaudeOAuthUsageProbe.cs`](src/AiUsageMonitor.Infrastructure/Providers/Claude/ClaudeOAuthUsageProbe.cs),
+[`CursorUsageProbe.cs`](src/AiUsageMonitor.Infrastructure/Providers/Cursor/CursorUsageProbe.cs)
 and [`GitHubReleaseClient.cs`](src/AiUsageMonitor.Infrastructure/Updates/GitHubReleaseClient.cs).
-There are no others, and you can read both in a few minutes.
+There are no others, and you can read all three in a few minutes.
 
 The Codex path makes no HTTP request at all: it launches the `codex` executable already on your machine and asks it one question over a pipe ([`CodexProbe.cs`](src/AiUsageMonitor.Infrastructure/Providers/Codex/CodexProbe.cs)). Codex answers that question by contacting OpenAI on its own — the same thing it does when you use it — which is why the numbers are live rather than cached. This app never reads Codex's credentials or session files. 🤝
 
@@ -105,7 +107,7 @@ The comparison happens on your computer. Switch it off in **Settings → Updates
 
 ### 💸 It only ever reads
 
-The monitor asks for numbers and nothing else. It never sends a prompt, starts a model turn, calls a generation endpoint, buys credits or changes your subscription — **it cannot cost you anything, and it does not consume the quota it displays.**
+The monitor asks for numbers and nothing else. Cursor's local database is opened **read-only**; the app cannot write to it even by accident. It never sends a prompt, starts a model turn, calls a generation endpoint, buys credits or changes your subscription — **it cannot cost you anything, and it does not consume the quota it displays.**
 
 If a provider isn't installed, its card simply says *Not installed*. If a request fails, the card shows a visible error and the scheduler backs off. It never invents a number, reuses a stale one, or shows a zero to fill the gap. **If you see a number, a provider returned it.**
 
@@ -118,6 +120,18 @@ If a provider isn't installed, its card simply says *Not installed*. If a reques
 - ❌ Never writes to Claude Code's or Codex's own configuration files
 - ❌ No administrator rights, no service, no driver, no scheduled task
 - ❌ No quota history, no database, no account to create, no sign-in
+
+### 🔵 About Cursor's token, and its database
+
+Cursor keeps its sign-in in a SQLite database — `%APPDATA%\Cursor\User\globalStorage\state.vscdb`,
+the same file VS Code-based editors use for local state. The app opens that file **read-only** and
+never writes to it, reads exactly three things from it — the access token, your plan type, and your
+team id — and asks Cursor's own server what you have spent this billing cycle.
+
+It deliberately does **not** read the email address or profile stored two rows away, and it never
+calls Cursor's team-roster endpoints, which would hand back your colleagues' names and work email
+addresses to compute a single percentage. Your team id is used as a request parameter and appears
+nowhere else — not on screen, not in a log, not in a diagnostic dump. 🔐
 
 ### 🔑 About that Claude Code token
 
@@ -157,10 +171,13 @@ Being straight about what that proves: a match means your copy is byte-for-byte 
 |---|---|---|---|
 | 🟢 **Codex** | `codex app-server` over stdio, JSON-RPC `account/rateLimits/read` | ✅ **Official** | codex-cli 0.144.6 |
 | 🟣 **Claude Code** | Anthropic's own usage endpoint, authenticated with the OAuth token Claude Code already stored on this machine | ⚠️ **Unofficial** | Claude Code 2.1.226 |
+| 🔵 **Cursor** | Cursor's own dashboard API, authenticated with the access token Cursor already stored on this machine | ⚠️ **Unofficial** | Cursor 3.16.29 |
 
-> ⚠️ **The Claude Code mechanism is undocumented and may stop working without notice.** It is not a published API and carries no stability guarantee. The app labels it *Unofficial* everywhere it appears, and when it breaks the card goes to a plain error state rather than showing you something comforting and wrong.
+> ⚠️ **The Claude Code and Cursor mechanisms are undocumented and may stop working without notice.** Neither is a published API and neither carries a stability guarantee. The app labels both *Unofficial* everywhere they appear, and when one breaks its card goes to a plain error state rather than showing you something comforting and wrong.
+>
+> Cursor's card shows your **spend against your monthly ceiling** — that is the limit Cursor actually enforces — as an ordinary percentage bar, the same as every other provider.
 
-You don't need both. A provider that isn't installed simply shows **Not installed** and costs nothing. 🤷
+You don't need all three. A provider that isn't installed simply shows **Not installed** and costs nothing. 🤷
 
 ---
 

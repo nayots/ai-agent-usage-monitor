@@ -217,7 +217,7 @@ statusLine may be reconsidered if the adopted endpoint ceases to function. The r
 2. **`context_window.used_percentage` is a false-positive trap.** It looks like a quota but is context fill. It is excluded only because it has no reset field. This must remain an explicit regression assertion.
 3. **Nullability is the norm, not the exception.** `secondary`, `resetsAt`, `windowDurationMins`, `limitName` are all nullable and were observed null in practice. Missing data must surface as unknown, never as zero.
 4. **The elapsed-time marker needs a verified window duration.** Codex supplies `windowDurationMins` explicitly. The Claude endpoint does not, so duration is inferred from the window name (`five_hour` → 5h) and tagged `duration_source=inferred_from_name`. When the name does not parse — as with `nimbus_quill` — the duration stays null and the marker is omitted per §16.
-5. **Both providers are poll-based.** Neither offers usable push. Refresh scheduling can be uniform.
+5. **Every provider is poll-based.** None offers usable push. Refresh scheduling can be uniform.
 6. **Elapsed-vs-used comparison has real diagnostic value.** The verified Codex account was at 100% used with only ~24% of the window elapsed — information a plain progress bar cannot convey.
 
 ## 6. Security posture
@@ -236,3 +236,77 @@ The OAuth access token is read into a local variable, used once to build an `Aut
 - Codex reset credits beyond `availableCount`: the live account returned `credits: []`, so the
   detail rows (`id`, `status`, `grantedAt`, `expiresAt`, `title`, `description`) have never been seen
   populated and only their count is surfaced today.
+
+## 8. Cursor (added 2026-08-19)
+
+Verified live against **Cursor 3.16.29** on Windows 11, on an **enterprise** seat held by a
+non-admin. Mechanism: read the access token from `%APPDATA%\Cursor\User\globalStorage\state.vscdb`
+(SQLite, WAL mode, opened **read-only** while Cursor was running), then call `api2.cursor.sh`.
+**Unofficial** — not a published API, no stability guarantee.
+
+### 8.1 What each endpoint actually returned
+
+| Call | Result |
+|---|---|
+| `GetCurrentPeriodUsage {}` | `{"billingCycleStart":"1787153574780","billingCycleEnd":"1787153574780","displayThreshold":100}` — **no `planUsage`, no `spendLimitUsage`, start equal to end** |
+| `GetPlanInfo {}` | `planName`, `price:"Custom"`, `billingCycleEnd:"1788220800000"` (2026-09-01T00:00:00Z, an exact UTC month boundary) |
+| `GetHardLimit {}` | `{"hardLimit":2147483647}` — a sentinel, not a limit |
+| `GetHardLimit {teamId}` | `{"hardLimit":2147483647,"perUserMonthlyLimitDollars":100}` |
+| `GetAggregatedUsageEvents` | `{}` — empty with `teamId:-1` and with the real team id alike |
+| `GetFilteredUsageEvents {teamId,…}` | 80 events, 38 390 bytes, 760 ms; Σ`chargedCents` = **$11.71 of $100** |
+| `GetUsageLimitPolicyStatus {}` | `limitType:"user-team"` |
+| `GET /auth/full_stripe_profile` | `membershipType:"enterprise"`, `isTeamMember:true`, `isYearlyPlan:false` |
+| `GetMonthlyInvoice` | HTTP 401 `"User not authorized for this team"` — admin-only |
+| `GetUserUsageSummary`, `GetSpendLimitUsage` | HTTP 404 — do not exist |
+
+### 8.2 The findings that shaped the adapter
+
+1. **The documented individual shape is absent on enterprise.** Every `GetCurrentPeriodUsage` field
+   `openusage.sh` documents — `planUsage`, `spendLimitUsage`, and their sub-fields — is missing on
+   this seat. A single-path adapter built on that documentation renders an empty card. The adapter
+   therefore chooses its source from what the payload actually carries, never from the plan name.
+2. **`GetFilteredUsageEvents` is already scoped to the caller.** One distinct `owningUser` across
+   all 80 events. No user id has to be resolved, so the roster endpoints are never called — see
+   §8.3.
+3. **The billing cycle start is a placeholder.** It equalled its own companion end. Critically it
+   was still *earlier* than the end actually used (which comes from `planInfo`), so a
+   start-before-end check alone accepts it and yields a 13-day "month". The start is trusted only
+   when it precedes **both** ends.
+4. **Instants are unix-millisecond strings**, not the RFC3339 `openusage.sh` documents. Both are
+   parsed; neither is assumed.
+5. **The access token is valid for 60 days** — a long-lived session credential. Declining to
+   refresh it therefore costs almost nothing in practice, which is what makes PRD §4.1.1
+   comfortable rather than merely obeyed.
+
+### 8.3 Endpoints deliberately never called
+
+`GetTeamMembers` and `GetTeamSpend` both return the **entire organisation roster — user ids, real
+names, work email addresses and roles**. `GetTeamSpend` was confirmed to do so during verification.
+Neither is needed, because of finding 2. Downloading an organisation's staff directory to compute
+one percentage is a disclosure this application has no reason to risk, and §23 forbids collecting
+it in the first place. If a page ever returns more than one `owningUser`, the adapter refuses to
+report a figure rather than presenting a team's spend as one person's.
+
+### 8.4 Security posture
+
+The token is read into a local variable, used to build `Authorization` headers, and discarded. It is
+never logged, persisted, cached, displayed, or placed in diagnostics, and it never enters a record —
+a record's generated `ToString` prints every property it has. Not even a hash of it is retained: the
+in-memory spend cache identifies a sign-in by the token's own expiry instant, because a stable
+fingerprint of a credential is a tracking identifier. The email address and profile stored beside it
+are never read. The team id is a request parameter only. The destination host is hardcoded, redirects
+are disabled, `/oauth/token` is never called and the refresh token is never read. The state database
+is opened read-only and never written.
+
+### 8.5 Not yet verified
+
+- **The individual/pro path.** Both seats available at implementation time were `enterprise`, so
+  `planUsage` and `spendLimitUsage` have **never been observed populated**. That path is implemented
+  from `openusage.sh` plus a working script's DTOs, and degrades to `Unsupported` rather than to a
+  wrong number. The first pro or free seat to run this is the real test of it.
+- **An administrator's seat.** Self-scoping (finding 2) was observed on a non-admin token; an admin
+  may see the whole organisation's events. The multi-owner guard exists for exactly that case and
+  has never fired against a live account.
+- **A cycle end that is not a month boundary.** Every observed end was exact midnight UTC on the
+  first, so the "omit the duration rather than guess" branch is unit-tested but unexercised live.
+- Behaviour when the unofficial endpoints change shape or are withdrawn.

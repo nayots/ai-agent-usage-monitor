@@ -11,6 +11,14 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <!-- SECURITY PIN, NOT A TIDY-UP CANDIDATE. Microsoft.Data.Sqlite 10.0.0 resolves
+         SQLitePCLRaw.lib.e_sqlite3 2.1.11 transitively, which carries a high-severity
+         advisory (NU1903 / GHSA-2m69-gcr7-jv3q). This repository builds with
+         TreatWarningsAsErrors, so that advisory FAILS THE BUILD rather than warning.
+         This explicit top-level reference overrides the vulnerable transitive version.
+         Removing it reintroduces a build that cannot compile. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>
 
 </Project>
