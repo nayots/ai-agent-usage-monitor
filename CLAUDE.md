@@ -92,7 +92,9 @@ Verified against Claude Code **2.1.226** and codex-cli **0.144.6** on Windows 11
 ### Codex — JSON-RPC over stdio
 
 Launch the **vendored exe directly**, never the npm shim (`codex.cmd`/`.ps1` just re-exec it through node):
-`%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-*\vendor\*\bin\codex.exe app-server`
+`%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-*\vendor\*\bin\codex.exe -s read-only -a untrusted app-server`
+
+`-s read-only -a untrusted` are flags of the **top-level `codex` command, not of `app-server`**, so they must precede the subcommand (`CodexProbe.AppServerArguments` holds the one copy; the tests reference that constant rather than repeating the string). Verified on 0.144.6: accepted, response byte-identical to the unflagged call. Defence-in-depth only — this app never opens a session.
 
 Framing is **newline-delimited JSON**, UTF-8, LF only, no BOM, no `Content-Length` headers. Send `initialize` (mandatory — otherwise `-32600 Not initialized`) then `account/rateLimits/read` (takes no `params`). Pipelining both writes before reading is safe. The `initialized` notification is not required.
 
@@ -102,11 +104,18 @@ Non-obvious behaviours that break naive clients:
 - **Unsolicited notifications interleave.** `remoteControl/status/changed` arrives before your `initialize` result. Any line without an `id` is a notification — skip it and keep reading. Never assume the first line back is your answer.
 - Cold start ~1.7 s, warm ~55 ms; the rate-limit call adds ~500 ms (it hits the network). Closing stdin exits cleanly with code 0.
 - Prefer `result.rateLimitsByLimitId` (a map, iterate all entries) over `result.rateLimits`, which is documented as the backward-compatible single-bucket view.
+- **`individualLimit` reports `remainingPercent`, not a used percentage** (protocol type `SpendControlLimitSnapshot`; `limit`/`used` are currency *strings*). `UsedPercent = 100 - remainingPercent` — map it straight through and a spend limit 5% consumed renders as 95% consumed. OpenUsage's public docs get this wrong, describing the object as `limit`/`used`/`resetsAt` with no mention of `remainingPercent`; trust the generated schema, never a third-party description. It is null on `plus` and populated on business/enterprise seats, and it carries no derivable period length, so it gets **no** `WindowDuration` and no §16 elapsed marker.
+- **`rateLimitResetCredits` is result-level**, a sibling of the buckets rather than a member of one, and is *not* a quota window — these credits reset a limit early. Its `credits: null` and `credits: []` mean different things (only-the-count-known vs details-fetched-and-empty) and the array may be capped shorter than `availableCount`, so never treat its length as a recount.
 - `accountRateLimitsUpdated` notifications only fire during an active model turn, so they are useless to an observer app — poll instead. When they do arrive they are **sparse rolling updates** that must be merged into the last full snapshot, never treated as a replacement.
 
 ### Claude Code
 
 The only mechanism this app uses: read `claudeAiOauth.accessToken` from the local credential store and call the provider's own first-party usage endpoint (`anthropic-beta: oauth-2025-04-20`). This is **undocumented and may break without notice** — it must fail into an explicit error state, never fabricate data, and always be labelled as unofficial in UI and diagnostics. There is no official fallback: if this endpoint fails, the provider goes to `Unsupported`/`Error`, full stop — never a silently degraded or fabricated value.
+
+`claudeAiOauth` also carries four **non-secret** fields the probe reads: `expiresAt` and `refreshTokenExpiresAt` (unix **milliseconds**), `subscriptionType` and `rateLimitTier` (plan labels, merged into every window's `Extra` — the Claude counterpart to Codex `planType`). Two rules govern them:
+
+- **The expiry check may only ever skip a request it is confident would fail.** A missing or implausible timestamp (outside 2000–2100 read as ms) falls through to sending the request exactly as before. It is an optimisation over the 401 path that already exists — worth having because a doomed call still counts toward the throttling behind the 120-second floor — and a bug in it must never be able to disable a working widget. `refreshTokenExpiresAt` picks the message: while it is live, running any Claude Code session repairs the sign-in; once expired, only a fresh sign-in will.
+- **The token never shares a container with anything printable.** It stays a bare local string; the non-secret fields come back separately as `ClaudeAccountMetadata`, a record that structurally cannot hold a credential. A record's generated `ToString` prints every property it has, so a "credentials" record holding the token could leak it into a note through nothing more than string interpolation.
 
 **statusLine was evaluated and rejected — do not re-add it as a fallback.** The statusLine JSON contract (`rate_limits` piped on stdin) was investigated and proven parseable, then rejected as a product mechanism because it is push-only (fires only inside an interactive session, never under `-p`), requires a user-approved modification of the user's existing `~/.claude/settings.json` statusLine configuration to tee the data out, and produces data that is stale whenever no session is running — the common case for a persistent desktop widget. The recorded sample in `fixtures/claude-statusline-sample.json` is kept solely as regression coverage for the duck-typed extractor's `used_percentage` dialect, asserted in `DuckTypedQuotaExtractorTests`, not as evidence the mechanism is supported. `fixtures/claude-usage-limits-sample.json` is a synthetic-only usage-endpoint shape fixture for Claude adapter normalization tests; its percentages and reset instants are not captured account data.
 

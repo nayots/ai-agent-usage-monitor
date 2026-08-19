@@ -43,10 +43,12 @@ The TypeScript bindings name methods far more legibly than the JSON schemas; `Cl
 Launch the vendored executable directly. The npm shims (`codex.cmd`, `codex.ps1`, `codex`) only re-exec it through node, and shelling out via PowerShell is unnecessary:
 
 ```
-%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe app-server
+%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe -s read-only -a untrusted app-server
 ```
 
 Discovery should glob `codex-win32-*\vendor\*\bin\codex.exe` to stay architecture-agnostic, and fall back to `codex.cmd` on PATH.
+
+`-s read-only -a untrusted` are **flags of the top-level `codex` command, not of `app-server`**, so they must precede the subcommand. Verified against 0.144.6 (2026-08-19): accepted, and the `account/rateLimits/read` response is byte-identical to the unflagged call. They are defence-in-depth only — this application never opens a session, so nothing it does today is affected by them; they exist so that the process it spawned is already capped if a future app-server ever acts on its own.
 
 ### Wire protocol
 
@@ -74,8 +76,49 @@ Observed live (`RateLimitSnapshot`):
 | `rateLimitsByLimitId` | map | Multi-bucket view; prefer this |
 | `rateLimits` | object | Documented as the backward-compatible single-bucket view |
 | `credits`, `individualLimit`, `rateLimitReachedType` | nullable | |
+| `rateLimitResetCredits` | nullable | **Result-level**, a sibling of the buckets — not inside one |
 
 Snapshot observed 2026-08-10: plan `plus`, `limitId: codex`, one bucket, `primary` at 100% used, `windowDurationMins: 10080` (7 days), `secondary: null`, `rateLimitReachedType: rate_limit_reached`.
+
+### Generated shapes (the source of truth)
+
+Do not infer these from third-party documentation — see the trap below. Regenerate with:
+
+```powershell
+codex app-server generate-ts --out <dir>
+codex app-server generate-json-schema --out <dir> --experimental
+```
+
+As of 0.144.6:
+
+```ts
+GetAccountRateLimitsResponse = { rateLimits, rateLimitsByLimitId, rateLimitResetCredits }
+SpendControlLimitSnapshot    = { limit: string, used: string, remainingPercent: i32, resetsAt: i64 }  // all four REQUIRED
+RateLimitResetCreditsSummary = { availableCount: i64, credits: RateLimitResetCredit[] | null }
+RateLimitResetCredit         = { id, resetType, status, grantedAt, expiresAt?, title?, description? }
+RateLimitResetCreditStatus   = "available" | "redeeming" | "redeemed" | "unknown"
+PlanType = "free" | "go" | "plus" | "pro" | "prolite" | "team"
+         | "self_serve_business_usage_based" | "business"
+         | "enterprise_cbp_usage_based" | "enterprise" | "edu" | "unknown"
+```
+
+**`individualLimit` reports `remainingPercent`, not a used percentage.** OpenUsage's public provider
+docs describe this object as carrying `limit`/`used`/`resetsAt` and do not mention `remainingPercent`
+at all; a client that trusts that description and maps the percentage straight through renders a
+spend limit 5% consumed as 95% consumed. `UsedPercent = 100 - remainingPercent`. It is mapped as a
+quota window with **no** `WindowDuration` — the payload carries a reset instant and nothing stating
+how long the period runs, so inferring "monthly" from the reset boundary would be a guess and the
+§16 elapsed marker is omitted instead.
+
+`individualLimit` is `null` on `plus`; the plan types that populate it are the business and
+enterprise seats the `PlanType` enum lists.
+
+**`rateLimitResetCredits.credits`: `null` and `[]` are different facts.** The schema's own doc
+comment says so — `null` means only `availableCount` is known, `[]` means detail rows were fetched
+and none came back. The array may also be capped shorter than `availableCount`, so its length is
+never a recount. These are credits that reset a rate limit early, so they are deliberately **not**
+a quota window; they ride in `Extra` as `resetCredits.availableCount` and, only when the array is
+genuinely present, `resetCredits.detailRows`.
 
 ### Behaviours that break naive clients
 
@@ -102,6 +145,32 @@ anthropic-beta: oauth-2025-04-20
 The token is the one Claude Code itself writes on login. This is an **undocumented, provider-owned endpoint**, adopted under PRD §4.1.1 because no official mechanism can deliver equivalent capability. It carries no stability guarantee and may change without notice.
 
 Observed latency: ~350–560 ms.
+
+Independently corroborated on 2026-08-19: OpenUsage reaches the same endpoint with the same local
+OAuth token. Notably it treats this as its *fallback* — its primary Claude source is
+`claude.ai/api/organizations/{org_uuid}/usage` authenticated with **imported browser session
+cookies**, which PRD §4.1.1/§23 forbids outright (no cookie or browser-profile access) and which is
+macOS-only in any case. This application uses their plan B as its plan A, by design.
+
+### Other fields in the credential file
+
+`claudeAiOauth` carries more than the token, and none of the rest is secret:
+
+| Field | Type | Use |
+|---|---|---|
+| `expiresAt` | unix **ms** | Access-token expiry |
+| `refreshTokenExpiresAt` | unix **ms** | Whether Claude Code can repair the sign-in unaided |
+| `subscriptionType` | string | Plan label (`pro` observed) — the Claude counterpart to Codex `planType` |
+| `rateLimitTier` | string | Tier label (`default_claude_ai` observed) |
+
+The two expiries let an expired sign-in be recognised **before** a request is spent learning it from
+a 401 — which matters because every call counts toward the throttling that put a 120-second floor on
+this provider. The check is deliberately one-directional: it may only skip a call it is *confident*
+would fail, so a missing or implausible timestamp (outside 2000–2100 read as ms) falls through to
+attempting the request exactly as before. A bug there must never be able to disable a working widget.
+
+`refreshTokenExpiresAt` is what separates the two failure messages: while it is live, running any
+Claude Code session repairs things; once it is gone, only a fresh sign-in will.
 
 ### Response shape
 
@@ -160,4 +229,10 @@ The OAuth access token is read into a local variable, used once to build an `Aut
 - Codex `secondary` windows and multi-entry `rateLimitsByLimitId` maps — code paths implemented but unexercised, as the verified account has a single bucket with `secondary: null`.
 - Behaviour when the unofficial endpoint changes shape or is withdrawn.
 - Behaviour on Claude Code API-key, Bedrock, or Vertex authentication.
-- Non-`plus` Codex plan types and the `individualLimit` / spend-control payload.
+- Non-`plus` Codex plan types. `individualLimit` is now **implemented against the generated schema
+  and unit-tested, but never yet observed populated** — it is null on `plus`. The first business or
+  enterprise seat to run this is the real test of that mapping, and the inversion
+  (`100 - remainingPercent`) is the thing to check first if a spend limit ever renders backwards.
+- Codex reset credits beyond `availableCount`: the live account returned `credits: []`, so the
+  detail rows (`id`, `status`, `grantedAt`, `expiresAt`, `title`, `description`) have never been seen
+  populated and only their count is surfaced today.
