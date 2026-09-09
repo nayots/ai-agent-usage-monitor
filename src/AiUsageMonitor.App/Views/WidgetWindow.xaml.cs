@@ -293,22 +293,12 @@ public partial class WidgetWindow : Window
             return;
         }
 
-        IntPtr icon = TrayGlyphRenderer.Render(
-            state.Bars,
-            state.Digits,
-            state.DigitsAreStale,
-            state.Overlay,
-            TrayIcon.SmallIconSize,
-            TrayGlyphPalette.For(variant));
-
-        if (icon == IntPtr.Zero)
-        {
-            // GDI refused the bitmap. Keeping the icon already in the tray says something slightly
-            // out of date; replacing it with nothing would say the widget had gone.
-            return;
-        }
-
-        _tray.SetIcon(icon);
+        // TEMPORARY BRIDGE - replaced wholesale by Task 6 of
+        // docs/plans/2026-09-10-tray-glyph-rotating-number.md, which wires up the rotation timer
+        // and the icon cache. Task 1 replaces this state's bars and digits with one frame per
+        // provider, and Task 3 replaces the renderer that consumed them; in between there is
+        // nothing here left to draw. Holding the icon the shell already has keeps every other task
+        // in the plan buildable and testable, which a call to the old renderer would not.
         _glyph = state;
         _glyphVariant = variant;
     }
