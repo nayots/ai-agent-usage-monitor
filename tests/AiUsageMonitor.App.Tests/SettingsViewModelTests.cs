@@ -480,4 +480,28 @@ public class SettingsViewModelTests
         Assert.False(model.ShowPaceProjection);
         model.Dispose();
     }
+
+    /// <summary>
+    /// Same read-time-sanitize contract as EffectiveAlertThresholds and RefreshInterval: a
+    /// hand-edited settings file may be wrong but must never stop the application starting, and
+    /// the file is never rewritten behind the user's back.
+    /// </summary>
+    [Theory]
+    [InlineData(0, null)]
+    [InlineData(-5, null)]
+    [InlineData(1, 3)]
+    [InlineData(4, 4)]
+    [InlineData(99, 8)]
+    public void TrayRotationSecondsIsClampedOnReadAndZeroMeansOff(int stored, int? expected)
+    {
+        AppSettings settings = new() { TrayRotationSeconds = stored };
+
+        Assert.Equal(expected is int seconds ? TimeSpan.FromSeconds(seconds) : null, settings.TrayRotationDwell);
+    }
+
+    [Fact]
+    public void TrayRotationDefaultsToFourSeconds()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(4), new AppSettings().TrayRotationDwell);
+    }
 }

@@ -140,6 +140,27 @@ public sealed record AppSettings
     public TimeSpan RefreshInterval => TimeSpan.FromSeconds(Math.Clamp(RefreshIntervalSeconds, MinimumRefreshSeconds, 3600));
 
     /// <summary>
+    /// How long the notification-area icon shows each provider before turning to the next, in
+    /// seconds. <c>0</c> means it does not turn at all and holds the worst provider instead.
+    /// Persisted as a plain number so the settings file stays readable and hand-editable.
+    /// </summary>
+    public int TrayRotationSeconds { get; init; } = 4;
+
+    // The bounds are duplicated from TrayRotation rather than referenced: Infrastructure does not
+    // depend on App, and inverting that for two integers would be the wrong trade. TrayRotationTests
+    // asserts the presets stay inside them, which is the coupling that actually matters.
+    /// <summary>
+    /// <see cref="TrayRotationSeconds"/> sanitized on read, never rewritten to disk - the same
+    /// contract as <see cref="RefreshInterval"/> and <see cref="EffectiveAlertThresholds"/>. Null
+    /// when rotation is off. Anything positive is pulled into the bounds rather than rejected,
+    /// because a hand-edited file must not be able to stop the icon working.
+    /// </summary>
+    [JsonIgnore]
+    public TimeSpan? TrayRotationDwell => TrayRotationSeconds <= 0
+        ? null
+        : TimeSpan.FromSeconds(Math.Clamp(TrayRotationSeconds, 3, 8));
+
+    /// <summary>
     /// The percentages worth a balloon. Persisted as a plain array of numbers so the file stays
     /// hand-editable; read through <see cref="EffectiveAlertThresholds"/>, never directly.
     /// </summary>

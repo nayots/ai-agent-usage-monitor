@@ -26,6 +26,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     // No 60 here. It is below AppSettings.MinimumRefreshSeconds, so choosing it would silently
     // resolve to 120 and leave the settings window showing a cadence the application is not using.
     private static readonly int[] RefreshPresets = [120, 300, 600];
+    private static readonly int[] TrayRotationPresets = [0, 3, 4, 6, 8];
     private static readonly int[] StalePresets = [60, 120, 300, 600, 1800, 3600];
 
     // Evening and morning, an hour apart. Deliberately not the full 24: a schedule offering 03:00
@@ -99,6 +100,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             (int)settings.Current.RefreshInterval.TotalSeconds,
             seconds => _settings.Update(s => s with { RefreshIntervalSeconds = seconds }),
             () => (int)_settings.Current.RefreshInterval.TotalSeconds);
+
+        TrayRotations = Durations(
+            "tray-rotation",
+            TrayRotationPresets,
+            settings.Current.TrayRotationSeconds,
+            seconds => _settings.Update(s => s with { TrayRotationSeconds = seconds }),
+            () => _settings.Current.TrayRotationSeconds);
 
         StaleThresholds = Durations(
             "stale",
@@ -315,6 +323,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ChoiceViewModel> RefreshIntervals { get; }
 
+    /// <summary>Off, then the dwell in seconds. Off is 0 and is a first-class value, not a disabled state.</summary>
+    public IReadOnlyList<ChoiceViewModel> TrayRotations { get; }
+
     public ObservableCollection<ChoiceViewModel> StaleThresholds { get; }
 
     public ObservableCollection<ChoiceViewModel> AlertThresholdChoices { get; }
@@ -439,9 +450,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         return [.. values.Select(seconds => new ChoiceViewModel(DurationLabel(seconds), seconds, groupName, read, write))];
     }
 
-    private static string DurationLabel(int seconds) => seconds < 60
-        ? seconds + "s"
-        : seconds % 60 == 0 ? seconds / 60 + "m" : seconds / 60 + "m " + seconds % 60 + "s";
+    private static string DurationLabel(int seconds) => seconds <= 0
+        ? "Off"
+        : seconds < 60
+            ? seconds + "s"
+            : seconds % 60 == 0 ? seconds / 60 + "m" : seconds / 60 + "m " + seconds % 60 + "s";
 
     /// <summary>
     /// The clock presets, plus <paramref name="current"/> when a hand-edited file holds something
@@ -583,6 +596,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             .Concat(Densities)
             .Concat(MiniDocks)
             .Concat(RefreshIntervals)
+            .Concat(TrayRotations)
             .Concat(StaleThresholds)
             .Concat(QuietHoursStarts)
             .Concat(QuietHoursEnds))

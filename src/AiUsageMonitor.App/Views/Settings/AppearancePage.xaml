@@ -31,6 +31,12 @@
     </StackPanel>
 
     <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Color bars by usage" IsChecked="{Binding ColorBarsByUsage, Mode=TwoWay}" AutomationProperties.Name="Color bars by usage" />
+    <TextBlock Text="Tray icon rotation" Margin="0,10,0,0" Style="{StaticResource BodySmallTextStyle}" Foreground="{DynamicResource TextPrimaryBrush}" />
+    <TextBlock Text="The tray icon shows one provider at a time. Each turn opens with the provider's initials, then its percentage." TextWrapping="Wrap" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
+    <ItemsControl ItemsSource="{Binding TrayRotations}" Margin="0,5,0,0" Focusable="False">
+      <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate><DataTemplate><RadioButton Style="{StaticResource SettingsRadioButtonStyle}" Content="{Binding Label}" GroupName="{Binding GroupName}" IsChecked="{Binding IsSelected, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" /></DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
     <CheckBox Style="{StaticResource SettingsCheckBoxStyle}" Margin="0,10,0,0" Content="Show pace projection" IsChecked="{Binding ShowPaceProjection, Mode=TwoWay}" AutomationProperties.Name="Show pace projection" />
     <TextBlock Text="On a window being spent faster than time is passing, states how far before its reset the quota runs out at the current pace." TextWrapping="Wrap" Margin="0,2,0,0" Style="{StaticResource CaptionTextStyle}" Foreground="{DynamicResource TextTertiaryBrush}" />
   </StackPanel>
