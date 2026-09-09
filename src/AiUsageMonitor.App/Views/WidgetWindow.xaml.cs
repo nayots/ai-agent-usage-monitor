@@ -59,6 +59,18 @@ public partial class WidgetWindow : Window
     private IntPtr _foregroundHookHandle;
     private TrayGlyphState _glyph = TrayGlyphState.Empty;
     private ThemeVariant? _glyphVariant;
+    private TrayIconFrames? _frames;
+    private TrayGlyphSlide _slide = new(-1, false);
+
+    /// <summary>
+    /// Rotation gets its own timer because the window's tick drops to five seconds while the window
+    /// is hidden - which is precisely when the tray icon is the only thing the user can see. A
+    /// quarter second is short enough that the one-second name is never visibly late; a tick with
+    /// nothing to change costs one division and a comparison.
+    /// </summary>
+    private readonly DispatcherTimer _rotate = new() { Interval = TimeSpan.FromMilliseconds(250) };
+
+    private readonly Stopwatch _turning = new();
     private bool _systemEventsSubscribed;
     private bool _sourceInitialized;
     private bool _globalHotkeyRegistered;
@@ -92,6 +104,7 @@ public partial class WidgetWindow : Window
         RestorePlacement(settings.Current);
 
         _tick.Tick += OnTick;
+        _rotate.Tick += OnRotate;
 
         // A fixed short tick, not the refresh interval. The service decides, per provider, whether
         // anything is due - which is the only place that can be decided now that a provider may
@@ -182,6 +195,7 @@ public partial class WidgetWindow : Window
         _tick.Stop();
         _poll.Stop();
         _dismiss.Stop();
+        _rotate.Stop();
 
         // Before the tray icon goes, and before anything else can fail: the strip is a separate
         // top-level window, so one left behind would outlive the application that owns it.
@@ -220,7 +234,11 @@ public partial class WidgetWindow : Window
 
         UnregisterGlobalHotkey();
         SavePlacement();
+        // The set is freed only after the icon is gone from the tray. The shell holds no reference
+        // once NIM_DELETE returns, and freeing first would destroy a handle it is still drawing.
         _tray?.Dispose();
+        _frames?.Dispose();
+        _frames = null;
         _model.Dispose();
         base.OnClosed(e);
     }
@@ -269,13 +287,12 @@ public partial class WidgetWindow : Window
     }
 
     /// <summary>
-    /// Redraws the notification-area glyph, and only when it would actually differ.
+    /// Rebuilds the notification-area icons, and only when they would actually differ.
     /// <para>
-    /// This is driven from the one-second tick rather than from a refresh because not every change
-    /// the glyph shows comes from a refresh: a card goes stale, and its bars grey, on the clock
-    /// alone. Rebuilding the state costs a walk over a handful of rows; what must not happen sixty
-    /// times a minute is the redraw, because each one is a new icon handle and a message to another
-    /// process. So the state is compared, not the trigger.
+    /// Driven from the one-second tick rather than from a refresh because not every change the
+    /// glyph shows comes from a refresh: a card goes stale, and greys, on the clock alone. What
+    /// must not happen sixty times a minute is the rebuild, because each one is a set of new icon
+    /// handles. So the state is compared, not the trigger.
     /// </para>
     /// </summary>
     private void UpdateTrayGlyph()
@@ -288,19 +305,88 @@ public partial class WidgetWindow : Window
         TrayGlyphState state = TrayGlyphState.From(_model.Providers);
         ThemeVariant variant = TrayGlyphPalette.TaskbarVariant;
 
-        if (!state.HasContent || (variant == _glyphVariant && state.Matches(_glyph)))
+        if (state.HasContent && (variant != _glyphVariant || !state.Matches(_glyph) || _frames is null))
+        {
+            TrayIconFrames built = TrayIconFrames.Build(state, TrayIcon.SmallIconSize, TrayGlyphPalette.For(variant));
+
+            // The outgoing set is disposed only after the shell has been handed a handle from the
+            // incoming one, which ShowSlide does below. Freeing first would destroy an icon the
+            // shell is still drawing and leave a blank square in the tray.
+            TrayIconFrames? outgoing = _frames;
+
+            _frames = built;
+            _glyph = state;
+            _glyphVariant = variant;
+            _slide = new TrayGlyphSlide(-1, false);
+            _turning.Restart();
+
+            ShowSlide(force: true);
+            outgoing?.Dispose();
+        }
+
+        bool turning = TrayRotation.ShouldTurn(
+            _glyph.Frames,
+            windowVisible: Visibility == Visibility.Visible || _mini is not null,
+            sessionLocked: _model.IsWorkstationLocked,
+            _settings.Current.TrayRotationDwell);
+
+        if (turning && !_rotate.IsEnabled)
+        {
+            _rotate.Start();
+        }
+        else if (!turning && _rotate.IsEnabled)
+        {
+            _rotate.Stop();
+
+            // Settle on the frame the rules say to hold - the worst provider, or the troubled one -
+            // rather than leaving whichever turn happened to be up when rotation stopped.
+            ShowSlide(force: false);
+        }
+    }
+
+    private void OnRotate(object? sender, EventArgs e) => ShowSlide(force: false);
+
+    private void ShowSlide(bool force)
+    {
+        if (_tray is null || _frames is null)
         {
             return;
         }
 
-        // TEMPORARY BRIDGE - replaced wholesale by Task 6 of
-        // docs/plans/2026-09-10-tray-glyph-rotating-number.md, which wires up the rotation timer
-        // and the icon cache. Task 1 replaces this state's bars and digits with one frame per
-        // provider, and Task 3 replaces the renderer that consumed them; in between there is
-        // nothing here left to draw. Holding the icon the shell already has keeps every other task
-        // in the plan buildable and testable, which a call to the old renderer would not.
-        _glyph = state;
-        _glyphVariant = variant;
+        TrayGlyphSlide slide = TrayRotation.At(_glyph.Frames, _turning.Elapsed, _settings.Current.TrayRotationDwell);
+
+        if (!force && slide == _slide)
+        {
+            return;
+        }
+
+        IntPtr icon = _frames.Icon(slide.Index, slide.ShowsName);
+
+        if (icon == IntPtr.Zero)
+        {
+            // The set refused to hand one over. Keeping the icon already in the tray says something
+            // slightly out of date; replacing it with nothing would say the widget had gone.
+            return;
+        }
+
+        _slide = slide;
+        _tray.SetIcon(icon, ownsHandle: false);
+        _tray.SetTooltip(TooltipFor(slide.Index));
+    }
+
+    private string TooltipFor(int index)
+    {
+        if (index < 0 || index >= _glyph.Frames.Count)
+        {
+            return "AI Usage Monitor";
+        }
+
+        string monogram = _glyph.Frames[index].Monogram;
+        ProviderCardViewModel? card = _model.Providers.FirstOrDefault(provider => provider.Monogram == monogram);
+
+        return card is null
+            ? "AI Usage Monitor"
+            : TrayTooltip.Compose(card.DisplayName, card.Windows.Select(row => (row.Label, row.UsedText, row.CountdownText)));
     }
 
     private void OnThemeChanged(object? sender, EventArgs e) =>

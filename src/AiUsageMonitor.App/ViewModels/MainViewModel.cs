@@ -264,6 +264,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public void SetWorkstationLocked(bool locked) => _refresh.IsWorkstationLocked = locked;
 
+    /// <summary>
+    /// Read back by the widget so tray rotation pauses on the same signal that pauses polling.
+    /// A second field tracking the same lock in the window would be a second thing to get wrong.
+    /// </summary>
+    public bool IsWorkstationLocked => _refresh.IsWorkstationLocked;
+
     public Task RefreshAfterLifecycleEventAsync(RefreshTrigger trigger) =>
         _lifetime.IsCancellationRequested
             ? Task.CompletedTask
