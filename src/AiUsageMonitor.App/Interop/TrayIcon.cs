@@ -36,10 +36,11 @@ public sealed class TrayIcon : IDisposable
     private const int NIIF_NOSOUND = 0x10;
 
     private readonly Window _owner;
-    private readonly string _tooltip;
+    private string _tooltip;
     private readonly uint _taskbarCreated;
     private HwndSource? _source;
     private IntPtr _icon;
+    private bool _ownsIcon = true;
     private bool _added;
     private bool _disposed;
 
@@ -94,15 +95,16 @@ public sealed class TrayIcon : IDisposable
     public static int SmallIconSize => Math.Max(1, GetSystemMetrics(SM_CXSMICON));
 
     /// <summary>
-    /// Replaces the icon and takes ownership of the handle. The previous one is destroyed once the
-    /// shell has been told about the new one - in that order, because destroying an icon the shell
-    /// is still drawing leaves a blank square in the tray.
+    /// Replaces the icon. With <paramref name="ownsHandle"/> the icon takes ownership and destroys
+    /// the previous one once the shell has been told about the new one - in that order, because
+    /// destroying an icon the shell is still drawing leaves a blank square in the tray.
     /// <para>
-    /// This runs on every change of state, so a handle left behind is not a one-off leak but one
-    /// that accumulates for as long as the widget runs.
+    /// Rotation passes <c>false</c>: those handles belong to a <see cref="TrayIconFrames"/> set
+    /// that outlives the swap and will hand the same handle back on the next turn. Destroying one
+    /// here would free a live icon and then draw it again.
     /// </para>
     /// </summary>
-    public void SetIcon(IntPtr icon)
+    public void SetIcon(IntPtr icon, bool ownsHandle = true)
     {
         if (_disposed || icon == IntPtr.Zero || icon == _icon)
         {
@@ -110,16 +112,42 @@ public sealed class TrayIcon : IDisposable
         }
 
         IntPtr previous = _icon;
+        bool ownedPrevious = _ownsIcon;
+
         _icon = icon;
+        _ownsIcon = ownsHandle;
 
         if (_added)
         {
             Send(NIM_MODIFY);
         }
 
-        if (previous != IntPtr.Zero)
+        if (ownedPrevious && previous != IntPtr.Zero)
         {
             DestroyIcon(previous);
+        }
+    }
+
+    /// <summary>
+    /// Replaces the hover text. Truncated to the shell's fixed buffer by
+    /// <see cref="ViewModels.TrayTooltip"/> before it gets here; the guard is belt and braces,
+    /// because <c>szTip</c> is marshalled <c>ByValTStr</c> and a longer string throws rather than
+    /// clipping.
+    /// </summary>
+    public void SetTooltip(string tooltip)
+    {
+        string trimmed = tooltip.Length > 127 ? tooltip[..127] : tooltip;
+
+        if (_disposed || trimmed == _tooltip)
+        {
+            return;
+        }
+
+        _tooltip = trimmed;
+
+        if (_added)
+        {
+            Send(NIM_MODIFY);
         }
     }
 
@@ -161,11 +189,12 @@ public sealed class TrayIcon : IDisposable
         _source?.RemoveHook(WndProc);
         _source = null;
 
-        if (_icon != IntPtr.Zero)
+        if (_ownsIcon && _icon != IntPtr.Zero)
         {
             DestroyIcon(_icon);
-            _icon = IntPtr.Zero;
         }
+
+        _icon = IntPtr.Zero;
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
