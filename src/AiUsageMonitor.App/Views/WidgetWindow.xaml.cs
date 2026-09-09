@@ -339,21 +339,33 @@ public partial class WidgetWindow : Window
             _rotate.Stop();
 
             // Settle on the frame the rules say to hold - the worst provider, or the troubled one -
-            // rather than leaving whichever turn happened to be up when rotation stopped.
-            ShowSlide(force: false);
+            // rather than leaving whichever turn happened to be up when rotation stopped. It is the
+            // locked session that makes this worth doing: the user walks back to the machine and the
+            // one frozen frame they find should be the one that needs them.
+            ShowSlide(force: false, settle: true);
         }
     }
 
     private void OnRotate(object? sender, EventArgs e) => ShowSlide(force: false);
 
-    private void ShowSlide(bool force)
+    /// <summary>
+    /// Puts the right icon in the tray for the moment.
+    /// <para>
+    /// <paramref name="settle"/> withholds the dwell from <see cref="TrayRotation.At"/>, which is
+    /// how it is asked for the frame to hold rather than for the frame whose turn it is. Not the
+    /// default, because a rebuild wants the turn: the stopwatch has just restarted, so the turn is
+    /// the first provider opening on its monogram, which is where a fresh rotation should begin.
+    /// </para>
+    /// </summary>
+    private void ShowSlide(bool force, bool settle = false)
     {
         if (_tray is null || _frames is null)
         {
             return;
         }
 
-        TrayGlyphSlide slide = TrayRotation.At(_glyph.Frames, _turning.Elapsed, _settings.Current.TrayRotationDwell);
+        TimeSpan? dwell = settle ? null : _settings.Current.TrayRotationDwell;
+        TrayGlyphSlide slide = TrayRotation.At(_glyph.Frames, _turning.Elapsed, dwell);
 
         if (!force && slide == _slide)
         {
