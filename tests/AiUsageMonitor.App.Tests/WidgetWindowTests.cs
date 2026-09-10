@@ -60,6 +60,69 @@ public class WidgetWindowTests(WpfFixture wpf)
         model.Dispose();
     });
 
+    /// <summary>
+    /// The rotation timer and the icon cache both outlive a single tick, so a shutdown must leave
+    /// neither running nor leaked. Not a rich assertion - the value is that it runs the real
+    /// teardown path, which is where a cached handle would be freed twice: the set is disposed
+    /// after the tray icon is gone, and every handle in it is borrowed rather than owned by the
+    /// icon that was drawing it.
+    /// <para>
+    /// <c>_shuttingDown</c> is set first because <c>Close()</c> alone does not close this window -
+    /// <c>OnClosing</c> cancels it and hides to the tray, which is the whole point of a widget that
+    /// lives in the notification area. Only the exit path reaches <c>OnClosed</c>, so only the exit
+    /// path is worth asserting on.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void ShuttingDownLeavesNoRotationRunningAndNoFramesToLeak() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+
+        window.Show();
+
+        typeof(WidgetWindow)
+            .GetField("_shuttingDown", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(window, true);
+
+        window.Close();
+
+        DispatcherTimer rotate = Assert.IsType<DispatcherTimer>(Field(window, "_rotate"));
+
+        Assert.False(rotate.IsEnabled, "the rotation timer was left running after shutdown");
+        Assert.Null(Field(window, "_frames"));
+
+        // OnClosed already disposed the tray icon and the frame set; closing again must not reach
+        // either of them a second time.
+        window.Close();
+    });
+
+    /// <summary>
+    /// The counterpart, and the case that actually happens when the user clicks the close button:
+    /// the window hides rather than closing, so rotation must survive it. Stopping the timer here
+    /// would park the icon on one provider for the rest of the session.
+    /// </summary>
+    [Fact]
+    public void ClosingTheWindowHidesItAndKeepsTheTrayAlive() => wpf.Invoke(() =>
+    {
+        IReadOnlyList<ProviderDescriptor> providers = Providers();
+        MainViewModel model = Model(providers, AppSettings.Default);
+        WidgetWindow window = new(model, Settings(AppSettings.Default));
+
+        window.Show();
+        window.Close();
+
+        Assert.NotEqual(Visibility.Visible, window.Visibility);
+        Assert.NotNull(Field(window, "_tray"));
+
+        window.HideToTray();
+        model.Dispose();
+    });
+
+    private static object? Field(WidgetWindow window, string name) =>
+        typeof(WidgetWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);
+
     [Fact]
     public void NotificationFormattingFitsTheShellInformationBuffers()
     {

@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using AiUsageMonitor.App.Interop;
+using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.Infrastructure.Theming;
 
 namespace AiUsageMonitor.App.Tests;
@@ -10,7 +11,7 @@ namespace AiUsageMonitor.App.Tests;
 /// <summary>
 /// A sixteen-pixel drawing is only really verified by looking at the pixels, so these assert on the
 /// bitmap rather than on the icon handle. A handle proves GDI accepted the bytes; it says nothing
-/// about whether a bar was silently squeezed out of the square.
+/// about whether the number was silently squeezed out of the square.
 /// </summary>
 [Collection("wpf")]
 public class TrayGlyphRendererTests(WpfFixture wpf)
@@ -25,166 +26,224 @@ public class TrayGlyphRendererTests(WpfFixture wpf)
         Bad: Color.FromRgb(0xFF, 0x00, 0x00),
         Layer: Color.FromRgb(0xFF, 0xFF, 0xFF));
 
+    private static TrayGlyphFrame Reading(string digits, double used, QuotaBarFill fill = QuotaBarFill.Accent) =>
+        new("CC", digits, used, fill, TrayFrameKind.Reading);
+
     [Fact]
-    public void EveryShapeOfGlyphYieldsAnIconHandleThatCanBeDestroyed() => wpf.Invoke(() =>
+    public void EveryFrameYieldsAnIconHandleThatCanBeDestroyed() => wpf.Invoke(() =>
     {
         foreach (int size in (int[])[16, 20, 24, 32])
         {
-            foreach (int count in (int[])[0, 1, 2, 3, 4])
+            foreach (TrayGlyphFrame frame in Frames())
             {
-                foreach (TrayOverlay overlay in Enum.GetValues<TrayOverlay>())
+                foreach (bool showsName in (bool[])[false, true])
                 {
-                    foreach (string? digits in (string?[])[null, "7", "92"])
-                    {
-                        // One window without a value in every set, because a provider reporting no
-                        // percentage is the case that must not be drawn as zero or skipped.
-                        TrayGlyphBar[] bars = [.. Enumerable.Range(0, count).Select(index =>
-                            new TrayGlyphBar(index == 1 ? null : index * 30d, QuotaBarFill.Accent, index == 2))];
+                    IntPtr icon = TrayGlyphRenderer.Render(frame, showsName, size, Palette);
 
-                        IntPtr icon = TrayGlyphRenderer.Render(bars, digits, false, overlay, size, Palette);
-
-                        Assert.NotEqual(IntPtr.Zero, icon);
-                        Assert.True(DestroyIcon(icon), $"{size}px, {count} bars, {overlay}, digits {digits ?? "none"}");
-                    }
+                    Assert.NotEqual(IntPtr.Zero, icon);
+                    Assert.True(DestroyIcon(icon), $"{size}px, {frame.Kind}, name {showsName}");
                 }
             }
         }
     });
 
+    private static IEnumerable<TrayGlyphFrame> Frames() =>
+    [
+        Reading("8", 8d),
+        Reading("92", 92d, QuotaBarFill.High),
+        Reading("61", 61d, QuotaBarFill.Stale),
+        new("CC", null, 100d, QuotaBarFill.Exhausted, TrayFrameKind.AtLimit),
+        new("CX", null, null, QuotaBarFill.Accent, TrayFrameKind.Failed),
+        new("CR", null, null, QuotaBarFill.Accent, TrayFrameKind.Waiting)
+    ];
+
+    /// <summary>
+    /// The whole point of the change. Today's glyph gives the digits eight of sixteen rows and
+    /// spends the other eight on bars that collapse to a pixel each; this one gives the figure
+    /// twelve and the bar two, so the number has to actually be taller.
+    /// </summary>
     [Fact]
-    public void EveryWindowStillGetsItsOwnBarInTheSmallestIconAlongsideDigits() => wpf.Invoke(() =>
+    public void TheFigureInksAtLeastTenOfTheTwelveRowsItIsGiven() => wpf.Invoke(() =>
     {
-        // Sixteen pixels with digits leaves eight for the bars, which is four two-pixel rows only
-        // once every gap is gone. The layout gives its gaps up before it gives up a window.
-        TrayGlyphBar[] bars =
-        [
-            new(25d, QuotaBarFill.Accent, false),
-            new(50d, QuotaBarFill.Accent, true),
-            new(75d, QuotaBarFill.Accent, false),
-            new(100d, QuotaBarFill.Accent, true)
-        ];
+        Color[,] pixels = Render(Reading("92", 92d, QuotaBarFill.High), showsName: false, 16);
 
-        Color[,] pixels = Render(bars, "99", TrayOverlay.None, 16);
-        HashSet<int> widths = [];
+        int[] rows = [.. Enumerable.Range(0, 12)
+            .Where(y => Enumerable.Range(0, 16).Any(x => Same(pixels[x, y], Palette.Ink)))];
 
-        for (int y = 0; y < 16; y++)
+        Assert.NotEmpty(rows);
+        Assert.True(rows.Max() - rows.Min() + 1 >= 10, $"the figure inked {rows.Max() - rows.Min() + 1} of 12 rows");
+    });
+
+    [Fact]
+    public void NeitherTwoFiguresNorThreeLeaveTheSquare() => wpf.Invoke(() =>
+    {
+        foreach (string digits in (string[])["8", "92", "100"])
         {
-            int width = Enumerable.Range(0, 16).Count(x => Same(pixels[x, y], Palette.Accent));
+            Color[,] pixels = Render(Reading(digits, 50d), showsName: false, 16);
 
-            if (width > 0)
+            Assert.True(InkColumns(pixels) <= 16, $"'{digits}' spanned {InkColumns(pixels)} columns");
+            Assert.True(InkColumns(pixels) > 0, $"'{digits}' drew nothing");
+        }
+    });
+
+    /// <summary>
+    /// Two capitals are wider per em than two figures, so the monogram is the string most likely to
+    /// be clipped. It is also the one the whole identity story rests on.
+    /// </summary>
+    [Fact]
+    public void TheMonogramFitsTheSquareAtEverySize() => wpf.Invoke(() =>
+    {
+        foreach (int size in (int[])[16, 20, 24, 32])
+        {
+            Color[,] pixels = Render(Reading("92", 40d), showsName: true, size);
+            int columns = Enumerable.Range(0, size)
+                .Count(x => Enumerable.Range(0, size).Any(y => Same(pixels[x, y], Palette.Ink)));
+
+            Assert.True(columns > 0, $"the monogram drew nothing at {size}px");
+            Assert.True(columns <= size, $"the monogram spanned {columns} columns of {size}");
+        }
+    });
+
+    /// <summary>
+    /// The complaint that started this: the number and the bar were glued together. Two rows of
+    /// nothing sit between them and nothing may creep into that gap.
+    /// </summary>
+    [Fact]
+    public void TwoRowsOfAirSeparateTheFigureFromTheBar() => wpf.Invoke(() =>
+    {
+        Color[,] pixels = Render(Reading("92", 92d, QuotaBarFill.High), showsName: false, 16);
+
+        foreach (int y in (int[])[12, 13])
+        {
+            Assert.All(Enumerable.Range(0, 16), x => Assert.Equal(0, pixels[x, y].A));
+        }
+    });
+
+    [Fact]
+    public void TheBarFillsToTheValueAndTakesItsToneFromTheBand() => wpf.Invoke(() =>
+    {
+        int Filled(Color tone, double used, QuotaBarFill fill) =>
+            Enumerable.Range(0, 16).Count(x => Same(Render(Reading("x", used, fill), false, 16)[x, 15], tone));
+
+        Assert.Equal(8, Filled(Palette.Accent, 50d, QuotaBarFill.Accent));
+        Assert.Equal(14, Filled(Palette.High, 88d, QuotaBarFill.High));
+        Assert.Equal(16, Filled(Palette.Exhausted, 100d, QuotaBarFill.Exhausted));
+    });
+
+    /// <summary>Missing is not zero: a waiting frame draws track and no fill whatsoever.</summary>
+    [Fact]
+    public void AWaitingFrameDrawsBareTrackAndNoFill() => wpf.Invoke(() =>
+    {
+        Color[] pixels = All(Render(new("CR", null, null, QuotaBarFill.Accent, TrayFrameKind.Waiting), false, 16), 16);
+
+        Assert.DoesNotContain(pixels, pixel => Same(pixel, Palette.Accent));
+        Assert.Contains(pixels, pixel => pixel.A > 0);
+    });
+
+    /// <summary>
+    /// A texture is never mistaken for a fill, however short a fill gets. Solid would have been
+    /// ambiguous against a low reading; the gaps are the signal.
+    /// </summary>
+    [Fact]
+    public void AFailedFrameDrawsADottedBarRatherThanASolidOne() => wpf.Invoke(() =>
+    {
+        Color[,] pixels = Render(new("CX", null, null, QuotaBarFill.Accent, TrayFrameKind.Failed), false, 16);
+        bool[] lit = [.. Enumerable.Range(0, 16).Select(x => Same(pixels[x, 15], Palette.Bad))];
+
+        Assert.Contains(true, lit);
+        Assert.Contains(false, lit);
+
+        // On, off, on, off ... rather than one run at the left edge.
+        int runs = Enumerable.Range(1, 15).Count(x => lit[x] != lit[x - 1]) + 1;
+        Assert.True(runs >= 4, $"the dotted bar had {runs} runs");
+    });
+
+    /// <summary>
+    /// The one state that inverts, and the only thing on a taskbar that will be doing it.
+    /// <para>
+    /// "A block" is asserted as opacity rather than as a count of exhausted-toned pixels: the name
+    /// knocked out of it is mostly its own antialiased edge at sixteen pixels, so most of the band
+    /// is a blend of the two tones and matches neither exactly. What separates a block from a badge
+    /// or an outline is that the whole band is filled and reaches its edges - which a reading, whose
+    /// band is empty but for the strokes of its figures, conspicuously is not.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void TheLimitFrameKnocksItsNameOutOfASolidBlock() => wpf.Invoke(() =>
+    {
+        Color[,] limit = Render(new("CC", null, 100d, QuotaBarFill.Exhausted, TrayFrameKind.AtLimit), false, 16);
+        Color[,] reading = Render(Reading("92", 92d), false, 16);
+
+        int knockout = 0;
+        int filled = 0;
+        int readingFilled = 0;
+
+        for (int y = 0; y < 12; y++)
+        {
+            for (int x = 0; x < 16; x++)
             {
-                widths.Add(width);
+                if (Same(limit[x, y], Palette.Layer)) knockout++;
+                if (limit[x, y].A > 200) filled++;
+                if (reading[x, y].A > 200) readingFilled++;
             }
         }
 
-        Assert.Equal([4, 8, 12, 16], widths.Order());
+        Assert.True(filled >= (16 * 12) - 8, $"the block left {(16 * 12) - filled} of 192 band pixels unfilled");
+        Assert.True(filled > readingFilled * 3, $"block filled {filled}, a reading filled {readingFilled}");
+        Assert.True(knockout > 0, "the name was not knocked out of the block");
+
+        // It reaches its edges. A mark centred in the band would leave these transparent.
+        Assert.All((int[])[2, 8, 13], x =>
+            Assert.True(Same(limit[x, 0], Palette.Exhausted), $"the top edge at x={x} was not the block"));
     });
-
-    [Fact]
-    public void ABarWithNoValueIsBareTrackRatherThanAnEmptyBarOrNoBarAtAll() => wpf.Invoke(() =>
-    {
-        Color[,] pixels = Render([new TrayGlyphBar(null, QuotaBarFill.Accent, false)], null, TrayOverlay.None, 16);
-
-        Assert.DoesNotContain(All(pixels, 16), pixel => Same(pixel, Palette.Accent));
-        Assert.Contains(All(pixels, 16), pixel => pixel.A > 0);
-    });
-
-    [Fact]
-    public void ATwoDigitReadingIsWiderThanOneAndNeitherLeavesTheSquare() => wpf.Invoke(() =>
-    {
-        int single = InkColumns(Render([], "7", TrayOverlay.None, 16));
-        int pair = InkColumns(Render([], "99", TrayOverlay.None, 16));
-
-        Assert.True(single > 0, "a single digit drew nothing");
-        Assert.True(pair > single, $"'99' spanned {pair} columns and '7' spanned {single}");
-        Assert.True(pair <= 16, $"'99' spanned {pair} columns of a 16 pixel icon");
-    });
-
-    [Fact]
-    public void ThreeDigitLimitReadingRendersAtSixteenPixels() => wpf.Invoke(() =>
-        Assert.NotNull(TrayGlyphRenderer.RenderBitmap([], "100", false, TrayOverlay.Alert, 16, Palette)));
 
     /// <summary>
-    /// The band above the bars is eight pixels at this size, and the number has to use it. Setting
-    /// the em equal to the band - which reads as the obvious thing to do - inks only about seven
-    /// tenths of it, so the digits came out at six pixels and the rest of the band was wasted. The
-    /// companion assertion is <see cref="EveryWindowStillGetsItsOwnBarInTheSmallestIconAlongsideDigits"/>:
-    /// together they say the number grew into its own space and not into the bars'.
+    /// The band only, not the whole square. The bar's track is the ink colour at a third of its
+    /// alpha in <em>every</em> frame, stale or not, so searching the square for ink would find the
+    /// track every time and prove nothing about the figures.
     /// </summary>
-    [Fact]
-    public void TheNumberFillsTheBandRatherThanSittingSmallInsideIt() => wpf.Invoke(() =>
-    {
-        Color[,] pixels = Render([], "88", TrayOverlay.None, 16);
-
-        int[] rows = [.. Enumerable.Range(0, 16)
-            .Where(y => Enumerable.Range(0, 16).Any(x => pixels[x, y].A >= 64))];
-
-        Assert.NotEmpty(rows);
-
-        int span = rows.Max() - rows.Min() + 1;
-        Assert.True(span >= 8, $"the digits inked {span} of the 8 rows they were given");
-    });
-
     [Fact]
     public void AStaleReadingIsGreyedRatherThanDrawnInInk() => wpf.Invoke(() =>
     {
-        Color[] current = All(Render([], "63", TrayOverlay.None, 16), 16);
-        Color[] stale = All(RenderBitmap([], "63", digitsAreStale: true, TrayOverlay.None, 16), 16);
+        Color[] current = Band(Render(Reading("63", 63d), false, 16));
+        Color[] stale = Band(Render(Reading("63", 63d, QuotaBarFill.Stale), false, 16));
 
         Assert.Contains(current, pixel => Same(pixel, Palette.Ink));
         Assert.DoesNotContain(stale, pixel => Same(pixel, Palette.Ink));
         Assert.Contains(stale, pixel => Same(pixel, Palette.Stale));
     });
 
-    [Fact]
-    public void TheErrorMarkTakesTheCornerAndTheAlertMarkTakesTheMiddle() => wpf.Invoke(() =>
-    {
-        TrayGlyphBar[] bars = [new(40d, QuotaBarFill.Accent, false), new(60d, QuotaBarFill.Accent, true)];
-
-        (double X, double Y) error = Centroid(Render(bars, "60", TrayOverlay.Error, 16));
-        (double X, double Y) alert = Centroid(Render(bars, null, TrayOverlay.Alert, 16));
-
-        Assert.True(error.X > 8 && error.Y > 8, $"the error mark sat at {error}");
-        Assert.InRange(alert.X, 6, 10);
-        Assert.InRange(alert.Y, 5, 11);
-    });
-
     /// <summary>
-    /// Found on a real taskbar, not in a test: a provider in error contributes no bars, so the
-    /// group shrinks, and while it was bottom-aligned it slid into the very corner the error mark
-    /// claims - which then landed on the second digit. The number is anchored to the top now, so
-    /// the two cannot meet. Asserted as rows rather than as an alignment so it stays true however
-    /// the layout is next expressed.
+    /// Not decoration: the offset is the one thing that distinguishes a stale bar from a current
+    /// one when every tone has resolved to the same system colour in high contrast.
+    /// <para>
+    /// The track still runs the full width beneath it, so what the eye reads at the left edge is
+    /// one pixel of track where a current bar would have had fill. That survives a single hue
+    /// because the track is that hue at a third of the alpha, which is why this asserts the edge
+    /// pixel is present but is not the stale tone, rather than asserting it is empty.
+    /// </para>
     /// </summary>
     [Fact]
-    public void AFailingProviderWithOneWindowKeepsItsBadgeOffTheNumber() => wpf.Invoke(() =>
+    public void AStaleBarLiftsOffTheLeftEdgeSoItSurvivesOneHue() => wpf.Invoke(() =>
     {
-        Color[,] pixels = Render([new TrayGlyphBar(53d, QuotaBarFill.Accent, false)], "53", TrayOverlay.Error, 16);
+        Color[,] stale = Render(Reading("63", 63d, QuotaBarFill.Stale), false, 16);
+        Color[,] current = Render(Reading("63", 63d), false, 16);
 
-        int[] number = RowsWhere(pixels, pixel => pixel.A >= 160 && Same(pixel, Palette.Ink));
-        int[] badge = RowsWhere(pixels, pixel => Same(pixel, Palette.Bad));
+        Assert.True(stale[0, 15].A > 0, "the track did not run beneath the offset");
+        Assert.False(Same(stale[0, 15], Palette.Stale), "the stale bar reached the left edge");
+        Assert.True(Same(stale[1, 15], Palette.Stale), "the stale bar did not start one pixel in");
 
-        Assert.NotEmpty(number);
-        Assert.NotEmpty(badge);
-        Assert.True(
-            number.Max() < badge.Min(),
-            $"the number reached row {number.Max()} and the badge began at row {badge.Min()}");
+        // The comparison that gives the offset its meaning: a current bar does start at the edge.
+        Assert.True(Same(current[0, 15], Palette.Accent), "a current bar did not start at the edge");
     });
 
-    private static int[] RowsWhere(Color[,] pixels, Func<Color, bool> matches) =>
-        [.. Enumerable.Range(0, pixels.GetLength(1))
-            .Where(y => Enumerable.Range(0, pixels.GetLength(0)).Any(x => matches(pixels[x, y])))];
-
     [Fact]
-    public void NothingIsDrawnForAnIconWithNoSize() =>
-        wpf.Invoke(() => Assert.Equal(IntPtr.Zero, TrayGlyphRenderer.Render([], "42", false, TrayOverlay.None, 0, Palette)));
+    public void NothingIsDrawnForAnIconWithNoSize() => wpf.Invoke(() =>
+        Assert.Equal(IntPtr.Zero, TrayGlyphRenderer.Render(Reading("42", 42d), false, 0, Palette)));
 
-    private static Color[,] Render(IReadOnlyList<TrayGlyphBar> bars, string? digits, TrayOverlay overlay, int size) =>
-        RenderBitmap(bars, digits, false, overlay, size);
-
-    private static Color[,] RenderBitmap(IReadOnlyList<TrayGlyphBar> bars, string? digits, bool digitsAreStale, TrayOverlay overlay, int size)
+    private static Color[,] Render(TrayGlyphFrame frame, bool showsName, int size)
     {
-        BitmapSource bitmap = TrayGlyphRenderer.RenderBitmap(bars, digits, digitsAreStale, overlay, size, Palette)
+        BitmapSource bitmap = TrayGlyphRenderer.RenderBitmap(frame, showsName, size, Palette)
             ?? throw new InvalidOperationException("The renderer produced no bitmap.");
 
         byte[] raw = new byte[size * size * 4];
@@ -226,36 +285,16 @@ public class TrayGlyphRendererTests(WpfFixture wpf)
             Math.Abs(Math.Min(255, channel * 255 / alpha) - expected) <= tolerance;
     }
 
+    /// <summary>The twelve rows the text is drawn in, at 16px. Excludes the gap and the bar.</summary>
+    private static Color[] Band(Color[,] pixels) =>
+        [.. Enumerable.Range(0, 12).SelectMany(y => Enumerable.Range(0, 16).Select(x => pixels[x, y]))];
+
     private static Color[] All(Color[,] pixels, int size) =>
         [.. Enumerable.Range(0, size).SelectMany(y => Enumerable.Range(0, size).Select(x => pixels[x, y]))];
 
     private static int InkColumns(Color[,] pixels) =>
         Enumerable.Range(0, pixels.GetLength(0))
             .Count(x => Enumerable.Range(0, pixels.GetLength(1)).Any(y => pixels[x, y].A > 0));
-
-    /// <summary>Where the overlay's colour sits, averaged. The overlay is the only red in the palette.</summary>
-    private static (double X, double Y) Centroid(Color[,] pixels)
-    {
-        double x = 0;
-        double y = 0;
-        int count = 0;
-
-        for (int row = 0; row < pixels.GetLength(1); row++)
-        {
-            for (int column = 0; column < pixels.GetLength(0); column++)
-            {
-                if (Same(pixels[column, row], Palette.Bad))
-                {
-                    x += column + 0.5;
-                    y += row + 0.5;
-                    count++;
-                }
-            }
-        }
-
-        Assert.True(count > 0, "the overlay drew nothing");
-        return (x / count, y / count);
-    }
 
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr icon);

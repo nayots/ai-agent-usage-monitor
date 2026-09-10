@@ -4,27 +4,11 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using AiUsageMonitor.App.Theming;
+using AiUsageMonitor.App.ViewModels;
 using AiUsageMonitor.Infrastructure.Settings;
 using AiUsageMonitor.Infrastructure.Theming;
 
 namespace AiUsageMonitor.App.Interop;
-
-/// <summary>The one extra mark a glyph can carry. Mutually exclusive, per the design.</summary>
-public enum TrayOverlay
-{
-    None,
-
-    /// <summary>A quota window is exhausted: a triangle over the bars.</summary>
-    Alert,
-
-    /// <summary>A provider is failing, so the bars may not be telling the truth: a cross.</summary>
-    Error
-}
-
-/// <param name="UsedPercent">Null when the provider reported no value; the bar renders as bare track.</param>
-/// <param name="Fill">The band, resolved by the same selector the widget's own bars use.</param>
-/// <param name="StartsGroup">True on the first bar of each provider after the first, which earns a wider gap.</param>
-public readonly record struct TrayGlyphBar(double? UsedPercent, QuotaBarFill Fill, bool StartsGroup);
 
 /// <summary>
 /// The colours the glyph draws with, taken from the same theme dictionaries the window uses so
@@ -94,8 +78,8 @@ public sealed record TrayGlyphPalette(
 }
 
 /// <summary>
-/// Draws the widget into a notification-area icon: a stack of bars, one
-/// per quota window, with the worst percentage above them as digits and a state overlay on top.
+/// Draws one provider into a notification-area icon: a large percentage over a single bar whose
+/// tone follows the band the reading falls in, with two pixels of air between them.
 /// <para>
 /// Everything is measured in device pixels. The bitmap is created at 96 dpi so one drawing unit is
 /// one pixel, and the caller passes the shell's own small-icon metric, which already accounts for
@@ -105,19 +89,36 @@ public sealed record TrayGlyphPalette(
 public static class TrayGlyphRenderer
 {
     /// <summary>
-    /// Renders one glyph and returns an <c>HICON</c> the caller owns and must destroy. Returns
+    /// How far the text may be squeezed horizontally before it gives up height instead. Below this
+    /// the vertical stems of a condensed figure thin out faster than the extra height is worth.
+    /// </summary>
+    private const double CondenseFloor = 0.72d;
+
+    private static readonly Typeface Face = new(
+        new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+
+    /// <summary>The band, the gap and the bar, in device pixels, for one icon size.</summary>
+    private readonly record struct Zones(int Unit, int Band, int Bar, int BarY)
+    {
+        public static Zones For(int size)
+        {
+            int unit = Math.Max(1, (int)Round(size / 16d));
+            int bar = Math.Max(2, (int)Round(size / 8d));
+
+            // The gap is the bar's own height: one expression, and it keeps the number, the air
+            // and the bar in a fixed proportion at every scaling factor.
+            return new Zones(unit, size - bar - bar, bar, size - bar);
+        }
+    }
+
+    /// <summary>
+    /// Renders one frame and returns an <c>HICON</c> the caller owns and must destroy. Returns
     /// <see cref="IntPtr.Zero"/> if GDI refuses the bitmap, which the caller treats as "keep the
     /// icon you have" rather than as a failure worth surfacing.
     /// </summary>
-    public static IntPtr Render(
-        IReadOnlyList<TrayGlyphBar> bars,
-        string? digits,
-        bool digitsAreStale,
-        TrayOverlay overlay,
-        int size,
-        TrayGlyphPalette palette)
+    public static IntPtr Render(TrayGlyphFrame frame, bool showsName, int size, TrayGlyphPalette palette)
     {
-        RenderTargetBitmap? bitmap = RenderBitmap(bars, digits, digitsAreStale, overlay, size, palette);
+        RenderTargetBitmap? bitmap = RenderBitmap(frame, showsName, size, palette);
         return bitmap is null ? IntPtr.Zero : ToIcon(bitmap, size);
     }
 
@@ -126,13 +127,7 @@ public static class TrayGlyphRenderer
     /// layout into a handle indistinguishable from a right one, and a sixteen-pixel drawing is only
     /// ever really verified by looking at the pixels - by a test or by an eye.
     /// </summary>
-    public static RenderTargetBitmap? RenderBitmap(
-        IReadOnlyList<TrayGlyphBar> bars,
-        string? digits,
-        bool digitsAreStale,
-        TrayOverlay overlay,
-        int size,
-        TrayGlyphPalette palette)
+    public static RenderTargetBitmap? RenderBitmap(TrayGlyphFrame frame, bool showsName, int size, TrayGlyphPalette palette)
     {
         if (size <= 0)
         {
@@ -143,7 +138,7 @@ public static class TrayGlyphRenderer
 
         using (DrawingContext context = visual.RenderOpen())
         {
-            Draw(context, bars, digits, digitsAreStale, overlay, size, palette);
+            Draw(context, frame, showsName, size, palette);
         }
 
         RenderTargetBitmap bitmap = new(size, size, 96, 96, PixelFormats.Pbgra32);
@@ -151,260 +146,125 @@ public static class TrayGlyphRenderer
         return bitmap;
     }
 
-    private static void Draw(
-        DrawingContext context,
-        IReadOnlyList<TrayGlyphBar> bars,
-        string? digits,
-        bool digitsAreStale,
-        TrayOverlay overlay,
-        int size,
-        TrayGlyphPalette palette)
+    private static void Draw(DrawingContext context, TrayGlyphFrame frame, bool showsName, int size, TrayGlyphPalette palette)
     {
-        double scale = size / 16d;
-        double digitHeight = string.IsNullOrEmpty(digits) ? 0 : Round(8 * scale);
-        Layout layout = Layout.Fit(bars, size - digitHeight, scale);
+        Zones zones = Zones.For(size);
+        bool atLimit = frame.Kind == TrayFrameKind.AtLimit;
 
-        // Digits take the top band and the bars grow downward from them; with no digits the bars are
-        // centred instead.
-        //
-        // The design bottom-aligns the group, which is the same thing whenever the bars fill the
-        // rest of the square - and self-defeating when they do not. A failing provider contributes
-        // no bars, so the group shrinks and slides down into the bottom-right corner at exactly the
-        // moment the corner is claimed by the error mark, and the mark lands on the second digit.
-        // Anchoring the digits to the top keeps the number and the badge apart in the one case that
-        // puts them together.
-        double contentHeight = digitHeight + layout.Height;
-        double y = digitHeight > 0 ? 0 : Round((size - contentHeight) / 2);
-
-        if (digitHeight > 0)
+        if (atLimit)
         {
-            // Greyed with the bars they came from. Crisp ink over grey bars would say the number is
-            // current when the widget's own row has already stopped claiming that.
-            DrawDigits(context, digits!, y, digitHeight, size, digitsAreStale ? palette.Stale : palette.Ink);
-            y += digitHeight;
+            context.DrawRoundedRectangle(
+                new SolidColorBrush(palette.Exhausted), null,
+                new Rect(0, 0, size, zones.Band), zones.Unit, zones.Unit);
         }
 
-        SolidColorBrush track = new(palette.TrackColor);
+        // The band shows the number unless the number carries nothing - at the limit it is always
+        // 100, on a failure there is none, before the first read there is none yet.
+        string text = showsName || frame.NamesItselfAlways || frame.Digits is null
+            ? frame.Monogram
+            : frame.Digits;
 
-        for (int index = 0; index < layout.Count; index++)
-        {
-            TrayGlyphBar bar = bars[index];
+        Color ink = atLimit ? palette.Layer
+            : frame.Fill == QuotaBarFill.Stale ? palette.Stale
+            : palette.Ink;
 
-            if (index > 0)
-            {
-                y += bar.StartsGroup ? layout.GroupGap : layout.WithinGap;
-            }
-
-            context.DrawRectangle(track, null, new Rect(0, y, size, layout.BarHeight));
-
-            if (bar.UsedPercent is double used)
-            {
-                double width = Round(size * Math.Clamp(used / 100d, 0d, 1d));
-
-                if (width > 0)
-                {
-                    context.DrawRectangle(
-                        new SolidColorBrush(palette.BandColor(bar.Fill)),
-                        null,
-                        new Rect(0, y, width, layout.BarHeight));
-                }
-            }
-
-            y += layout.BarHeight;
-        }
-
-        DrawOverlay(context, overlay, size, scale, palette);
+        DrawText(context, text, size, zones.Band, ink);
+        DrawBar(context, frame, size, zones, palette);
     }
 
     /// <summary>
-    /// The digits are drawn as glyph outlines rather than text so they can be centred on their own
-    /// ink rather than on a line box: at these sizes the line box is half again as tall as the
-    /// digits, and centring on it puts them visibly off-centre in a 16-pixel square.
+    /// Drawn as glyph outlines rather than text so it can be centred on its own ink rather than on
+    /// a line box: at these sizes the line box is half again as tall as the figures, and centring
+    /// on it puts them visibly high.
     /// <para>
-    /// The em is derived from <paramref name="height"/> rather than set equal to it. A lining digit
-    /// inks about seven tenths of its em, so the two are not the same number: passing the band
-    /// straight through as the em - which this did - drew 5.8 pixels of digit inside an 8 pixel
-    /// band and left the remaining quarter empty, for no gain anywhere else.
+    /// Width, not the band, sets the size. Two figures at a twelve-pixel height are eighteen pixels
+    /// wide, so the geometry is measured once at a reference em, scaled uniformly to reach the
+    /// target ink height, then condensed to fit the square - and only when condensing would pass
+    /// <see cref="CondenseFloor"/> does it give up height instead. That is why <c>100</c> is
+    /// shorter than <c>92</c>.
     /// </para>
     /// </summary>
-    private static void DrawDigits(DrawingContext context, string digits, double y, double height, int size, Color ink)
+    private static void DrawText(DrawingContext context, string text, int size, int band, Color ink)
     {
-        FormattedText text = Text(digits, height / DigitInkRatio, ink);
-        Geometry geometry = text.BuildGeometry(new Point(0, 0));
+        const double Reference = 100d;
+
+        Geometry geometry = Text(text, Reference, ink).BuildGeometry(new Point(0, 0));
         Rect bounds = geometry.Bounds;
 
-        if (bounds.IsEmpty || bounds.Width <= 0)
+        if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
         {
             return;
         }
 
-        // Never let a three-digit reading spill out of the square; the widget itself carries the
-        // exact number, and an unreadable glyph is worse than a slightly compressed one.
-        double horizontal = Math.Min(1d, size / bounds.Width);
+        double scale = Round(band * 0.92) / bounds.Height;
+        double condense = Math.Min(1d, size / (bounds.Width * scale));
+
+        if (condense < CondenseFloor)
+        {
+            condense = CondenseFloor;
+            scale = size / (bounds.Width * CondenseFloor);
+        }
+
+        double drawnWidth = bounds.Width * scale * condense;
+        double drawnHeight = bounds.Height * scale;
 
         TransformGroup transform = new();
-        transform.Children.Add(new ScaleTransform(horizontal, 1d, bounds.X, bounds.Y));
+        transform.Children.Add(new ScaleTransform(scale * condense, scale, bounds.X, bounds.Y));
         transform.Children.Add(new TranslateTransform(
-            Round((size - (bounds.Width * horizontal)) / 2) - bounds.X,
-            Round(y + ((height - bounds.Height) / 2)) - bounds.Y));
+            Round((size - drawnWidth) / 2) - bounds.X,
+            Round((band - drawnHeight) / 2) - bounds.Y));
 
         geometry.Transform = transform;
         context.DrawGeometry(new SolidColorBrush(ink), null, geometry);
     }
 
-    private static readonly Typeface DigitFace = new(
-        new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
-
-    private static double? _digitInkRatio;
-
-    /// <summary>
-    /// How much of its em a lining digit actually inks, measured from the face rather than assumed.
-    /// Memoised on first use instead of held in a static initialiser: a throwing initialiser in a
-    /// type the window touches during layout is how this application once shipped with no window at
-    /// all, and a font measurement is not worth reintroducing that failure mode for.
-    /// </summary>
-    private static double DigitInkRatio
+    private static void DrawBar(DrawingContext context, TrayGlyphFrame frame, int size, Zones zones, TrayGlyphPalette palette)
     {
-        get
+        context.DrawRectangle(new SolidColorBrush(palette.TrackColor), null, new Rect(0, zones.BarY, size, zones.Bar));
+
+        if (frame.Kind == TrayFrameKind.Failed)
         {
-            if (_digitInkRatio is double ratio)
+            // Dotted, not solid: a texture is never mistaken for a fill, however short a fill gets.
+            SolidColorBrush bad = new(palette.Bad);
+
+            for (int x = 0; x < size; x += 4 * zones.Unit)
             {
-                return ratio;
+                context.DrawRectangle(bad, null,
+                    new Rect(x, zones.BarY, Math.Min(2 * zones.Unit, size - x), zones.Bar));
             }
 
-            const double reference = 100d;
-            Rect bounds = Text("0123456789", reference, Colors.Black).BuildGeometry(new Point(0, 0)).Bounds;
-
-            // A face that measures to nothing falls back to the usual seven tenths rather than
-            // dividing by zero and drawing an infinitely large number.
-            _digitInkRatio = bounds.IsEmpty || bounds.Height <= 0 ? 0.7 : bounds.Height / reference;
-            return _digitInkRatio.Value;
+            return;
         }
+
+        if (frame.UsedPercent is not double used)
+        {
+            return;
+        }
+
+        // The track runs the full width beneath it, so a stale bar reads as one pixel of track
+        // where a current bar would have had fill - a difference in alpha rather than in hue, which
+        // is what keeps it legible once high contrast has resolved every tone to one system colour.
+        bool stale = frame.Fill == QuotaBarFill.Stale;
+        double left = stale ? zones.Unit : 0;
+        double width = frame.Kind == TrayFrameKind.AtLimit
+            ? size
+            : Math.Max(1, Round(size * Math.Clamp(used / 100d, 0d, 1d)));
+
+        context.DrawRectangle(
+            new SolidColorBrush(palette.BandColor(frame.Fill)), null,
+            new Rect(left, zones.BarY, Math.Min(width, size - left), zones.Bar));
     }
 
     private static FormattedText Text(string value, double em, Color ink) => new(
         value,
         CultureInfo.InvariantCulture,
         FlowDirection.LeftToRight,
-        DigitFace,
+        Face,
         em,
         new SolidColorBrush(ink),
         numberSubstitution: null,
         TextFormattingMode.Display,
         pixelsPerDip: 1d);
-
-    private static void DrawOverlay(DrawingContext context, TrayOverlay overlay, int size, double scale, TrayGlyphPalette palette)
-    {
-        switch (overlay)
-        {
-            case TrayOverlay.Error:
-            {
-                // A disc in the bottom-right corner with a cross struck through it. The design
-                // writes the cross as a character; at six pixels a glyph is a smudge, so it is two
-                // strokes here - the same mark, drawn at a size a font cannot reach.
-                double diameter = Math.Max(4, Round(6 * scale));
-                double radius = diameter / 2;
-                Point centre = new(size - radius, size - radius);
-
-                context.DrawEllipse(new SolidColorBrush(palette.Bad), null, centre, radius, radius);
-
-                double arm = radius * 0.45;
-                Pen pen = new(new SolidColorBrush(palette.Layer), Math.Max(1, Math.Floor(scale)))
-                {
-                    StartLineCap = PenLineCap.Square,
-                    EndLineCap = PenLineCap.Square
-                };
-
-                context.DrawLine(pen, new Point(centre.X - arm, centre.Y - arm), new Point(centre.X + arm, centre.Y + arm));
-                context.DrawLine(pen, new Point(centre.X + arm, centre.Y - arm), new Point(centre.X - arm, centre.Y + arm));
-                break;
-            }
-
-            case TrayOverlay.Alert:
-            {
-                double half = Math.Max(2, 3.5 * scale);
-                double height = Math.Max(4, Round(6 * scale));
-                double centreX = size / 2d;
-                double centreY = size / 2d;
-
-                StreamGeometry triangle = new();
-
-                using (StreamGeometryContext figure = triangle.Open())
-                {
-                    figure.BeginFigure(new Point(centreX, centreY - (height / 2)), isFilled: true, isClosed: true);
-                    figure.LineTo(new Point(centreX + half, centreY + (height / 2)), isStroked: true, isSmoothJoin: false);
-                    figure.LineTo(new Point(centreX - half, centreY + (height / 2)), isStroked: true, isSmoothJoin: false);
-                }
-
-                triangle.Freeze();
-
-                // Outlined in the layer colour so it stays a triangle when it lands on a full red
-                // bar, which is the case it exists for.
-                context.DrawGeometry(
-                    new SolidColorBrush(palette.Bad),
-                    new Pen(new SolidColorBrush(palette.Layer), Math.Max(1, Math.Floor(scale))),
-                    triangle);
-                break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// How the bars share the height left over after the digits.
-    /// <para>
-    /// Space is given up in a fixed order, and the order is the point: gaps go first, then bar
-    /// height, and only when a single pixel per bar will not fit does a bar get dropped. Dropping
-    /// is last because a missing bar is a window the user cannot see at all, whereas a thinner one
-    /// still reports its number honestly. At 16 pixels with digits there are 8 left, which is
-    /// three bars with their gaps or four without.
-    /// </para>
-    /// </summary>
-    internal readonly record struct Layout(int Count, double BarHeight, double WithinGap, double GroupGap, double Height)
-    {
-        public static Layout Fit(IReadOnlyList<TrayGlyphBar> bars, double available, double scale)
-        {
-            int count = bars.Count;
-
-            if (count <= 0 || available <= 0)
-            {
-                return new Layout(0, 0, 0, 0, 0);
-            }
-
-            double bar = Math.Max(1, Round(2 * scale));
-            double within = Math.Max(0, Round(scale));
-            double group = Math.Max(0, Round(2 * scale));
-
-            while (group > 0 && Total(bars, count, bar, within, group) > available)
-            {
-                group -= 1;
-                within = Math.Min(within, group);
-            }
-
-            if (count * bar > available)
-            {
-                bar = Math.Max(1, Math.Floor(available / count));
-            }
-
-            while (count > 1 && Total(bars, count, bar, within, group) > available)
-            {
-                count -= 1;
-            }
-
-            return new Layout(count, bar, within, group, Total(bars, count, bar, within, group));
-        }
-
-        private static double Total(IReadOnlyList<TrayGlyphBar> bars, int count, double bar, double within, double group)
-        {
-            double total = count * bar;
-
-            for (int index = 1; index < count; index++)
-            {
-                total += bars[index].StartsGroup ? group : within;
-            }
-
-            return total;
-        }
-    }
 
     private static double Round(double value) => Math.Round(value, MidpointRounding.AwayFromZero);
 
