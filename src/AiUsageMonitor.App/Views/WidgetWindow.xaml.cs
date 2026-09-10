@@ -372,7 +372,7 @@ public partial class WidgetWindow : Window
             return;
         }
 
-        IntPtr icon = _frames.Icon(slide.Index, slide.ShowsName);
+        IntPtr icon = _frames.Icon(slide.Index);
 
         if (icon == IntPtr.Zero)
         {
