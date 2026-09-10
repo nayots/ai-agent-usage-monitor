@@ -20,7 +20,7 @@
     would promise a stability that depends on endpoints this project does not control.
   -->
   <PropertyGroup>
-    <VersionPrefix>0.5.0</VersionPrefix>
+    <VersionPrefix>0.6.0</VersionPrefix>
     <Product>AI Usage Monitor</Product>
     <!-- Without this, MSBuild defaults AssemblyCompany to the assembly name, and the .exe's
          Details tab reports its own file name as the publisher. -->
