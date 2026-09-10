@@ -60,7 +60,7 @@ public partial class WidgetWindow : Window
     private TrayGlyphState _glyph = TrayGlyphState.Empty;
     private ThemeVariant? _glyphVariant;
     private TrayIconFrames? _frames;
-    private TrayGlyphSlide _slide = new(-1, false);
+    private int _slide = -1;
 
     /// <summary>
     /// Rotation gets its own timer because the window's tick drops to five seconds while the window
@@ -317,7 +317,7 @@ public partial class WidgetWindow : Window
             _frames = built;
             _glyph = state;
             _glyphVariant = variant;
-            _slide = new TrayGlyphSlide(-1, false);
+            _slide = -1;
             _turning.Restart();
 
             ShowSlide(force: true);
@@ -354,7 +354,7 @@ public partial class WidgetWindow : Window
     /// <paramref name="settle"/> withholds the dwell from <see cref="TrayRotation.At"/>, which is
     /// how it is asked for the frame to hold rather than for the frame whose turn it is. Not the
     /// default, because a rebuild wants the turn: the stopwatch has just restarted, so the turn is
-    /// the first provider opening on its monogram, which is where a fresh rotation should begin.
+    /// the first provider's, which is where a fresh rotation should begin.
     /// </para>
     /// </summary>
     private void ShowSlide(bool force, bool settle = false)
@@ -365,14 +365,14 @@ public partial class WidgetWindow : Window
         }
 
         TimeSpan? dwell = settle ? null : _settings.Current.TrayRotationDwell;
-        TrayGlyphSlide slide = TrayRotation.At(_glyph.Frames, _turning.Elapsed, dwell);
+        int index = TrayRotation.At(_glyph.Frames, _turning.Elapsed, dwell);
 
-        if (!force && slide == _slide)
+        if (!force && index == _slide)
         {
             return;
         }
 
-        IntPtr icon = _frames.Icon(slide.Index);
+        IntPtr icon = _frames.Icon(index);
 
         if (icon == IntPtr.Zero)
         {
@@ -381,9 +381,9 @@ public partial class WidgetWindow : Window
             return;
         }
 
-        _slide = slide;
+        _slide = index;
         _tray.SetIcon(icon, ownsHandle: false);
-        _tray.SetTooltip(TooltipFor(slide.Index));
+        _tray.SetTooltip(TooltipFor(index));
     }
 
     private string TooltipFor(int index)

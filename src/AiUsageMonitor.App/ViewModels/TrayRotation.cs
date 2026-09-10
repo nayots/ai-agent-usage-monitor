@@ -2,23 +2,12 @@ using System.Linq;
 
 namespace AiUsageMonitor.App.ViewModels;
 
-/// <param name="Index">Which frame is up, or -1 when there is nothing to show.</param>
-/// <param name="ShowsName">
-/// True while the turn is opening on the provider's monogram. Only ever true for a
-/// <see cref="TrayFrameKind.Reading"/> frame; the other kinds carry their name regardless, so the
-/// renderer takes this as "also show the name", never as "hide it".
-/// </param>
-public readonly record struct TrayGlyphSlide(int Index, bool ShowsName);
-
 /// <summary>
 /// Which provider the one tray icon is showing at a given moment. Pure and clock-free: the caller
 /// supplies elapsed time, so the whole behaviour is testable without waiting for it.
 /// </summary>
 public static class TrayRotation
 {
-    /// <summary>How long each turn opens on the provider's monogram before the number.</summary>
-    public static readonly TimeSpan NameDwell = TimeSpan.FromSeconds(1);
-
     public const int MinimumDwellSeconds = 3;
     public const int MaximumDwellSeconds = 8;
 
@@ -38,18 +27,22 @@ public static class TrayRotation
         return troubled.Count > 0 ? troubled : [.. Enumerable.Range(0, frames.Count)];
     }
 
-    public static TrayGlyphSlide At(IReadOnlyList<TrayGlyphFrame> frames, TimeSpan elapsed, TimeSpan? dwell)
+    /// <summary>
+    /// Which frame is up, or -1 when there is nothing to show. One frame per turn: every frame
+    /// carries its own name, so there is nothing for a turn to alternate between.
+    /// </summary>
+    public static int At(IReadOnlyList<TrayGlyphFrame> frames, TimeSpan elapsed, TimeSpan? dwell)
     {
         IReadOnlyList<int> eligible = Eligible(frames);
 
         if (eligible.Count == 0)
         {
-            return new TrayGlyphSlide(-1, false);
+            return -1;
         }
 
         if (eligible.Count == 1 || dwell is not TimeSpan turn || turn <= TimeSpan.Zero)
         {
-            return new TrayGlyphSlide(Worst(frames, eligible), false);
+            return Worst(frames, eligible);
         }
 
         // Floor division with a non-negative remainder, so a clock that hands back a negative
@@ -57,9 +50,8 @@ public static class TrayRotation
         // throwing or indexing backwards.
         long slot = elapsed.Ticks / turn.Ticks;
         int position = (int)(((slot % eligible.Count) + eligible.Count) % eligible.Count);
-        TimeSpan within = TimeSpan.FromTicks(elapsed.Ticks - (slot * turn.Ticks));
 
-        return new TrayGlyphSlide(eligible[position], within < NameDwell);
+        return eligible[position];
     }
 
     /// <summary>
