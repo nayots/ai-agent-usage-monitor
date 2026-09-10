@@ -11,7 +11,7 @@ public enum TrayFrameKind
     /// <summary>A percentage worth printing. The only kind whose band shows figures.</summary>
     Reading,
 
-    /// <summary>At or beyond the limit. The figure is always 100, so the band shows the name instead.</summary>
+    /// <summary>At or beyond the limit. The figure is always 100, and the band prints it.</summary>
     AtLimit,
 
     /// <summary>The provider's mechanism failed. There is no figure, and which tool broke is the question.</summary>
@@ -90,7 +90,7 @@ public sealed class TrayGlyphState
             QuotaBarFill fill = QuotaBarFillSelector.Select(used, limitReached: false, worst.ColorBarsByUsage, worst.IsStale);
 
             frames.Add(used >= QuotaBarFillSelector.ExhaustedBandStartPercent
-                ? new(card.Monogram, null, used, fill, TrayFrameKind.AtLimit)
+                ? new(card.Monogram, "100", used, fill, TrayFrameKind.AtLimit)
                 : new(card.Monogram, DigitsFor(used), used, fill, TrayFrameKind.Reading));
         }
 
