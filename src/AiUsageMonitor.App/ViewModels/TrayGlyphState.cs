@@ -11,7 +11,7 @@ public enum TrayFrameKind
     /// <summary>A percentage worth printing. The only kind whose band shows figures.</summary>
     Reading,
 
-    /// <summary>At or beyond the limit. The figure is always 100, so the band shows the name instead.</summary>
+    /// <summary>At or beyond the limit. The figure is always 100, and the band prints it.</summary>
     AtLimit,
 
     /// <summary>The provider's mechanism failed. There is no figure, and which tool broke is the question.</summary>
@@ -22,7 +22,7 @@ public enum TrayFrameKind
 }
 
 /// <param name="Monogram">The provider's two letters, from <c>ProviderDescriptor.Monogram</c>.</param>
-/// <param name="Digits">The figures to print, or null when the band shows the name.</param>
+/// <param name="Digits">The figures to print, or null for the two kinds that have none.</param>
 /// <param name="UsedPercent">Bar fill. Null draws bare track - never a zero-width fill.</param>
 /// <param name="Fill">The bar's band, resolved by the same selector the widget's own rows use.</param>
 public readonly record struct TrayGlyphFrame(
@@ -30,14 +30,7 @@ public readonly record struct TrayGlyphFrame(
     string? Digits,
     double? UsedPercent,
     QuotaBarFill Fill,
-    TrayFrameKind Kind)
-{
-    /// <summary>
-    /// True for the three kinds whose band always carries the name. They take no part in the
-    /// name-then-number alternation, which is why a parked glyph holds perfectly still.
-    /// </summary>
-    public bool NamesItselfAlways => Kind is not TrayFrameKind.Reading;
-}
+    TrayFrameKind Kind);
 
 /// <summary>
 /// One frame per provider the user can see, in card order. Reads the cards rather than the
@@ -90,7 +83,7 @@ public sealed class TrayGlyphState
             QuotaBarFill fill = QuotaBarFillSelector.Select(used, limitReached: false, worst.ColorBarsByUsage, worst.IsStale);
 
             frames.Add(used >= QuotaBarFillSelector.ExhaustedBandStartPercent
-                ? new(card.Monogram, null, used, fill, TrayFrameKind.AtLimit)
+                ? new(card.Monogram, "100", used, fill, TrayFrameKind.AtLimit)
                 : new(card.Monogram, DigitsFor(used), used, fill, TrayFrameKind.Reading));
         }
 

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Runtime.InteropServices;
 using AiUsageMonitor.App.ViewModels;
 
@@ -11,54 +12,30 @@ namespace AiUsageMonitor.App.Interop;
 /// swapping among them is two or three. The set owns every handle it holds, which is why
 /// <see cref="TrayIcon.SetIcon"/> has to be told not to take ownership of one.
 /// </para>
+/// <para>
+/// One handle per frame. There used to be two - a turn opened on the provider's monogram and then
+/// swapped to the number - but a frame carries its own name now, so there is nothing to alternate.
+/// </para>
 /// </summary>
 public sealed class TrayIconFrames : IDisposable
 {
-    /// <summary><see cref="Number"/> is <see cref="IntPtr.Zero"/> when the frame names itself always.</summary>
-    private readonly record struct Pair(IntPtr Number, IntPtr Name);
-
-    private readonly List<Pair> _pairs;
+    private readonly List<IntPtr> _icons;
     private bool _disposed;
 
-    private TrayIconFrames(List<Pair> pairs) => _pairs = pairs;
+    private TrayIconFrames(List<IntPtr> icons) => _icons = icons;
 
-    public int Count => _pairs.Count;
+    public int Count => _icons.Count;
 
-    public static TrayIconFrames Build(TrayGlyphState state, int size, TrayGlyphPalette palette)
-    {
-        List<Pair> pairs = [];
-
-        foreach (TrayGlyphFrame frame in state.Frames)
-        {
-            IntPtr name = TrayGlyphRenderer.Render(frame, showsName: true, size, palette);
-
-            // A frame whose band always carries its name has nothing to alternate with, so it gets
-            // one handle rather than two identical ones - and Dispose then cannot free it twice.
-            IntPtr number = frame.NamesItselfAlways
-                ? IntPtr.Zero
-                : TrayGlyphRenderer.Render(frame, showsName: false, size, palette);
-
-            pairs.Add(new Pair(number, name));
-        }
-
-        return new TrayIconFrames(pairs);
-    }
+    public static TrayIconFrames Build(TrayGlyphState state, int size, TrayGlyphPalette palette) =>
+        new([.. state.Frames.Select(frame => TrayGlyphRenderer.Render(frame, size, palette))]);
 
     /// <summary>
     /// The handle for one frame. Borrowed, never transferred: the caller must not destroy it.
     /// Returns <see cref="IntPtr.Zero"/> for an index outside the set, which the caller treats as
     /// "keep the icon you have".
     /// </summary>
-    public IntPtr Icon(int index, bool showsName)
-    {
-        if (_disposed || index < 0 || index >= _pairs.Count)
-        {
-            return IntPtr.Zero;
-        }
-
-        Pair pair = _pairs[index];
-        return showsName || pair.Number == IntPtr.Zero ? pair.Name : pair.Number;
-    }
+    public IntPtr Icon(int index) =>
+        _disposed || index < 0 || index >= _icons.Count ? IntPtr.Zero : _icons[index];
 
     public void Dispose()
     {
@@ -69,20 +46,12 @@ public sealed class TrayIconFrames : IDisposable
 
         _disposed = true;
 
-        foreach (Pair pair in _pairs)
+        foreach (IntPtr icon in _icons.Where(icon => icon != IntPtr.Zero))
         {
-            if (pair.Name != IntPtr.Zero)
-            {
-                DestroyIcon(pair.Name);
-            }
-
-            if (pair.Number != IntPtr.Zero)
-            {
-                DestroyIcon(pair.Number);
-            }
+            DestroyIcon(icon);
         }
 
-        _pairs.Clear();
+        _icons.Clear();
     }
 
     [DllImport("user32.dll")]

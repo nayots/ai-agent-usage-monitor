@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Media;
 using AiUsageMonitor.App.Interop;
@@ -17,8 +18,12 @@ public class TrayIconFramesTests(WpfFixture wpf)
     private static TrayGlyphFrame Reading(string mark) =>
         new(mark, "44", 44d, QuotaBarFill.Accent, TrayFrameKind.Reading);
 
+    /// <summary>
+    /// One handle per frame, now that a frame names itself. The pair existed only so a turn could
+    /// open on the monogram and then swap to the number; there is nothing left to swap to.
+    /// </summary>
     [Fact]
-    public void AReadingFrameGetsTwoDistinctIconsAndTheOthersGetOne() => wpf.Invoke(() =>
+    public void EveryFrameGetsExactlyOneIconAndNoTwoFramesShareIt() => wpf.Invoke(() =>
     {
         using TrayIconFrames frames = TrayIconFrames.Build(
             State(Reading("CC"), new("CX", null, null, QuotaBarFill.Accent, TrayFrameKind.Failed)),
@@ -26,10 +31,12 @@ public class TrayIconFramesTests(WpfFixture wpf)
             Palette);
 
         Assert.Equal(2, frames.Count);
-        Assert.NotEqual(frames.Icon(0, showsName: false), frames.Icon(0, showsName: true));
+        Assert.NotEqual(IntPtr.Zero, frames.Icon(0));
+        Assert.NotEqual(IntPtr.Zero, frames.Icon(1));
+        Assert.NotEqual(frames.Icon(0), frames.Icon(1));
 
-        // Nothing to alternate, so one handle serves both - and must not be destroyed twice.
-        Assert.Equal(frames.Icon(1, showsName: false), frames.Icon(1, showsName: true));
+        // Borrowed, not minted: asking twice must hand back the same handle.
+        Assert.Equal(frames.Icon(0), frames.Icon(0));
     });
 
     [Fact]
@@ -37,8 +44,8 @@ public class TrayIconFramesTests(WpfFixture wpf)
     {
         using TrayIconFrames frames = TrayIconFrames.Build(State(Reading("CC")), 16, Palette);
 
-        Assert.Equal(IntPtr.Zero, frames.Icon(-1, false));
-        Assert.Equal(IntPtr.Zero, frames.Icon(9, false));
+        Assert.Equal(IntPtr.Zero, frames.Icon(-1));
+        Assert.Equal(IntPtr.Zero, frames.Icon(9));
     });
 
     /// <summary>
@@ -53,13 +60,7 @@ public class TrayIconFramesTests(WpfFixture wpf)
             16,
             Palette);
 
-        List<IntPtr> handles = [];
-
-        for (int index = 0; index < frames.Count; index++)
-        {
-            handles.Add(frames.Icon(index, false));
-            handles.Add(frames.Icon(index, true));
-        }
+        List<IntPtr> handles = [.. Enumerable.Range(0, frames.Count).Select(frames.Icon)];
 
         frames.Dispose();
 

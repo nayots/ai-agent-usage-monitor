@@ -78,8 +78,12 @@ public sealed record TrayGlyphPalette(
 }
 
 /// <summary>
-/// Draws one provider into a notification-area icon: a large percentage over a single bar whose
-/// tone follows the band the reading falls in, with two pixels of air between them.
+/// Draws one provider into a notification-area icon: a percentage over a bar deep enough to carry
+/// the provider's initials, which are cut out of it and invert wherever the fill has reached them.
+/// <para>
+/// A frame therefore names itself. Nothing has to be alternated with anything, which is what lets
+/// a turn of the rotation be one frame rather than a second of initials followed by a number.
+/// </para>
 /// <para>
 /// Everything is measured in device pixels. The bitmap is created at 96 dpi so one drawing unit is
 /// one pixel, and the caller passes the shell's own small-icon metric, which already accounts for
@@ -97,18 +101,52 @@ public static class TrayGlyphRenderer
     private static readonly Typeface Face = new(
         new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
 
-    /// <summary>The band, the gap and the bar, in device pixels, for one icon size.</summary>
-    private readonly record struct Zones(int Unit, int Band, int Bar, int BarY)
+    /// <summary>
+    /// The initials are set a weight heavier than the figures. At four or five pixels of cap height
+    /// the stems are narrower than a pixel, so no pixel is ever fully inked and weight is the only
+    /// lever left on contrast: in SemiBold the brightest pixel of a knocked-out capital reaches
+    /// about two thirds of the layer colour, which reads as a smudge rather than as a letter.
+    /// </summary>
+    private static readonly Typeface LabelFace = new(
+        new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+
+    /// <summary>The number band, the air and the labelled plinth, in device pixels, for one size.</summary>
+    private readonly record struct Zones(int Unit, int Band, int Plinth, int PlinthY)
     {
         public static Zones For(int size)
         {
             int unit = Math.Max(1, (int)Round(size / 16d));
-            int bar = Math.Max(2, (int)Round(size / 8d));
 
-            // The gap is the bar's own height: one expression, and it keeps the number, the air
-            // and the bar in a fixed proportion at every scaling factor.
-            return new Zones(unit, size - bar - bar, bar, size - bar);
+            // Three eighths of the square: at sixteen pixels a five-pixel capital and the one row
+            // beneath it the fill has to itself. Any shallower and the initials stop being letters;
+            // any deeper and the figure above them starts paying for it.
+            int plinth = Math.Max(4, (int)Round(size * 0.375d));
+
+            return new Zones(unit, size - plinth - unit, plinth, size - plinth);
         }
+
+        public Rect BandArea(int size) => new(0, 0, size, Band);
+
+        /// <summary>
+        /// Where the figure is drawn: the band, less a pixel at each end. Only a three-figure
+        /// string is ever wide enough to notice, and without the margin it is condensed to exactly
+        /// the square and runs into both edges, which reads as a number that has been cut off.
+        /// </summary>
+        public Rect FigureArea(int size) => new(Unit, 0, size - (2 * Unit), Band);
+
+        public Rect PlinthArea(int size) => new(0, PlinthY, size, Plinth);
+
+        /// <summary>
+        /// Where the initials are drawn: the plinth, less its bottom row.
+        /// <para>
+        /// The letters take every pixel of depth that row leaves them, because they need it. A
+        /// capital this small has strokes narrower than a pixel, so no pixel of it is ever fully
+        /// inked and every pixel of height it gives up costs more contrast than the arithmetic
+        /// suggests. The row it does give up is the one place along the plinth carrying fill and
+        /// track alone, which is what makes the fill's width readable at all.
+        /// </para>
+        /// </summary>
+        public Rect LabelArea(int size) => new(0, PlinthY, size, Plinth - Unit);
     }
 
     /// <summary>
@@ -116,9 +154,9 @@ public static class TrayGlyphRenderer
     /// <see cref="IntPtr.Zero"/> if GDI refuses the bitmap, which the caller treats as "keep the
     /// icon you have" rather than as a failure worth surfacing.
     /// </summary>
-    public static IntPtr Render(TrayGlyphFrame frame, bool showsName, int size, TrayGlyphPalette palette)
+    public static IntPtr Render(TrayGlyphFrame frame, int size, TrayGlyphPalette palette)
     {
-        RenderTargetBitmap? bitmap = RenderBitmap(frame, showsName, size, palette);
+        RenderTargetBitmap? bitmap = RenderBitmap(frame, size, palette);
         return bitmap is null ? IntPtr.Zero : ToIcon(bitmap, size);
     }
 
@@ -127,7 +165,7 @@ public static class TrayGlyphRenderer
     /// layout into a handle indistinguishable from a right one, and a sixteen-pixel drawing is only
     /// ever really verified by looking at the pixels - by a test or by an eye.
     /// </summary>
-    public static RenderTargetBitmap? RenderBitmap(TrayGlyphFrame frame, bool showsName, int size, TrayGlyphPalette palette)
+    public static RenderTargetBitmap? RenderBitmap(TrayGlyphFrame frame, int size, TrayGlyphPalette palette)
     {
         if (size <= 0)
         {
@@ -138,7 +176,7 @@ public static class TrayGlyphRenderer
 
         using (DrawingContext context = visual.RenderOpen())
         {
-            Draw(context, frame, showsName, size, palette);
+            Draw(context, frame, size, palette);
         }
 
         RenderTargetBitmap bitmap = new(size, size, 96, 96, PixelFormats.Pbgra32);
@@ -146,30 +184,85 @@ public static class TrayGlyphRenderer
         return bitmap;
     }
 
-    private static void Draw(DrawingContext context, TrayGlyphFrame frame, bool showsName, int size, TrayGlyphPalette palette)
+    private static void Draw(DrawingContext context, TrayGlyphFrame frame, int size, TrayGlyphPalette palette)
     {
         Zones zones = Zones.For(size);
-        bool atLimit = frame.Kind == TrayFrameKind.AtLimit;
 
-        if (atLimit)
+        if (frame.Kind == TrayFrameKind.AtLimit)
         {
             context.DrawRoundedRectangle(
-                new SolidColorBrush(palette.Exhausted), null,
-                new Rect(0, 0, size, zones.Band), zones.Unit, zones.Unit);
+                new SolidColorBrush(palette.Exhausted), null, zones.BandArea(size), zones.Unit, zones.Unit);
         }
 
-        // The band shows the number unless the number carries nothing - at the limit it is always
-        // 100, on a failure there is none, before the first read there is none yet.
-        string text = showsName || frame.NamesItselfAlways || frame.Digits is null
-            ? frame.Monogram
-            : frame.Digits;
+        DrawBand(context, frame, size, zones, palette);
+        DrawPlinth(context, frame, size, zones, palette);
+        DrawLabel(context, frame, size, zones, palette);
+    }
 
-        Color ink = atLimit ? palette.Layer
-            : frame.Fill == QuotaBarFill.Stale ? palette.Stale
-            : palette.Ink;
+    /// <summary>
+    /// The figure, or - for the two kinds that have none - a drawn mark.
+    /// <para>
+    /// Drawn rather than typed, because <see cref="DrawText"/> scales a string to an ink
+    /// <em>height</em> and a dash's own ink is a fraction of a capital's: a dash asked to fill the
+    /// band comes back as a slab the width of the square, which is indistinguishable from the bar
+    /// it sits above. An exclamation typed the same way is the opposite problem, about a pixel
+    /// wide. Both get rectangles at explicit device-pixel sizes instead.
+    /// </para>
+    /// </summary>
+    private static void DrawBand(DrawingContext context, TrayGlyphFrame frame, int size, Zones zones, TrayGlyphPalette palette)
+    {
+        if (frame.Digits is string digits)
+        {
+            Color ink = frame.Kind == TrayFrameKind.AtLimit ? palette.Layer
+                : frame.Fill == QuotaBarFill.Stale ? palette.Stale
+                : palette.Ink;
 
-        DrawText(context, text, size, zones.Band, ink);
-        DrawBar(context, frame, size, zones, palette);
+            DrawText(context, digits, zones.FigureArea(size), Round(zones.Band * 0.92), ink, Face);
+            return;
+        }
+
+        if (frame.Kind == TrayFrameKind.Failed)
+        {
+            DrawUpright(context, size, zones, palette.Bad);
+            return;
+        }
+
+        DrawRule(context, size, zones, palette.Ink);
+    }
+
+    /// <summary>
+    /// The failure mark: a stem, a pixel of air, and a square dot, together filling the ink height
+    /// a figure would have had.
+    /// </summary>
+    private static void DrawUpright(DrawingContext context, int size, Zones zones, Color ink)
+    {
+        double width = Math.Max(2 * zones.Unit, Round(size / 8d));
+        double dot = Math.Max(zones.Unit, Round(size / 16d));
+        double total = Round(zones.Band * 0.92);
+        double stem = total - dot - zones.Unit;
+
+        if (stem <= 0)
+        {
+            return;
+        }
+
+        SolidColorBrush brush = new(ink);
+        double x = Round((size - width) / 2);
+        double y = Round((zones.Band - total) / 2);
+
+        context.DrawRectangle(brush, null, new Rect(x, y, width, stem));
+        context.DrawRectangle(brush, null, new Rect(x, y + stem + zones.Unit, width, dot));
+    }
+
+    /// <summary>Nothing read yet: a short rule, which is never a zero and never a second bar.</summary>
+    private static void DrawRule(DrawingContext context, int size, Zones zones, Color ink)
+    {
+        double width = Round(size * 0.3);
+        double height = Math.Max(zones.Unit, Round(size / 12d));
+
+        context.DrawRectangle(
+            new SolidColorBrush(ink), null,
+            new Rect(Round((size - width) / 2), Round((zones.Band - height) / 2), width, height));
     }
 
     /// <summary>
@@ -177,18 +270,23 @@ public static class TrayGlyphRenderer
     /// a line box: at these sizes the line box is half again as tall as the figures, and centring
     /// on it puts them visibly high.
     /// <para>
-    /// Width, not the band, sets the size. Two figures at a twelve-pixel height are eighteen pixels
-    /// wide, so the geometry is measured once at a reference em, scaled uniformly to reach the
-    /// target ink height, then condensed to fit the square - and only when condensing would pass
-    /// <see cref="CondenseFloor"/> does it give up height instead. That is why <c>100</c> is
-    /// shorter than <c>92</c>.
+    /// Width, not the area's height, sets the size. Two figures at a twelve-pixel height are
+    /// eighteen pixels wide, so the geometry is measured once at a reference em, scaled uniformly
+    /// to reach <paramref name="inkHeight"/>, then condensed to fit the area - and only when
+    /// condensing would pass <see cref="CondenseFloor"/> does it give up height instead. That is
+    /// why <c>100</c> is shorter than <c>92</c>.
     /// </para>
     /// </summary>
-    private static void DrawText(DrawingContext context, string text, int size, int band, Color ink)
+    private static void DrawText(DrawingContext context, string text, Rect area, double inkHeight, Color ink, Typeface face)
     {
         const double Reference = 100d;
 
-        Geometry geometry = Text(text, Reference, ink).BuildGeometry(new Point(0, 0));
+        if (inkHeight <= 0 || area.Width <= 0)
+        {
+            return;
+        }
+
+        Geometry geometry = Text(text, Reference, ink, face).BuildGeometry(new Point(0, 0));
         Rect bounds = geometry.Bounds;
 
         if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
@@ -196,13 +294,13 @@ public static class TrayGlyphRenderer
             return;
         }
 
-        double scale = Round(band * 0.92) / bounds.Height;
-        double condense = Math.Min(1d, size / (bounds.Width * scale));
+        double scale = inkHeight / bounds.Height;
+        double condense = Math.Min(1d, area.Width / (bounds.Width * scale));
 
         if (condense < CondenseFloor)
         {
             condense = CondenseFloor;
-            scale = size / (bounds.Width * CondenseFloor);
+            scale = area.Width / (bounds.Width * CondenseFloor);
         }
 
         double drawnWidth = bounds.Width * scale * condense;
@@ -211,16 +309,16 @@ public static class TrayGlyphRenderer
         TransformGroup transform = new();
         transform.Children.Add(new ScaleTransform(scale * condense, scale, bounds.X, bounds.Y));
         transform.Children.Add(new TranslateTransform(
-            Round((size - drawnWidth) / 2) - bounds.X,
-            Round((band - drawnHeight) / 2) - bounds.Y));
+            area.X + Round((area.Width - drawnWidth) / 2) - bounds.X,
+            area.Y + Round((area.Height - drawnHeight) / 2) - bounds.Y));
 
         geometry.Transform = transform;
         context.DrawGeometry(new SolidColorBrush(ink), null, geometry);
     }
 
-    private static void DrawBar(DrawingContext context, TrayGlyphFrame frame, int size, Zones zones, TrayGlyphPalette palette)
+    private static void DrawPlinth(DrawingContext context, TrayGlyphFrame frame, int size, Zones zones, TrayGlyphPalette palette)
     {
-        context.DrawRectangle(new SolidColorBrush(palette.TrackColor), null, new Rect(0, zones.BarY, size, zones.Bar));
+        context.DrawRectangle(new SolidColorBrush(palette.TrackColor), null, zones.PlinthArea(size));
 
         if (frame.Kind == TrayFrameKind.Failed)
         {
@@ -230,36 +328,107 @@ public static class TrayGlyphRenderer
             for (int x = 0; x < size; x += 4 * zones.Unit)
             {
                 context.DrawRectangle(bad, null,
-                    new Rect(x, zones.BarY, Math.Min(2 * zones.Unit, size - x), zones.Bar));
+                    new Rect(x, zones.PlinthY, Math.Min(2 * zones.Unit, size - x), zones.Plinth));
             }
 
             return;
         }
 
-        if (frame.UsedPercent is not double used)
+        if (FillWidth(frame, size) is not double width)
         {
             return;
         }
 
-        // The track runs the full width beneath it, so a stale bar reads as one pixel of track
-        // where a current bar would have had fill - a difference in alpha rather than in hue, which
-        // is what keeps it legible once high contrast has resolved every tone to one system colour.
-        bool stale = frame.Fill == QuotaBarFill.Stale;
-        double left = stale ? zones.Unit : 0;
-        double width = frame.Kind == TrayFrameKind.AtLimit
-            ? size
-            : Math.Max(1, Round(size * Math.Clamp(used / 100d, 0d, 1d)));
+        double left = FillLeft(frame, zones);
 
         context.DrawRectangle(
             new SolidColorBrush(palette.BandColor(frame.Fill)), null,
-            new Rect(left, zones.BarY, Math.Min(width, size - left), zones.Bar));
+            new Rect(left, zones.PlinthY, Math.Min(width, size - left), zones.Plinth));
     }
 
-    private static FormattedText Text(string value, double em, Color ink) => new(
+    /// <summary>
+    /// The provider's initials, cut into the plinth and inverting at the fill's edge: the layer
+    /// colour where the fill has reached them, the ink colour over bare track.
+    /// <para>
+    /// One string, drawn twice through complementary clips. That is what lets the plinth stay
+    /// translucent over a taskbar whose colour this application cannot query - a single
+    /// knocked-out colour would be unreadable on one side of the fill or the other - and it makes
+    /// the fill's edge readable straight through the letters.
+    /// </para>
+    /// </summary>
+    private static void DrawLabel(DrawingContext context, TrayGlyphFrame frame, int size, Zones zones, TrayGlyphPalette palette)
+    {
+        Rect area = zones.LabelArea(size);
+
+        if (area.Height <= 0)
+        {
+            return;
+        }
+
+        double edge = FillEdge(frame, size, zones);
+
+        Cut(new Rect(0, area.Y, edge, area.Height), palette.Layer);
+        Cut(new Rect(edge, area.Y, size - edge, area.Height), palette.Ink);
+
+        void Cut(Rect clip, Color ink)
+        {
+            if (clip.Width <= 0)
+            {
+                return;
+            }
+
+            context.PushClip(new RectangleGeometry(clip));
+            DrawText(context, frame.Monogram, area, area.Height, ink, LabelFace);
+            context.Pop();
+        }
+    }
+
+    /// <summary>
+    /// The fill's width in device pixels, or null when there is nothing to fill. Null draws bare
+    /// track - never a zero-width fill.
+    /// </summary>
+    private static double? FillWidth(TrayGlyphFrame frame, int size)
+    {
+        if (frame.Kind == TrayFrameKind.Failed || frame.UsedPercent is not double used)
+        {
+            return null;
+        }
+
+        return frame.Kind == TrayFrameKind.AtLimit
+            ? size
+            : Math.Max(1, Round(size * Math.Clamp(used / 100d, 0d, 1d)));
+    }
+
+    /// <summary>
+    /// A stale fill lifts a pixel off the left edge. The track runs the full width beneath it, so
+    /// what the eye reads there is one pixel of track where a current fill would have had colour -
+    /// a difference in alpha rather than in hue, which is what keeps it legible once high contrast
+    /// has resolved every tone to one system colour.
+    /// </summary>
+    private static double FillLeft(TrayGlyphFrame frame, Zones zones) =>
+        frame.Fill == QuotaBarFill.Stale ? zones.Unit : 0;
+
+    /// <summary>
+    /// Where the fill stops, which is where the initials invert. Derived from the same two helpers
+    /// the plinth draws with, so the letters can never turn over anywhere but at the edge the eye
+    /// can see.
+    /// </summary>
+    private static double FillEdge(TrayGlyphFrame frame, int size, Zones zones)
+    {
+        if (FillWidth(frame, size) is not double width)
+        {
+            return 0;
+        }
+
+        double left = FillLeft(frame, zones);
+        return left + Math.Min(width, size - left);
+    }
+
+    private static FormattedText Text(string value, double em, Color ink, Typeface face) => new(
         value,
         CultureInfo.InvariantCulture,
         FlowDirection.LeftToRight,
-        Face,
+        face,
         em,
         new SolidColorBrush(ink),
         numberSubstitution: null,

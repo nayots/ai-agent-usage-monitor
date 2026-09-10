@@ -35,14 +35,18 @@ public class TrayGlyphStateTests
         Assert.Equal(91d, state.Frames[0].UsedPercent);
     }
 
+    /// <summary>
+    /// It used to have to choose: the band could show the name or the figure, and at the limit the
+    /// name won because a hundred said nothing the colour was not already saying. The name lives in
+    /// the plinth now, so the band is free to print the one figure that matters most.
+    /// </summary>
     [Fact]
-    public void AProviderAtOrBeyondItsLimitNamesItselfInsteadOfShowingAHundred()
+    public void AProviderAtOrBeyondItsLimitPrintsAHundred()
     {
         TrayGlyphFrame frame = TrayGlyphState.From([Card("CC", 100d)]).Frames[0];
 
         Assert.Equal(TrayFrameKind.AtLimit, frame.Kind);
-        Assert.Null(frame.Digits);
-        Assert.True(frame.NamesItselfAlways);
+        Assert.Equal("100", frame.Digits);
     }
 
     [Fact]
