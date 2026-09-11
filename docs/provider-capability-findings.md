@@ -172,6 +172,19 @@ attempting the request exactly as before. A bug there must never be able to disa
 `refreshTokenExpiresAt` is what separates the two failure messages: while it is live, running any
 Claude Code session repairs things; once it is gone, only a fresh sign-in will.
 
+### Sign-in renewal (measured 2026-09-11, Claude Code 2.1.263)
+
+The access token lasted 8 hours and the refresh token about 30 days. `claude doctor` renewed an
+expired sign-in in about 2 seconds. `claude auth status` was observed not to renew it and must not
+be substituted. `claude update` also renews according to jens-duttke, but installs a new version
+as a side effect, so it conflicts with `DISABLE_AUTOUPDATER` and is only the documented fallback.
+
+The application does not handle either token during repair. It runs the local CLI once per observed
+expired `expiresAt`, then re-reads only non-secret metadata and proceeds only when that expiry has
+moved. A failed attempt blocks further spawns for that same expiry; the block clears when the
+expiry changes. The setting `AppSettings.ClaudeSignInAutoRepairEnabled` controls this behavior and
+defaults to on.
+
 ### Response shape
 
 Uses `utilization` (0–100) plus **ISO-8601** `resets_at` — note this differs from the statusLine contract, which used `used_percentage` plus unix seconds. Window identity is the **key name**; there is no label field.
