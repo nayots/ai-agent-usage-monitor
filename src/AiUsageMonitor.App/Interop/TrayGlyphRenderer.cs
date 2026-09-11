@@ -118,15 +118,6 @@ public static class TrayGlyphRenderer
     private static readonly Typeface Face = new(
         new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
 
-    /// <summary>
-    /// The initials are set a weight heavier than the figures. At four or five pixels of cap height
-    /// the stems are narrower than a pixel, so no pixel is ever fully inked and weight is the only
-    /// lever left on contrast: in SemiBold the brightest pixel of a knocked-out capital reaches
-    /// about two thirds of the layer colour, which reads as a smudge rather than as a letter.
-    /// </summary>
-    private static readonly Typeface LabelFace = new(
-        new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
-
     /// <summary>The number band, the air and the labelled plinth, in device pixels, for one size.</summary>
     private readonly record struct Zones(int Unit, int Band, int Plinth, int PlinthY)
     {
@@ -213,7 +204,6 @@ public static class TrayGlyphRenderer
 
         DrawBand(context, frame, size, zones, palette);
         DrawPlinth(context, frame, size, zones, palette);
-        DrawLabel(context, frame, size, zones, palette);
     }
 
     /// <summary>
@@ -361,43 +351,6 @@ public static class TrayGlyphRenderer
         context.DrawRectangle(
             new SolidColorBrush(palette.BandColor(frame.Fill)), null,
             new Rect(left, zones.PlinthY, Math.Min(width, size - left), zones.Plinth));
-    }
-
-    /// <summary>
-    /// The provider's initials, cut into the plinth and inverting at the fill's edge: the layer
-    /// colour where the fill has reached them, the ink colour over bare track.
-    /// <para>
-    /// One string, drawn twice through complementary clips. That is what lets the plinth stay
-    /// translucent over a taskbar whose colour this application cannot query - a single
-    /// knocked-out colour would be unreadable on one side of the fill or the other - and it makes
-    /// the fill's edge readable straight through the letters.
-    /// </para>
-    /// </summary>
-    private static void DrawLabel(DrawingContext context, TrayGlyphFrame frame, int size, Zones zones, TrayGlyphPalette palette)
-    {
-        Rect area = zones.LabelArea(size);
-
-        if (area.Height <= 0)
-        {
-            return;
-        }
-
-        double edge = FillEdge(frame, size, zones);
-
-        Cut(new Rect(0, area.Y, edge, area.Height), palette.Layer);
-        Cut(new Rect(edge, area.Y, size - edge, area.Height), palette.Ink);
-
-        void Cut(Rect clip, Color ink)
-        {
-            if (clip.Width <= 0)
-            {
-                return;
-            }
-
-            context.PushClip(new RectangleGeometry(clip));
-            DrawText(context, frame.Monogram, area, area.Height, ink, LabelFace);
-            context.Pop();
-        }
     }
 
     /// <summary>
