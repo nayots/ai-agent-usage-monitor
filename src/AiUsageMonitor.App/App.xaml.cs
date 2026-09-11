@@ -73,7 +73,9 @@ public partial class App : Application
                 new RollingFileWriter(RollingFileLoggerProvider.DefaultDirectory, "app")));
         });
 
-        services.AddSingleton<IReadOnlyList<ProviderDescriptor>>(ProviderRegistry.CreateDefault());
+        services.AddSingleton<IReadOnlyList<ProviderDescriptor>>(provider =>
+            ProviderRegistry.CreateDefault(
+                () => provider.GetRequiredService<SettingsService>().Current.ClaudeSignInAutoRepairEnabled));
         services.AddSingleton(provider => new ProviderRefreshService(
             provider.GetRequiredService<IReadOnlyList<ProviderDescriptor>>(),
             timeout: TimeSpan.FromSeconds(30),

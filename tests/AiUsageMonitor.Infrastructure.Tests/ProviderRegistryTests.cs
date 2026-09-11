@@ -54,4 +54,18 @@ public class ProviderRegistryTests
             Assert.False(string.IsNullOrWhiteSpace(provider.Monogram));
         }
     }
+
+    [Fact]
+    public void CreateDefaultStillProducesEveryProviderWithoutAnAutoRepairDelegate()
+    {
+        Assert.Equal(3, ProviderRegistry.CreateDefault().Count);
+    }
+
+    [Fact]
+    public void CreateDefaultAcceptsAnAutoRepairDelegate()
+    {
+        IReadOnlyList<ProviderDescriptor> providers = ProviderRegistry.CreateDefault(() => false);
+
+        Assert.Equal("claude-code", providers[0].Key);
+    }
 }
