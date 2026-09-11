@@ -504,4 +504,18 @@ public class SettingsViewModelTests
     {
         Assert.Equal(TimeSpan.FromSeconds(4), new AppSettings().TrayRotationDwell);
     }
+
+    [Fact]
+    public void ToggledSignInAutoRepairIsPersisted()
+    {
+        SettingsViewModel viewModel = Model(out SettingsService service);
+
+        Assert.True(viewModel.ClaudeSignInAutoRepairEnabled);
+
+        viewModel.ClaudeSignInAutoRepairEnabled = false;
+
+        Assert.False(viewModel.ClaudeSignInAutoRepairEnabled);
+        Assert.False(service.Current.ClaudeSignInAutoRepairEnabled);
+        viewModel.Dispose();
+    }
 }

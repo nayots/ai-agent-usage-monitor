@@ -56,5 +56,15 @@
       </ItemsControl.ItemTemplate>
     </ItemsControl>
     <Button Style="{StaticResource SettingsActionButtonStyle}" Content="Re-check providers" Command="{Binding RecheckProvidersCommand}" AutomationProperties.Name="Re-check providers" />
+    <CheckBox Margin="0,16,0,0"
+              Style="{StaticResource SettingsCheckBoxStyle}"
+              Content="Renew a lapsed Claude Code sign-in automatically"
+              IsChecked="{Binding ClaudeSignInAutoRepairEnabled, Mode=TwoWay}"
+              AutomationProperties.Name="Renew a lapsed Claude Code sign-in automatically" />
+    <TextBlock Margin="0,4,0,0"
+               TextWrapping="Wrap"
+               Style="{StaticResource CaptionTextStyle}"
+               Foreground="{DynamicResource TextTertiaryBrush}"
+               Text="Claude Code's sign-in lasts eight hours. When it lapses, this runs &quot;claude doctor&quot; so Claude Code renews its own sign-in. No token is ever read or sent by this application." />
   </StackPanel>
 </UserControl>

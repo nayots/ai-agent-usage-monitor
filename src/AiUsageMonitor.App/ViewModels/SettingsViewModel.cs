@@ -277,6 +277,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => _settings.Update(s => s with { ShowUnavailableProviders = value });
     }
 
+    public bool ClaudeSignInAutoRepairEnabled
+    {
+        get => _settings.Current.ClaudeSignInAutoRepairEnabled;
+        set => _settings.Update(s => s with { ClaudeSignInAutoRepairEnabled = value });
+    }
+
     /// <summary>
     /// Reads from the registry rather than from the settings file, because the registry is where
     /// the fact lives. A settings file copied to another machine, or an app the user moved, would
