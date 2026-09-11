@@ -114,7 +114,14 @@ public sealed record AppSettings
 
     /// <summary>
     /// Whether a lapsed Claude Code sign-in may be renewed by asking Claude Code's own CLI to do
-    /// it. This is on by default because the access token lasts eight hours.
+    /// it. On by default: the access token lasts eight hours, so with this off the Claude card
+    /// stops reporting roughly three times a day until a terminal is opened.
+    ///
+    /// It is a setting rather than plain behaviour because the command does cause Claude Code to
+    /// rewrite its own credential file, unattended. PRD §11 governs <em>this</em> application
+    /// modifying provider configuration, and here the provider's own maintenance command maintains
+    /// the provider's own state - but the side effect is real, so a user is entitled to switch it
+    /// off.
     /// </summary>
     public bool ClaudeSignInAutoRepairEnabled { get; init; } = true;
 

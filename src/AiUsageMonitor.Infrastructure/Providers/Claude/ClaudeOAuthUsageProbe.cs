@@ -584,6 +584,11 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
 
     /// <summary>
     /// Reads non-secret account facts through a path that structurally cannot return the token.
+    ///
+    /// The repair only ever needs to know whether the stored expiry moved. Giving it a reader that
+    /// never touches <c>accessToken</c> means no later edit to the repair path can leak one, which
+    /// is worth the small duplication of the JSON navigation that <see cref="ReadAccessToken"/>
+    /// also does.
     /// </summary>
     private static ClaudeAccountMetadata ReadAccountMetadata(string credentialsPath)
     {
@@ -603,6 +608,10 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+            // Unknown, never a guess - and the guess would be consequential. ClaudeSignInRepair
+            // requires a readable instant before it calls anything a renewal, so a file that cannot
+            // be read here can never be mistaken for one, which is the only reason returning Empty
+            // is safe rather than merely convenient.
             return ClaudeAccountMetadata.Empty;
         }
     }
