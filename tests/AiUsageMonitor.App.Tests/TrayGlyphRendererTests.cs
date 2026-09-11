@@ -155,6 +155,28 @@ public class TrayGlyphRendererTests(WpfFixture wpf)
         }
     });
 
+    /// <summary>
+    /// The slot arithmetic is re-derived per size rather than scaled from sixteen, and the whole
+    /// point of doing it that way is the sizes that are not sixteen. The expected columns are copied
+    /// from the spec's table rather than from the implementation, so this fails if the two drift.
+    /// </summary>
+    [Theory]
+    [InlineData(20, 1, 8)]
+    [InlineData(20, 2, 16)]
+    [InlineData(24, 1, 10)]
+    [InlineData(24, 2, 19)]
+    [InlineData(32, 1, 13)]
+    [InlineData(32, 2, 26)]
+    public void FlagSitsInItsSlotAtEverySize(int size, int slot, int expectedX) => wpf.Invoke(() =>
+    {
+        Color[,] pixels = Render(new(slot, "47", 47d, QuotaBarFill.Accent, TrayFrameKind.Reading), size);
+        int flag = Math.Max(1, (int)Math.Round(size * 0.1875d, MidpointRounding.AwayFromZero));
+
+        Assert.True(Same(pixels[expectedX, 0], Palette.FlagColor(slot)), $"no flag at x={expectedX} ({size}px)");
+        Assert.True(Same(pixels[expectedX + flag - 1, 0], Palette.FlagColor(slot)), $"flag is short at {size}px");
+        Assert.False(Same(pixels[expectedX - 1, 0], Palette.FlagColor(slot)), $"flag starts early at {size}px");
+    });
+
     /// <summary>The flag and the figure share columns but no rows, at every size the shell asks for.</summary>
     [Theory]
     [InlineData(16)]
