@@ -55,6 +55,24 @@ public class ProviderCardViewModelTests
     }
 
     [Fact]
+    public void TraySlotComesFromTheDescriptor()
+    {
+        ProviderDescriptor descriptor = new("codex", "Codex", "CX", new SilentProbe(), TraySlot: 1);
+        ProviderCardViewModel card = new(descriptor, colorBarsByUsage: true, _ => { });
+
+        Assert.Equal(1, card.TraySlot);
+    }
+
+    [Fact]
+    public void EveryRegisteredProviderHasItsOwnTraySlot()
+    {
+        int[] slots = [.. ProviderRegistry.CreateDefault().Select(provider => provider.TraySlot)];
+
+        Assert.Equal([0, 1, 2], slots);
+        Assert.Equal(slots.Length, slots.Distinct().Count());
+    }
+
+    [Fact]
     public void LatestSnapshotIsNullUntilApplyThenExposesTheAppliedSnapshot()
     {
         ProviderCardViewModel card = Card();
