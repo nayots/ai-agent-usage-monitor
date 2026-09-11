@@ -137,10 +137,17 @@ substituted**; `claude update` also works but installs a new version as a side e
 contradicts a user who has set `DISABLE_AUTOUPDATER`. The subcommand is the single constant
 `ClaudeSignInRepair.RepairArguments`.
 
-Success is judged **only** by whether the stored `expiresAt` moved — never by the exit code, and
-never by parsing output. One attempt per observed expiry (`ClaudeSignInRepair` holds the block),
-so a CLI that cannot fix it does not spawn a process every poll. Controlled by
-`AppSettings.ClaudeSignInAutoRepairEnabled`, default on.
+Success is judged **only** from the credential file — never by the exit code, and never by parsing
+output. The test is that the stored `expiresAt` is readable, **has changed, and is still in the
+future**, and all three parts are load-bearing. Dropping "changed" breaks the 401 path, where the
+expiry was already future when the endpoint refused the token, so liveness alone would retry the
+identical token. Dropping "still future" breaks the lapsed path, where a rotation to another spent
+token would send exactly the doomed request that path exists to avoid. **An earlier revision
+stated only the liveness half and shipped only the change half; do not "simplify" it back.**
+
+One attempt per observed expiry (`ClaudeSignInRepair` holds the block), so a CLI that cannot fix it
+does not spawn a process every poll. Controlled by `AppSettings.ClaudeSignInAutoRepairEnabled`,
+default on.
 
 **statusLine was evaluated and rejected — do not re-add it as a fallback.** The statusLine JSON contract (`rate_limits` piped on stdin) was investigated and proven parseable, then rejected as a product mechanism because it is push-only (fires only inside an interactive session, never under `-p`), requires a user-approved modification of the user's existing `~/.claude/settings.json` statusLine configuration to tee the data out, and produces data that is stale whenever no session is running — the common case for a persistent desktop widget. The recorded sample in `fixtures/claude-statusline-sample.json` is kept solely as regression coverage for the duck-typed extractor's `used_percentage` dialect, asserted in `DuckTypedQuotaExtractorTests`, not as evidence the mechanism is supported. `fixtures/claude-usage-limits-sample.json` is a synthetic-only usage-endpoint shape fixture for Claude adapter normalization tests; its percentages and reset instants are not captured account data.
 

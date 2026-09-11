@@ -179,10 +179,18 @@ expired sign-in in about 2 seconds. `claude auth status` was observed not to ren
 be substituted. `claude update` also renews according to jens-duttke, but installs a new version
 as a side effect, so it conflicts with `DISABLE_AUTOUPDATER` and is only the documented fallback.
 
+The `doctor` observation is a **single trial**, taken on a machine that was also running a Claude
+Code session. It is reported as cause rather than coincidence because the token had sat expired for
+24 minutes beforehand and `auth status` one minute earlier left it expired — but it is one
+observation, not a series.
+
 The application does not handle either token during repair. It runs the local CLI once per observed
-expired `expiresAt`, then re-reads only non-secret metadata and proceeds only when that expiry has
-moved. A failed attempt blocks further spawns for that same expiry; the block clears when the
-expiry changes. The setting `AppSettings.ClaudeSignInAutoRepairEnabled` controls this behavior and
+expired `expiresAt`, then re-reads only non-secret metadata and proceeds only when that expiry is
+readable, has changed, **and is still in the future**. Requiring all three is deliberate: the
+changed half is what stops a rejected-but-unexpired token being retried unchanged, and the still-
+future half is what stops a rotation to another already-spent token being treated as a renewal. A
+failed attempt blocks further spawns for that same expiry; the block clears when the expiry
+changes. The setting `AppSettings.ClaudeSignInAutoRepairEnabled` controls this behavior and
 defaults to on.
 
 ### Response shape
