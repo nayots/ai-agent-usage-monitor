@@ -666,6 +666,30 @@ public sealed class ClaudeOAuthUsageProbeTests
     }
 
     [Fact]
+    public async Task ARepairThatLeavesTheSignInSpentStillSendsNoRequest()
+    {
+        DateTimeOffset now = DateTimeOffset.Parse("2026-09-11T19:00:00Z");
+        using var directory = new TempDirectory();
+        string path = WriteCredentials(directory, "stale", $"{Expiry(now.AddHours(-1))},{LiveRefreshToken(now)}");
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.263 (Claude Code)");
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+
+        // The file changes, but to another already-spent sign-in. A changed expiry alone must not
+        // count as a renewal, or this sends the doomed request the whole branch exists to avoid.
+        var repairingProcesses = new RewritingProcessRunner(
+            processes,
+            () => WriteCredentials(directory, "also-spent", $"{Expiry(now.AddMinutes(-5))},{LiveRefreshToken(now)}"));
+        var probe = new ClaudeOAuthUsageProbe(repairingProcesses, handler, () => ExePath, () => path, clock: () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(0, handler.RequestCount);
+        Assert.Equal(ConnectionState.Unavailable, snapshot.State);
+    }
+
+    [Fact]
     public async Task ALapsedSignInThatCannotBeRepairedKeepsTodaysMessage()
     {
         DateTimeOffset now = DateTimeOffset.Parse("2026-09-11T19:00:00Z");

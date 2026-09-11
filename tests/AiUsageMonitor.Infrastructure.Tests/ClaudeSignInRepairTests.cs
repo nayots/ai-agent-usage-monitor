@@ -7,17 +7,56 @@ public sealed class ClaudeSignInRepairTests
 {
     private const string ExePath = "C:\\tools\\claude.exe";
 
+    // Pinned, not ambient. Liveness is half of what decides a repair worked, so a real clock would
+    // make every "renewed" fixture below expire on 2026-09-11 and start failing the next day.
+    private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-09-11T12:00:00Z");
+
     private static readonly DateTimeOffset Stale = DateTimeOffset.Parse("2026-09-11T10:00:00Z");
     private static readonly DateTimeOffset Renewed = DateTimeOffset.Parse("2026-09-11T22:00:00Z");
+
+    private static ClaudeSignInRepair CreateRepair(FakeProcessRunner processes) => new(processes, () => Now);
 
     private static ClaudeAccountMetadata Metadata(DateTimeOffset? expiresAt) =>
         new(expiresAt, RefreshTokenExpiresAt: null, SubscriptionType: null, RateLimitTier: null);
 
     [Fact]
+    public async Task ARotationToAnotherAlreadySpentTokenIsNotARepair()
+    {
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
+        ClaudeSignInRepair repair = CreateRepair(processes);
+        var notes = new List<string>();
+
+        // The expiry moved, so it is a different sign-in - but it is spent too. Accepting it would
+        // send a request that can only be rejected, which is the whole point of not sending one.
+        DateTimeOffset alsoSpent = Stale.AddMinutes(30);
+
+        bool repaired = await repair.TryRepairAsync(
+            ExePath, Stale, () => Metadata(alsoSpent), notes, CancellationToken.None);
+
+        Assert.False(repaired);
+    }
+
+    [Fact]
+    public async Task AStillFutureExpiryThatDidNotMoveIsNotARepair()
+    {
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
+        ClaudeSignInRepair repair = CreateRepair(processes);
+
+        // The rejected-token path: the endpoint refused a token the file still calls live. Nothing
+        // changed, so there is nothing new to retry with.
+        bool repaired = await repair.TryRepairAsync(
+            ExePath, Renewed, () => Metadata(Renewed), [], CancellationToken.None);
+
+        Assert.False(repaired);
+    }
+
+    [Fact]
     public async Task RenewalThatHappenedElsewhereIsAcceptedWithoutSpawningAnything()
     {
         var processes = new FakeProcessRunner();
-        var repair = new ClaudeSignInRepair(processes);
+        var repair = CreateRepair(processes);
         var notes = new List<string>();
 
         bool repaired = await repair.TryRepairAsync(
@@ -32,7 +71,7 @@ public sealed class ClaudeSignInRepairTests
     {
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, "Claude Code doctor");
-        var repair = new ClaudeSignInRepair(processes);
+        var repair = CreateRepair(processes);
         var notes = new List<string>();
         var reloads = new Queue<ClaudeAccountMetadata>([Metadata(Stale), Metadata(Renewed)]);
 
@@ -47,7 +86,7 @@ public sealed class ClaudeSignInRepairTests
     {
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
-        var repair = new ClaudeSignInRepair(processes);
+        var repair = CreateRepair(processes);
 
         bool repaired = await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
 
@@ -60,7 +99,7 @@ public sealed class ClaudeSignInRepairTests
     {
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
-        var repair = new ClaudeSignInRepair(processes);
+        var repair = CreateRepair(processes);
 
         bool repaired = await repair.TryRepairAsync(
             ExePath, Stale, () => ClaudeAccountMetadata.Empty, [], CancellationToken.None);
@@ -73,7 +112,7 @@ public sealed class ClaudeSignInRepairTests
     {
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
-        var repair = new ClaudeSignInRepair(processes);
+        var repair = CreateRepair(processes);
 
         bool first = await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
         bool second = await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
@@ -89,7 +128,7 @@ public sealed class ClaudeSignInRepairTests
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
         processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
-        var repair = new ClaudeSignInRepair(processes);
+        var repair = CreateRepair(processes);
         DateTimeOffset later = Stale.AddHours(8);
 
         await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
@@ -103,7 +142,7 @@ public sealed class ClaudeSignInRepairTests
     {
         var processes = new FakeProcessRunner();
         processes.EnqueueCapturedFailure(ExePath, ClaudeSignInRepair.RepairArguments, new IOException("boom"));
-        var repair = new ClaudeSignInRepair(processes);
+        var repair = CreateRepair(processes);
         var notes = new List<string>();
 
         bool repaired = await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), notes, CancellationToken.None);
@@ -119,7 +158,7 @@ public sealed class ClaudeSignInRepairTests
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
         processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
-        var repair = new ClaudeSignInRepair(processes);
+        var repair = CreateRepair(processes);
 
         await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
         DateTimeOffset other = Stale.AddHours(8);

@@ -128,7 +128,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         _lastWriteUtc = lastWriteUtc ?? File.GetLastWriteTimeUtc;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _signInAutoRepairEnabled = signInAutoRepairEnabled ?? (() => true);
-        _repair = new ClaudeSignInRepair(_processes);
+        _repair = new ClaudeSignInRepair(_processes, _clock);
     }
 
     /// <inheritdoc />

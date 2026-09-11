@@ -13,13 +13,19 @@ public sealed class ClaudeSignInRepair
     private static readonly TimeSpan RepairTimeout = TimeSpan.FromSeconds(30);
 
     private readonly IProcessRunner _processes;
+    private readonly Func<DateTimeOffset> _now;
     private bool _hasFailed;
     private DateTimeOffset? _failedExpiry;
 
-    public ClaudeSignInRepair(IProcessRunner processes) => _processes = processes;
+    public ClaudeSignInRepair(IProcessRunner processes, Func<DateTimeOffset>? now = null)
+    {
+        _processes = processes;
+        _now = now ?? (() => DateTimeOffset.UtcNow);
+    }
 
     /// <summary>
-    /// Returns true when the stored sign-in is now different from <paramref name="staleExpiry"/>.
+    /// Returns true when the stored sign-in is now a different one from <paramref name="staleExpiry"/>
+    /// <em>and</em> that new one is still live.
     /// </summary>
     public async Task<bool> TryRepairAsync(
         string exePath,
@@ -70,8 +76,32 @@ public sealed class ClaudeSignInRepair
         return false;
     }
 
-    private static bool Rotated(DateTimeOffset? staleExpiry, ClaudeAccountMetadata reloaded) =>
-        reloaded.AccessTokenExpiresAt is DateTimeOffset current && current != staleExpiry;
+    /// <summary>
+    /// Whether the stored expiry is now a different, readable, still-future instant from the one we
+    /// started with. All three conditions are load-bearing, and each guards a different call site:
+    ///
+    /// <list type="bullet">
+    /// <item><description>
+    /// <b>Readable.</b> The token-free reader returns <see cref="ClaudeAccountMetadata.Empty"/> for a
+    /// file it cannot read or parse. Without this, an unreadable file would compare unequal to a real
+    /// instant and be reported as a successful renewal.
+    /// </description></item>
+    /// <item><description>
+    /// <b>Changed.</b> Required by the rejected-token path, where the stored expiry was already in
+    /// the future when the endpoint rejected it. Liveness alone would call that a renewal and retry
+    /// the identical token, buying a guaranteed second rejection.
+    /// </description></item>
+    /// <item><description>
+    /// <b>Still future.</b> Required by the lapsed-sign-in path, where change alone would accept a
+    /// rotation to another already-spent token and send a request that can only be rejected - the
+    /// exact doomed call that path exists to avoid.
+    /// </description></item>
+    /// </list>
+    /// </summary>
+    private bool Rotated(DateTimeOffset? staleExpiry, ClaudeAccountMetadata reloaded) =>
+        reloaded.AccessTokenExpiresAt is DateTimeOffset current
+        && current != staleExpiry
+        && current > _now();
 
     private void RecordFailure(DateTimeOffset? staleExpiry)
     {
