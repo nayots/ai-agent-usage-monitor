@@ -18,6 +18,9 @@
   <SolidColorBrush x:Key="QuotaBarExhaustedFillBrush" Color="#E0685E" />
   <SolidColorBrush x:Key="QuotaBarStaleFillBrush" Color="#8A8A8A" />
   <SolidColorBrush x:Key="QuotaBarTrackBrush" Color="#3D3D3D" />
+  <SolidColorBrush x:Key="TrayFlagSlot0Brush" Color="#C57DEE" />
+  <SolidColorBrush x:Key="TrayFlagSlot1Brush" Color="#35C5BE" />
+  <SolidColorBrush x:Key="TrayFlagSlot2Brush" Color="#FF8CBF" />
   <SolidColorBrush x:Key="ElapsedMarkerBrush" Color="#FFFFFF" />
   <SolidColorBrush x:Key="ElapsedMarkerGapBrush" Color="#2B2B2B" />
   <SolidColorBrush x:Key="QuotaBarHatchBrush" Color="#4D000000" />

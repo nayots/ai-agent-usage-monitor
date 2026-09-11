@@ -22,8 +22,22 @@ public sealed record TrayGlyphPalette(
     Color Exhausted,
     Color Stale,
     Color Bad,
-    Color Layer)
+    Color Layer,
+    Color Flag0,
+    Color Flag1,
+    Color Flag2)
 {
+    /// <summary>
+    /// The flag's colour for a slot. Colour and position come from the same integer, so the two can
+    /// never disagree about which provider is being drawn.
+    /// </summary>
+    public Color FlagColor(int slot) => slot switch
+    {
+        <= 0 => Flag0,
+        1 => Flag1,
+        _ => Flag2
+    };
+
     /// <summary>
     /// The bar track, as the ink colour at low opacity.
     /// <para>
@@ -62,7 +76,10 @@ public sealed record TrayGlyphPalette(
             Read(dictionary, "QuotaBarExhaustedFillBrush"),
             Read(dictionary, "QuotaBarStaleFillBrush"),
             Read(dictionary, "StateBadBrush"),
-            Read(dictionary, "WidgetLayerBackgroundBrush"));
+            Read(dictionary, "WidgetLayerBackgroundBrush"),
+            Read(dictionary, "TrayFlagSlot0Brush"),
+            Read(dictionary, "TrayFlagSlot1Brush"),
+            Read(dictionary, "TrayFlagSlot2Brush"));
     }
 
     public Color BandColor(QuotaBarFill fill) => fill switch

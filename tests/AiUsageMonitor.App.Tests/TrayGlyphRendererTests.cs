@@ -29,7 +29,10 @@ public class TrayGlyphRendererTests(WpfFixture wpf)
         Exhausted: Color.FromRgb(0xFF, 0x00, 0xFF),
         Stale: Color.FromRgb(0x80, 0x80, 0x80),
         Bad: Color.FromRgb(0xFF, 0x00, 0x00),
-        Layer: Color.FromRgb(0xFF, 0xFF, 0xFF));
+        Layer: Color.FromRgb(0xFF, 0xFF, 0xFF),
+        Flag0: Color.FromRgb(0x11, 0x22, 0x33),
+        Flag1: Color.FromRgb(0x44, 0x55, 0x66),
+        Flag2: Color.FromRgb(0x77, 0x88, 0x99));
 
     private const int Band = 9;
     private const int PlinthTop = 10;
@@ -383,4 +386,41 @@ public class TrayGlyphRendererTests(WpfFixture wpf)
 
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr icon);
+
+    [Theory]
+    [InlineData(ThemeVariant.Light)]
+    [InlineData(ThemeVariant.Dark)]
+    [InlineData(ThemeVariant.HighContrast)]
+    public void EveryVariantDefinesAllThreeFlagColours(ThemeVariant variant) => wpf.Invoke(() =>
+    {
+        TrayGlyphPalette palette = TrayGlyphPalette.For(variant);
+
+        // Read() falls back to Gray for a missing key, so Gray is the tell for a token that is absent.
+        foreach (int slot in (int[])[0, 1, 2])
+        {
+            Assert.NotEqual(Colors.Gray, palette.FlagColor(slot));
+        }
+    });
+
+    [Fact]
+    public void FlagColoursAreDistinctWhereColourIsAllowedToCarryMeaning() => wpf.Invoke(() =>
+    {
+        TrayGlyphPalette palette = TrayGlyphPalette.For(ThemeVariant.Dark);
+
+        Assert.Equal(3, new[] { palette.FlagColor(0), palette.FlagColor(1), palette.FlagColor(2) }.Distinct().Count());
+    });
+
+    /// <summary>
+    /// High contrast resolves every fill to one system colour on purpose, so the flag's hue carries
+    /// nothing there and the slot's position is the only thing left naming the provider. Asserting the
+    /// collapse keeps anyone from "fixing" it back into three hues.
+    /// </summary>
+    [Fact]
+    public void HighContrastCollapsesTheFlagToOneSystemColour() => wpf.Invoke(() =>
+    {
+        TrayGlyphPalette palette = TrayGlyphPalette.For(ThemeVariant.HighContrast);
+
+        Assert.Equal(palette.FlagColor(0), palette.FlagColor(1));
+        Assert.Equal(palette.FlagColor(1), palette.FlagColor(2));
+    });
 }

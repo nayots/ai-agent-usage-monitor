@@ -11,7 +11,8 @@ namespace AiUsageMonitor.App.Tests;
 public class TrayIconFramesTests(WpfFixture wpf)
 {
     private static readonly TrayGlyphPalette Palette = new(
-        Colors.Black, Colors.Blue, Colors.Orange, Colors.Red, Colors.Gray, Colors.DarkRed, Colors.White);
+        Colors.Black, Colors.Blue, Colors.Orange, Colors.Red, Colors.Gray, Colors.DarkRed, Colors.White,
+        Colors.Violet, Colors.Teal, Colors.HotPink);
 
     private static TrayGlyphState State(params TrayGlyphFrame[] frames) => new(frames);
 
