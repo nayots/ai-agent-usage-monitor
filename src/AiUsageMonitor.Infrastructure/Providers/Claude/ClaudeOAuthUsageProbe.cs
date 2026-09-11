@@ -77,6 +77,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private readonly ProviderInstallationCache _installations;
     private readonly Func<string, DateTime> _lastWriteUtc;
     private readonly Func<DateTimeOffset> _clock;
+    private readonly Func<bool> _signInAutoRepairEnabled;
+    private readonly ClaudeSignInRepair _repair;
 
     private static HttpClient CreateClient()
     {
@@ -114,7 +116,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         ProviderVersionCache? versions = null,
         Func<string, DateTime>? lastWriteUtc = null,
         Func<DateTimeOffset>? clock = null,
-        ProviderInstallationCache? installations = null)
+        ProviderInstallationCache? installations = null,
+        Func<bool>? signInAutoRepairEnabled = null)
     {
         _processes = processes ?? DefaultProcessRunner.Instance;
         _client = handler is null ? Client : CreateClient(handler);
@@ -124,6 +127,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         _installations = installations ?? new ProviderInstallationCache();
         _lastWriteUtc = lastWriteUtc ?? File.GetLastWriteTimeUtc;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        _signInAutoRepairEnabled = signInAutoRepairEnabled ?? (() => true);
+        _repair = new ClaudeSignInRepair(_processes);
     }
 
     /// <inheritdoc />
@@ -183,14 +188,31 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         // fact is what is useful, and notes end up in diagnostic dumps.
         if (ExpiredSignInMessage(account, _clock()) is string expiredMessage)
         {
-            notes.Add(
-                "The stored sign-in had already expired when this check ran, so no request was sent - "
-                + "an expired token can only be rejected, and every call counts toward this endpoint's throttling.");
-            notes.Add(expiredMessage == SignInExpiredMessage
-                ? "The refresh token has expired too, so Claude Code cannot repair this by itself."
-                : "The refresh token is still usable, so running any Claude Code session will restore this.");
+            bool repaired = expiredMessage == SignInNeedsRefreshMessage
+                && _signInAutoRepairEnabled()
+                && await _repair.TryRepairAsync(
+                    exePath,
+                    account.AccessTokenExpiresAt,
+                    () => ReadAccountMetadata(credentialsPath),
+                    notes,
+                    ct).ConfigureAwait(false);
 
-            return Snapshot(true, version, exePath, ConnectionState.Unavailable, [], null, expiredMessage, notes);
+            if (repaired)
+            {
+                token = ReadAccessToken(credentialsPath, fileExists: true, notes, out account);
+            }
+
+            if (!repaired || token is null)
+            {
+                notes.Add(
+                    "The stored sign-in had already expired when this check ran, so no request was sent - "
+                    + "an expired token can only be rejected, and every call counts toward this endpoint's throttling.");
+                notes.Add(expiredMessage == SignInExpiredMessage
+                    ? "The refresh token has expired too, so Claude Code cannot repair this by itself."
+                    : "The refresh token is still usable, so running any Claude Code session will restore this.");
+
+                return Snapshot(true, version, exePath, ConnectionState.Unavailable, [], null, expiredMessage, notes);
+            }
         }
 
         try
@@ -505,6 +527,31 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             notes.Add($"credentials.json could not be read or parsed ({ex.GetType().Name}). token: <absent>");
             metadata = ClaudeAccountMetadata.Empty;
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads non-secret account facts through a path that structurally cannot return the token.
+    /// </summary>
+    private static ClaudeAccountMetadata ReadAccountMetadata(string credentialsPath)
+    {
+        try
+        {
+            using FileStream stream = File.OpenRead(credentialsPath);
+            using JsonDocument doc = JsonDocument.Parse(stream);
+
+            return doc.RootElement.TryGetProperty("claudeAiOauth", out JsonElement oauth)
+                && oauth.ValueKind == JsonValueKind.Object
+                    ? new ClaudeAccountMetadata(
+                        AccessTokenExpiresAt: TryGetUnixMilliseconds(oauth, "expiresAt"),
+                        RefreshTokenExpiresAt: TryGetUnixMilliseconds(oauth, "refreshTokenExpiresAt"),
+                        SubscriptionType: TryGetNonEmptyString(oauth, "subscriptionType"),
+                        RateLimitTier: TryGetNonEmptyString(oauth, "rateLimitTier"))
+                    : ClaudeAccountMetadata.Empty;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return ClaudeAccountMetadata.Empty;
         }
     }
 

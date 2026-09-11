@@ -573,6 +573,86 @@ public sealed class ClaudeOAuthUsageProbeTests
         Assert.Contains("token: <present, redacted>", snapshot.Notes);
     }
 
+    private static string Expiry(DateTimeOffset instant) =>
+        $"\"expiresAt\":{instant.ToUnixTimeMilliseconds()}";
+
+    private static string LiveRefreshToken(DateTimeOffset now) =>
+        $"\"refreshTokenExpiresAt\":{now.AddDays(20).ToUnixTimeMilliseconds()}";
+
+    [Fact]
+    public async Task ALapsedSignInIsRepairedAndTheReadingProceeds()
+    {
+        DateTimeOffset now = DateTimeOffset.Parse("2026-09-11T19:00:00Z");
+        using var directory = new TempDirectory();
+        string path = WriteCredentials(directory, "stale", $"{Expiry(now.AddHours(-1))},{LiveRefreshToken(now)}");
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.263 (Claude Code)");
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, "Claude Code doctor");
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        var repairingProcesses = new RewritingProcessRunner(
+            processes,
+            () => WriteCredentials(directory, "renewed", $"{Expiry(now.AddHours(8))},{LiveRefreshToken(now)}"));
+        var probe = new ClaudeOAuthUsageProbe(repairingProcesses, handler, () => ExePath, () => path, clock: () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(1, handler.RequestCount);
+        Assert.NotEqual(ConnectionState.Unavailable, snapshot.State);
+        Assert.Contains(snapshot.Notes, n => n.Contains("renewed its sign-in", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ALapsedSignInThatCannotBeRepairedKeepsTodaysMessage()
+    {
+        DateTimeOffset now = DateTimeOffset.Parse("2026-09-11T19:00:00Z");
+        using var directory = new TempDirectory();
+        string path = WriteCredentials(directory, "stale", $"{Expiry(now.AddHours(-1))},{LiveRefreshToken(now)}");
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.263 (Claude Code)");
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        var probe = new ClaudeOAuthUsageProbe(processes, handler, () => ExePath, () => path, clock: () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Unavailable, snapshot.State);
+        Assert.Equal("Claude Code's stored sign-in has expired — run any Claude Code session to refresh it", snapshot.Error);
+        Assert.Equal(0, handler.RequestCount);
+        Assert.Contains(snapshot.Notes, n => n.Contains("did not change", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AFullyExpiredSignInIsNeverWorthACommand()
+    {
+        DateTimeOffset now = DateTimeOffset.Parse("2026-09-11T19:00:00Z");
+        using var directory = new TempDirectory();
+        string path = WriteCredentials(directory, "stale", $"{Expiry(now.AddHours(-1))},\"refreshTokenExpiresAt\":{now.AddDays(-1).ToUnixTimeMilliseconds()}");
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.263 (Claude Code)");
+        var probe = new ClaudeOAuthUsageProbe(processes, new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}")), () => ExePath, () => path, clock: () => now);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal("Claude Code's sign-in has fully expired — run \"claude\" and sign in again", snapshot.Error);
+        Assert.Equal(1, processes.RunCapturedCallCount(ExePath));
+    }
+
+    [Fact]
+    public async Task TheRepairIsSkippedEntirelyWhenTheSettingIsOff()
+    {
+        DateTimeOffset now = DateTimeOffset.Parse("2026-09-11T19:00:00Z");
+        using var directory = new TempDirectory();
+        string path = WriteCredentials(directory, "stale", $"{Expiry(now.AddHours(-1))},{LiveRefreshToken(now)}");
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.263 (Claude Code)");
+        var probe = new ClaudeOAuthUsageProbe(processes, new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}")), () => ExePath, () => path, clock: () => now, signInAutoRepairEnabled: () => false);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Unavailable, snapshot.State);
+        Assert.Equal(1, processes.RunCapturedCallCount(ExePath));
+    }
+
     private static long UnixMs(DateTimeOffset instant) => instant.ToUnixTimeMilliseconds();
 
     private static ClaudeOAuthUsageProbe CreateProbe(HttpMessageHandler handler, string credentialsPath, Func<DateTimeOffset>? clock = null)
