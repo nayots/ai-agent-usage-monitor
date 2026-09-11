@@ -393,8 +393,8 @@ public partial class WidgetWindow : Window
             return "AI Usage Monitor";
         }
 
-        string monogram = _glyph.Frames[index].Monogram;
-        ProviderCardViewModel? card = _model.Providers.FirstOrDefault(provider => provider.Monogram == monogram);
+        int slot = _glyph.Frames[index].Slot;
+        ProviderCardViewModel? card = _model.Providers.FirstOrDefault(provider => provider.TraySlot == slot);
 
         return card is null
             ? "AI Usage Monitor"

@@ -43,6 +43,8 @@ public sealed class ProviderCardViewModel : ObservableObject
 
     public string Monogram => _descriptor.Monogram;
 
+    public int TraySlot => _descriptor.TraySlot;
+
     public RelayCommand RetryCommand { get; }
 
     /// <summary>

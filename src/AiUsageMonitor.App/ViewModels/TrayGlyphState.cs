@@ -11,7 +11,7 @@ public enum TrayFrameKind
     /// <summary>A percentage worth printing. The only kind whose band shows figures.</summary>
     Reading,
 
-    /// <summary>At or beyond the limit. The figure is always 100, and the band prints it.</summary>
+    /// <summary>At or beyond the limit. The band prints no figure.</summary>
     AtLimit,
 
     /// <summary>The provider's mechanism failed. There is no figure, and which tool broke is the question.</summary>
@@ -21,12 +21,12 @@ public enum TrayFrameKind
     Waiting
 }
 
-/// <param name="Monogram">The provider's two letters, from <c>ProviderDescriptor.Monogram</c>.</param>
-/// <param name="Digits">The figures to print, or null for the two kinds that have none.</param>
-/// <param name="UsedPercent">Bar fill. Null draws bare track - never a zero-width fill.</param>
-/// <param name="Fill">The bar's band, resolved by the same selector the widget's own rows use.</param>
+/// <param name="Slot">The provider's flag slot, which picks both the flag's position and its colour.</param>
+/// <param name="Digits">The figures to print, or null for the three kinds that have none.</param>
+/// <param name="UsedPercent">Gauge fill. Null draws bare track - never a zero-width fill.</param>
+/// <param name="Fill">The gauge's band, resolved by the same selector the widget's own rows use.</param>
 public readonly record struct TrayGlyphFrame(
-    string Monogram,
+    int Slot,
     string? Digits,
     double? UsedPercent,
     QuotaBarFill Fill,
@@ -65,7 +65,7 @@ public sealed class TrayGlyphState
 
             if (card.State is ConnectionState.Error or ConnectionState.Unavailable)
             {
-                frames.Add(new(card.Monogram, null, null, QuotaBarFill.Accent, TrayFrameKind.Failed));
+                frames.Add(new(card.TraySlot, null, null, QuotaBarFill.Accent, TrayFrameKind.Failed));
                 continue;
             }
 
@@ -76,15 +76,15 @@ public sealed class TrayGlyphState
 
             if (worst?.UsedPercent is not double used)
             {
-                frames.Add(new(card.Monogram, null, null, QuotaBarFill.Accent, TrayFrameKind.Waiting));
+                frames.Add(new(card.TraySlot, null, null, QuotaBarFill.Accent, TrayFrameKind.Waiting));
                 continue;
             }
 
             QuotaBarFill fill = QuotaBarFillSelector.Select(used, limitReached: false, worst.ColorBarsByUsage, worst.IsStale);
 
             frames.Add(used >= QuotaBarFillSelector.ExhaustedBandStartPercent
-                ? new(card.Monogram, "100", used, fill, TrayFrameKind.AtLimit)
-                : new(card.Monogram, DigitsFor(used), used, fill, TrayFrameKind.Reading));
+                ? new(card.TraySlot, null, used, fill, TrayFrameKind.AtLimit)
+                : new(card.TraySlot, DigitsFor(used), used, fill, TrayFrameKind.Reading));
         }
 
         return new TrayGlyphState(frames);

@@ -7,14 +7,14 @@ public class TrayRotationTests
 {
     private static readonly TimeSpan Dwell = TimeSpan.FromSeconds(4);
 
-    private static TrayGlyphFrame Reading(string mark, double used) =>
-        new(mark, ((int)used).ToString(), used, QuotaBarFill.Accent, TrayFrameKind.Reading);
+    private static TrayGlyphFrame Reading(int slot, double used) =>
+        new(slot, ((int)used).ToString(), used, QuotaBarFill.Accent, TrayFrameKind.Reading);
 
-    private static TrayGlyphFrame Troubled(string mark, TrayFrameKind kind) =>
-        new(mark, null, null, QuotaBarFill.Accent, kind);
+    private static TrayGlyphFrame Troubled(int slot, TrayFrameKind kind) =>
+        new(slot, null, null, QuotaBarFill.Accent, kind);
 
     private static readonly TrayGlyphFrame[] Three =
-        [Reading("CC", 92d), Reading("CX", 44d), Reading("CR", 22d)];
+        [Reading(0, 92d), Reading(1, 44d), Reading(2, 22d)];
 
     /// <summary>
     /// A turn is one frame now. It used to open on a second of the provider's initials before the
@@ -44,7 +44,7 @@ public class TrayRotationTests
     [Fact]
     public void ItParksOnTheOnlyTroubledProvider()
     {
-        TrayGlyphFrame[] frames = [Reading("CC", 61d), Troubled("CX", TrayFrameKind.AtLimit), Reading("CR", 22d)];
+        TrayGlyphFrame[] frames = [Reading(0, 61d), Troubled(1, TrayFrameKind.AtLimit), Reading(2, 22d)];
 
         foreach (double second in (double[])[0d, 1.5d, 4d, 9d, 400d])
         {
@@ -56,7 +56,7 @@ public class TrayRotationTests
     public void TwoInTroubleRotateBetweenThemselvesAndIgnoreTheHealthyOne()
     {
         TrayGlyphFrame[] frames =
-            [Troubled("CC", TrayFrameKind.AtLimit), Reading("CX", 12d), Troubled("CR", TrayFrameKind.Failed)];
+            [Troubled(0, TrayFrameKind.AtLimit), Reading(1, 12d), Troubled(2, TrayFrameKind.Failed)];
 
         Assert.Equal(0, TrayRotation.At(frames, TimeSpan.Zero, Dwell));
         Assert.Equal(2, TrayRotation.At(frames, TimeSpan.FromSeconds(4), Dwell));
@@ -67,7 +67,7 @@ public class TrayRotationTests
     [Fact]
     public void AWaitingProviderDoesNotCountAsTrouble()
     {
-        TrayGlyphFrame[] frames = [Reading("CC", 61d), Troubled("CX", TrayFrameKind.Waiting)];
+        TrayGlyphFrame[] frames = [Reading(0, 61d), Troubled(1, TrayFrameKind.Waiting)];
 
         Assert.Equal(0, TrayRotation.At(frames, TimeSpan.Zero, Dwell));
         Assert.Equal(1, TrayRotation.At(frames, TimeSpan.FromSeconds(4), Dwell));
@@ -76,7 +76,7 @@ public class TrayRotationTests
     [Fact]
     public void OneProviderNeverTurns()
     {
-        TrayGlyphFrame[] one = [Reading("CC", 61d)];
+        TrayGlyphFrame[] one = [Reading(0, 61d)];
 
         Assert.Equal(0, TrayRotation.At(one, TimeSpan.Zero, Dwell));
         Assert.Equal(0, TrayRotation.At(one, TimeSpan.FromSeconds(30), Dwell));
@@ -87,7 +87,7 @@ public class TrayRotationTests
     public void RotationOffHoldsTheWorstProviderRatherThanTheFirst()
     {
         Assert.Equal(0, TrayRotation.At(Three, TimeSpan.FromSeconds(9), null));
-        Assert.Equal(1, TrayRotation.At([Reading("CC", 12d), Reading("CX", 88d)], TimeSpan.FromSeconds(9), null));
+        Assert.Equal(1, TrayRotation.At([Reading(0, 12d), Reading(1, 88d)], TimeSpan.FromSeconds(9), null));
     }
 
     [Fact]
@@ -103,9 +103,9 @@ public class TrayRotationTests
         Assert.False(TrayRotation.ShouldTurn(Three, windowVisible: true, sessionLocked: false, Dwell));
         Assert.False(TrayRotation.ShouldTurn(Three, windowVisible: false, sessionLocked: true, Dwell));
         Assert.False(TrayRotation.ShouldTurn(Three, windowVisible: false, sessionLocked: false, null));
-        Assert.False(TrayRotation.ShouldTurn([Reading("CC", 5d)], windowVisible: false, sessionLocked: false, Dwell));
+        Assert.False(TrayRotation.ShouldTurn([Reading(0, 5d)], windowVisible: false, sessionLocked: false, Dwell));
         Assert.False(TrayRotation.ShouldTurn(
-            [Reading("CC", 5d), Troubled("CX", TrayFrameKind.Failed)], windowVisible: false, sessionLocked: false, Dwell));
+            [Reading(0, 5d), Troubled(1, TrayFrameKind.Failed)], windowVisible: false, sessionLocked: false, Dwell));
     }
 
     [Fact]

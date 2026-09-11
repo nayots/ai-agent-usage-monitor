@@ -11,12 +11,13 @@ namespace AiUsageMonitor.App.Tests;
 public class TrayIconFramesTests(WpfFixture wpf)
 {
     private static readonly TrayGlyphPalette Palette = new(
-        Colors.Black, Colors.Blue, Colors.Orange, Colors.Red, Colors.Gray, Colors.DarkRed, Colors.White);
+        Colors.Black, Colors.Blue, Colors.Orange, Colors.Red, Colors.Gray, Colors.DarkRed, Colors.White,
+        Colors.Violet, Colors.Teal, Colors.HotPink);
 
     private static TrayGlyphState State(params TrayGlyphFrame[] frames) => new(frames);
 
-    private static TrayGlyphFrame Reading(string mark) =>
-        new(mark, "44", 44d, QuotaBarFill.Accent, TrayFrameKind.Reading);
+    private static TrayGlyphFrame Reading(int slot) =>
+        new(slot, "44", 44d, QuotaBarFill.Accent, TrayFrameKind.Reading);
 
     /// <summary>
     /// One handle per frame, now that a frame names itself. The pair existed only so a turn could
@@ -26,7 +27,7 @@ public class TrayIconFramesTests(WpfFixture wpf)
     public void EveryFrameGetsExactlyOneIconAndNoTwoFramesShareIt() => wpf.Invoke(() =>
     {
         using TrayIconFrames frames = TrayIconFrames.Build(
-            State(Reading("CC"), new("CX", null, null, QuotaBarFill.Accent, TrayFrameKind.Failed)),
+            State(Reading(0), new(1, null, null, QuotaBarFill.Accent, TrayFrameKind.Failed)),
             16,
             Palette);
 
@@ -42,7 +43,7 @@ public class TrayIconFramesTests(WpfFixture wpf)
     [Fact]
     public void AnIndexOutsideTheSetYieldsNoHandleRatherThanThrowing() => wpf.Invoke(() =>
     {
-        using TrayIconFrames frames = TrayIconFrames.Build(State(Reading("CC")), 16, Palette);
+        using TrayIconFrames frames = TrayIconFrames.Build(State(Reading(0)), 16, Palette);
 
         Assert.Equal(IntPtr.Zero, frames.Icon(-1));
         Assert.Equal(IntPtr.Zero, frames.Icon(9));
@@ -56,7 +57,7 @@ public class TrayIconFramesTests(WpfFixture wpf)
     public void DisposingDestroysEveryHandleExactlyOnce() => wpf.Invoke(() =>
     {
         TrayIconFrames frames = TrayIconFrames.Build(
-            State(Reading("CC"), Reading("CX"), new("CR", null, null, QuotaBarFill.Accent, TrayFrameKind.Waiting)),
+            State(Reading(0), Reading(1), new(2, null, null, QuotaBarFill.Accent, TrayFrameKind.Waiting)),
             16,
             Palette);
 

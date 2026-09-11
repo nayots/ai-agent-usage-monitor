@@ -15,9 +15,9 @@ public class TrayGlyphStateTests
     public void OneFramePerVisibleProviderInCardOrder()
     {
         TrayGlyphState state = TrayGlyphState.From(
-            [Card("CC", 92d), Card("CX", 44d), Card("CR", 22d)]);
+            [Card("CC", 92d, traySlot: 0), Card("CX", 44d, traySlot: 1), Card("CR", 22d, traySlot: 2)]);
 
-        Assert.Equal(["CC", "CX", "CR"], state.Frames.Select(frame => frame.Monogram));
+        Assert.Equal([0, 1, 2], state.Frames.Select(frame => frame.Slot));
     }
 
     /// <summary>
@@ -36,17 +36,25 @@ public class TrayGlyphStateTests
     }
 
     /// <summary>
-    /// It used to have to choose: the band could show the name or the figure, and at the limit the
-    /// name won because a hundred said nothing the colour was not already saying. The name lives in
-    /// the plinth now, so the band is free to print the one figure that matters most.
+    /// At the limit the icon floods and prints nothing: "100" is three characters, hits the condense
+    /// floor, gives back height and lands smaller than any other reading. The flood is the statement.
     /// </summary>
     [Fact]
-    public void AProviderAtOrBeyondItsLimitPrintsAHundred()
+    public void AtLimitCarriesNoFigure()
     {
         TrayGlyphFrame frame = TrayGlyphState.From([Card("CC", 100d)]).Frames[0];
 
         Assert.Equal(TrayFrameKind.AtLimit, frame.Kind);
-        Assert.Equal("100", frame.Digits);
+        Assert.Null(frame.Digits);
+        Assert.Equal(100d, frame.UsedPercent);
+    }
+
+    [Fact]
+    public void FrameCarriesTheProvidersSlot()
+    {
+        TrayGlyphState state = TrayGlyphState.From([Card("CR", 42d, traySlot: 2)]);
+
+        Assert.Equal(2, Assert.Single(state.Frames).Slot);
     }
 
     [Fact]
@@ -86,7 +94,7 @@ public class TrayGlyphStateTests
         TrayGlyphState state = TrayGlyphState.From(
             [Card("CC", 61d), Card("CX", state: ConnectionState.NotInstalled), Card("CR", state: ConnectionState.Unsupported)]);
 
-        Assert.Equal(["CC"], state.Frames.Select(frame => frame.Monogram));
+        Assert.Equal([0], state.Frames.Select(frame => frame.Slot));
     }
 
     [Fact]
@@ -95,7 +103,7 @@ public class TrayGlyphStateTests
         ProviderCardViewModel hidden = Card("CX", 44d);
         hidden.IsHiddenByUser = true;
 
-        Assert.Equal(["CC"], TrayGlyphState.From([Card("CC", 61d), hidden]).Frames.Select(f => f.Monogram));
+        Assert.Equal([0], TrayGlyphState.From([Card("CC", 61d), hidden]).Frames.Select(f => f.Slot));
     }
 
     [Fact]
@@ -117,10 +125,11 @@ public class TrayGlyphStateTests
         double? first = null,
         double? second = null,
         double? third = null,
-        ConnectionState state = ConnectionState.Connected)
+        ConnectionState state = ConnectionState.Connected,
+        int traySlot = 0)
     {
         ProviderCardViewModel card = new(
-            new ProviderDescriptor(monogram.ToLowerInvariant(), monogram, monogram, new SilentProbe(monogram)),
+            new ProviderDescriptor(monogram.ToLowerInvariant(), monogram, monogram, new SilentProbe(monogram), traySlot),
             colorBarsByUsage: true,
             _ => { });
         double?[] percentages = [first, second, third];
