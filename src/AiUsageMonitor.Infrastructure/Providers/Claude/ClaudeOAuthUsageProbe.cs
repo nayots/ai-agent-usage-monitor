@@ -217,16 +217,11 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            request.Headers.Add("anthropic-beta", AnthropicBetaHeaderValue);
-            request.Headers.UserAgent.ParseAdd(UserAgent);
-
-            using HttpResponseMessage response = await _client.SendAsync(request, ct).ConfigureAwait(false);
+            using HttpResponseMessage response = await SendWithRepairAsync(
+                token, exePath, credentialsPath, account, notes, ct).ConfigureAwait(false);
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
-                notes.Add($"HTTP {(int)response.StatusCode} ({response.StatusCode}) received from the usage endpoint.");
                 return Snapshot(true, version, exePath, ConnectionState.Error, [], null, TokenRejectedMessage, notes);
             }
 
@@ -310,6 +305,63 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         {
             return Snapshot(true, version, exePath, ConnectionState.Error, [], null, ProviderErrorText.For(ex), notes);
         }
+    }
+
+    private async Task<HttpResponseMessage> SendUsageAsync(string token, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("anthropic-beta", AnthropicBetaHeaderValue);
+        request.Headers.UserAgent.ParseAdd(UserAgent);
+
+        return await _client.SendAsync(request, ct).ConfigureAwait(false);
+    }
+
+    private async Task<HttpResponseMessage> SendWithRepairAsync(
+        string token,
+        string exePath,
+        string credentialsPath,
+        ClaudeAccountMetadata account,
+        List<string> notes,
+        CancellationToken ct)
+    {
+        HttpResponseMessage response = await SendUsageAsync(token, ct).ConfigureAwait(false);
+
+        if (response.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden))
+        {
+            return response;
+        }
+
+        notes.Add($"HTTP {(int)response.StatusCode} ({response.StatusCode}) received from the usage endpoint.");
+
+        if (!_signInAutoRepairEnabled()
+            || !await _repair.TryRepairAsync(
+                exePath,
+                account.AccessTokenExpiresAt,
+                () => ReadAccountMetadata(credentialsPath),
+                notes,
+                ct).ConfigureAwait(false))
+        {
+            return response;
+        }
+
+        string? renewed = ReadAccessToken(credentialsPath, fileExists: true, notes, out _);
+        if (renewed is null)
+        {
+            return response;
+        }
+
+        response.Dispose();
+        HttpResponseMessage retried = await SendUsageAsync(renewed, ct).ConfigureAwait(false);
+
+        if (retried.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            notes.Add(
+                $"HTTP {(int)retried.StatusCode} ({retried.StatusCode}) again after the sign-in was renewed, "
+                + "so the token is being rejected for some other reason.");
+        }
+
+        return retried;
     }
 
     /// <summary>
