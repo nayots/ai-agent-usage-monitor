@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
+using Microsoft.Extensions.Logging;
 
 namespace AiUsageMonitor.Infrastructure.Providers.Claude;
 
@@ -77,6 +78,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private readonly ProviderInstallationCache _installations;
     private readonly Func<string, DateTime> _lastWriteUtc;
     private readonly Func<DateTimeOffset> _clock;
+    private readonly Func<bool> _signInAutoRepairEnabled;
+    private readonly ClaudeSignInRepair _repair;
 
     private static HttpClient CreateClient()
     {
@@ -114,7 +117,9 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         ProviderVersionCache? versions = null,
         Func<string, DateTime>? lastWriteUtc = null,
         Func<DateTimeOffset>? clock = null,
-        ProviderInstallationCache? installations = null)
+        ProviderInstallationCache? installations = null,
+        Func<bool>? signInAutoRepairEnabled = null,
+        ILogger<ClaudeOAuthUsageProbe>? logger = null)
     {
         _processes = processes ?? DefaultProcessRunner.Instance;
         _client = handler is null ? Client : CreateClient(handler);
@@ -124,6 +129,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         _installations = installations ?? new ProviderInstallationCache();
         _lastWriteUtc = lastWriteUtc ?? File.GetLastWriteTimeUtc;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        _signInAutoRepairEnabled = signInAutoRepairEnabled ?? (() => true);
+        _repair = new ClaudeSignInRepair(_processes, _clock, logger);
     }
 
     /// <inheritdoc />
@@ -183,28 +190,40 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         // fact is what is useful, and notes end up in diagnostic dumps.
         if (ExpiredSignInMessage(account, _clock()) is string expiredMessage)
         {
-            notes.Add(
-                "The stored sign-in had already expired when this check ran, so no request was sent - "
-                + "an expired token can only be rejected, and every call counts toward this endpoint's throttling.");
-            notes.Add(expiredMessage == SignInExpiredMessage
-                ? "The refresh token has expired too, so Claude Code cannot repair this by itself."
-                : "The refresh token is still usable, so running any Claude Code session will restore this.");
+            bool repaired = expiredMessage == SignInNeedsRefreshMessage
+                && _signInAutoRepairEnabled()
+                && await _repair.TryRepairAsync(
+                    exePath,
+                    account.AccessTokenExpiresAt,
+                    () => ReadAccountMetadata(credentialsPath),
+                    notes,
+                    ct).ConfigureAwait(false);
 
-            return Snapshot(true, version, exePath, ConnectionState.Unavailable, [], null, expiredMessage, notes);
+            if (repaired)
+            {
+                token = ReadAccessToken(credentialsPath, fileExists: true, notes, out account);
+            }
+
+            if (!repaired || token is null)
+            {
+                notes.Add(
+                    "The stored sign-in had already expired when this check ran, so no request was sent - "
+                    + "an expired token can only be rejected, and every call counts toward this endpoint's throttling.");
+                notes.Add(expiredMessage == SignInExpiredMessage
+                    ? "The refresh token has expired too, so Claude Code cannot repair this by itself."
+                    : "The refresh token is still usable, so running any Claude Code session will restore this.");
+
+                return Snapshot(true, version, exePath, ConnectionState.Unavailable, [], null, expiredMessage, notes);
+            }
         }
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            request.Headers.Add("anthropic-beta", AnthropicBetaHeaderValue);
-            request.Headers.UserAgent.ParseAdd(UserAgent);
-
-            using HttpResponseMessage response = await _client.SendAsync(request, ct).ConfigureAwait(false);
+            using HttpResponseMessage response = await SendWithRepairAsync(
+                token, exePath, credentialsPath, account, notes, ct).ConfigureAwait(false);
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
-                notes.Add($"HTTP {(int)response.StatusCode} ({response.StatusCode}) received from the usage endpoint.");
                 return Snapshot(true, version, exePath, ConnectionState.Error, [], null, TokenRejectedMessage, notes);
             }
 
@@ -288,6 +307,63 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         {
             return Snapshot(true, version, exePath, ConnectionState.Error, [], null, ProviderErrorText.For(ex), notes);
         }
+    }
+
+    private async Task<HttpResponseMessage> SendUsageAsync(string token, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("anthropic-beta", AnthropicBetaHeaderValue);
+        request.Headers.UserAgent.ParseAdd(UserAgent);
+
+        return await _client.SendAsync(request, ct).ConfigureAwait(false);
+    }
+
+    private async Task<HttpResponseMessage> SendWithRepairAsync(
+        string token,
+        string exePath,
+        string credentialsPath,
+        ClaudeAccountMetadata account,
+        List<string> notes,
+        CancellationToken ct)
+    {
+        HttpResponseMessage response = await SendUsageAsync(token, ct).ConfigureAwait(false);
+
+        if (response.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden))
+        {
+            return response;
+        }
+
+        notes.Add($"HTTP {(int)response.StatusCode} ({response.StatusCode}) received from the usage endpoint.");
+
+        if (!_signInAutoRepairEnabled()
+            || !await _repair.TryRepairAsync(
+                exePath,
+                account.AccessTokenExpiresAt,
+                () => ReadAccountMetadata(credentialsPath),
+                notes,
+                ct).ConfigureAwait(false))
+        {
+            return response;
+        }
+
+        string? renewed = ReadAccessToken(credentialsPath, fileExists: true, notes, out _);
+        if (renewed is null)
+        {
+            return response;
+        }
+
+        response.Dispose();
+        HttpResponseMessage retried = await SendUsageAsync(renewed, ct).ConfigureAwait(false);
+
+        if (retried.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            notes.Add(
+                $"HTTP {(int)retried.StatusCode} ({retried.StatusCode}) again after the sign-in was renewed, "
+                + "so the token is being rejected for some other reason.");
+        }
+
+        return retried;
     }
 
     /// <summary>
@@ -505,6 +581,40 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             notes.Add($"credentials.json could not be read or parsed ({ex.GetType().Name}). token: <absent>");
             metadata = ClaudeAccountMetadata.Empty;
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads non-secret account facts through a path that structurally cannot return the token.
+    ///
+    /// The repair only ever needs to know whether the stored expiry moved. Giving it a reader that
+    /// never touches <c>accessToken</c> means no later edit to the repair path can leak one, which
+    /// is worth the small duplication of the JSON navigation that <see cref="ReadAccessToken"/>
+    /// also does.
+    /// </summary>
+    private static ClaudeAccountMetadata ReadAccountMetadata(string credentialsPath)
+    {
+        try
+        {
+            using FileStream stream = File.OpenRead(credentialsPath);
+            using JsonDocument doc = JsonDocument.Parse(stream);
+
+            return doc.RootElement.TryGetProperty("claudeAiOauth", out JsonElement oauth)
+                && oauth.ValueKind == JsonValueKind.Object
+                    ? new ClaudeAccountMetadata(
+                        AccessTokenExpiresAt: TryGetUnixMilliseconds(oauth, "expiresAt"),
+                        RefreshTokenExpiresAt: TryGetUnixMilliseconds(oauth, "refreshTokenExpiresAt"),
+                        SubscriptionType: TryGetNonEmptyString(oauth, "subscriptionType"),
+                        RateLimitTier: TryGetNonEmptyString(oauth, "rateLimitTier"))
+                    : ClaudeAccountMetadata.Empty;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            // Unknown, never a guess - and the guess would be consequential. ClaudeSignInRepair
+            // requires a readable instant before it calls anything a renewal, so a file that cannot
+            // be read here can never be mistaken for one, which is the only reason returning Empty
+            // is safe rather than merely convenient.
+            return ClaudeAccountMetadata.Empty;
         }
     }
 

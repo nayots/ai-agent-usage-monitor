@@ -424,4 +424,9 @@ public class AppSettingsStoreTests
         Assert.Null(AppSettings.Default.SettingsWindowWidth);
         Assert.Null(AppSettings.Default.SettingsWindowHeight);
     }
+    [Fact]
+    public void SignInAutoRepairDefaultsToOn()
+    {
+        Assert.True(new AppSettings().ClaudeSignInAutoRepairEnabled);
+    }
 }

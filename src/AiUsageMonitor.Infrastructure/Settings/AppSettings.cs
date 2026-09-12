@@ -112,6 +112,19 @@ public sealed record AppSettings
     /// <summary>PRD §15: an unavailable provider keeps its card unless the user hides it.</summary>
     public bool ShowUnavailableProviders { get; init; } = true;
 
+    /// <summary>
+    /// Whether a lapsed Claude Code sign-in may be renewed by asking Claude Code's own CLI to do
+    /// it. On by default: the access token lasts eight hours, so with this off the Claude card
+    /// stops reporting roughly three times a day until a terminal is opened.
+    ///
+    /// It is a setting rather than plain behaviour because the command does cause Claude Code to
+    /// rewrite its own credential file, unattended. PRD §11 governs <em>this</em> application
+    /// modifying provider configuration, and here the provider's own maintenance command maintains
+    /// the provider's own state - but the side effect is real, so a user is entitled to switch it
+    /// off.
+    /// </summary>
+    public bool ClaudeSignInAutoRepairEnabled { get; init; } = true;
+
     /// <summary>Persisted as a plain number so the settings file stays readable and hand-editable.</summary>
     public int StaleAfterSeconds { get; init; } = 300;
 

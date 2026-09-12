@@ -128,6 +128,27 @@ The only mechanism this app uses: read `claudeAiOauth.accessToken` from the loca
 - **The expiry check may only ever skip a request it is confident would fail.** A missing or implausible timestamp (outside 2000–2100 read as ms) falls through to sending the request exactly as before. It is an optimisation over the 401 path that already exists — worth having because a doomed call still counts toward the throttling behind the 120-second floor — and a bug in it must never be able to disable a working widget. `refreshTokenExpiresAt` picks the message: while it is live, running any Claude Code session repairs the sign-in; once expired, only a fresh sign-in will.
 - **The token never shares a container with anything printable.** It stays a bare local string; the non-secret fields come back separately as `ClaudeAccountMetadata`, a record that structurally cannot hold a credential. A record's generated `ToString` prints every property it has, so a "credentials" record holding the token could leak it into a note through nothing more than string interpolation.
 
+**The access token lives 8 hours; the refresh token about 30 days.** The application never
+refreshes either. Instead, when the stored `expiresAt` has passed (or the endpoint returns 401),
+it runs the local CLI's `claude doctor` once and re-reads the file: Claude Code rotates its own
+credential as a side effect, and the reading proceeds. Measured 2026-09-11 on 2.1.263 — `doctor`
+renewed an expired token in ~2 s; **`claude auth status` does not renew and must not be
+substituted**; `claude update` also works but installs a new version as a side effect and so
+contradicts a user who has set `DISABLE_AUTOUPDATER`. The subcommand is the single constant
+`ClaudeSignInRepair.RepairArguments`.
+
+Success is judged **only** from the credential file — never by the exit code, and never by parsing
+output. The test is that the stored `expiresAt` is readable, **has changed, and is still in the
+future**, and all three parts are load-bearing. Dropping "changed" breaks the 401 path, where the
+expiry was already future when the endpoint refused the token, so liveness alone would retry the
+identical token. Dropping "still future" breaks the lapsed path, where a rotation to another spent
+token would send exactly the doomed request that path exists to avoid. **An earlier revision
+stated only the liveness half and shipped only the change half; do not "simplify" it back.**
+
+One attempt per observed expiry (`ClaudeSignInRepair` holds the block), so a CLI that cannot fix it
+does not spawn a process every poll. Controlled by `AppSettings.ClaudeSignInAutoRepairEnabled`,
+default on.
+
 **statusLine was evaluated and rejected — do not re-add it as a fallback.** The statusLine JSON contract (`rate_limits` piped on stdin) was investigated and proven parseable, then rejected as a product mechanism because it is push-only (fires only inside an interactive session, never under `-p`), requires a user-approved modification of the user's existing `~/.claude/settings.json` statusLine configuration to tee the data out, and produces data that is stale whenever no session is running — the common case for a persistent desktop widget. The recorded sample in `fixtures/claude-statusline-sample.json` is kept solely as regression coverage for the duck-typed extractor's `used_percentage` dialect, asserted in `DuckTypedQuotaExtractorTests`, not as evidence the mechanism is supported. `fixtures/claude-usage-limits-sample.json` is a synthetic-only usage-endpoint shape fixture for Claude adapter normalization tests; its percentages and reset instants are not captured account data.
 
 Investigated and confirmed to carry **no** quota data: hook payloads, OpenTelemetry metrics, all non-interactive CLI output (`-p --output-format json` has token counts and cost only), and `~/.claude/stats-cache.json`. Add statusLine to this "carries no usable signal for this app" list too — not because it lacks quota data (it has some), but because it cannot be relied upon as described above.
