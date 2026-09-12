@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using AiUsageMonitor.Domain;
 using AiUsageMonitor.Infrastructure.Providers;
+using Microsoft.Extensions.Logging;
 
 namespace AiUsageMonitor.Infrastructure.Providers.Claude;
 
@@ -117,7 +118,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         Func<string, DateTime>? lastWriteUtc = null,
         Func<DateTimeOffset>? clock = null,
         ProviderInstallationCache? installations = null,
-        Func<bool>? signInAutoRepairEnabled = null)
+        Func<bool>? signInAutoRepairEnabled = null,
+        ILogger<ClaudeOAuthUsageProbe>? logger = null)
     {
         _processes = processes ?? DefaultProcessRunner.Instance;
         _client = handler is null ? Client : CreateClient(handler);
@@ -128,7 +130,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         _lastWriteUtc = lastWriteUtc ?? File.GetLastWriteTimeUtc;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _signInAutoRepairEnabled = signInAutoRepairEnabled ?? (() => true);
-        _repair = new ClaudeSignInRepair(_processes, _clock);
+        _repair = new ClaudeSignInRepair(_processes, _clock, logger);
     }
 
     /// <inheritdoc />

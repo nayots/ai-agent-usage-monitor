@@ -75,7 +75,8 @@ public partial class App : Application
 
         services.AddSingleton<IReadOnlyList<ProviderDescriptor>>(provider =>
             ProviderRegistry.CreateDefault(
-                () => provider.GetRequiredService<SettingsService>().Current.ClaudeSignInAutoRepairEnabled));
+                () => provider.GetRequiredService<SettingsService>().Current.ClaudeSignInAutoRepairEnabled,
+                provider.GetRequiredService<ILoggerFactory>()));
         services.AddSingleton(provider => new ProviderRefreshService(
             provider.GetRequiredService<IReadOnlyList<ProviderDescriptor>>(),
             timeout: TimeSpan.FromSeconds(30),

@@ -1,5 +1,6 @@
 using AiUsageMonitor.Infrastructure.Providers.Claude;
 using AiUsageMonitor.Infrastructure.Tests.Fakes;
+using Microsoft.Extensions.Logging;
 
 namespace AiUsageMonitor.Infrastructure.Tests;
 
@@ -15,6 +16,76 @@ public sealed class ClaudeSignInRepairTests
     private static readonly DateTimeOffset Renewed = DateTimeOffset.Parse("2026-09-11T22:00:00Z");
 
     private static ClaudeSignInRepair CreateRepair(FakeProcessRunner processes) => new(processes, () => Now);
+
+    private static ClaudeSignInRepair CreateRepair(
+        FakeProcessRunner processes, CapturingLogger<ClaudeOAuthUsageProbe> logger) =>
+        new(processes, () => Now, logger);
+
+    [Fact]
+    public async Task ASuccessfulRenewalIsRecordedInTheLogAsWellAsTheNotes()
+    {
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
+        var logger = new CapturingLogger<ClaudeOAuthUsageProbe>();
+        ClaudeSignInRepair repair = CreateRepair(processes, logger);
+        var reloads = new Queue<ClaudeAccountMetadata>([Metadata(Stale), Metadata(Renewed)]);
+
+        bool repaired = await repair.TryRepairAsync(
+            ExePath, Stale, reloads.Dequeue, [], CancellationToken.None);
+
+        Assert.True(repaired);
+        Assert.Contains(logger.MessagesAt(LogLevel.Information), m => m.Contains("asking Claude Code to renew", StringComparison.Ordinal));
+        Assert.Contains(logger.MessagesAt(LogLevel.Information), m => m.Contains("renewed its sign-in", StringComparison.Ordinal));
+        Assert.Empty(logger.MessagesAt(LogLevel.Warning));
+    }
+
+    [Fact]
+    public async Task ARenewalThatChangedNothingIsLoggedAsAWarning()
+    {
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
+        var logger = new CapturingLogger<ClaudeOAuthUsageProbe>();
+        ClaudeSignInRepair repair = CreateRepair(processes, logger);
+
+        await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
+
+        Assert.Contains(logger.MessagesAt(LogLevel.Warning), m => m.Contains("did not change", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AFailedLaunchLogsTheExceptionTypeAndNeverItsMessage()
+    {
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCapturedFailure(
+            ExePath, ClaudeSignInRepair.RepairArguments, new IOException("C:\\secret\\path failed"));
+        var logger = new CapturingLogger<ClaudeOAuthUsageProbe>();
+        ClaudeSignInRepair repair = CreateRepair(processes, logger);
+
+        await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
+
+        Assert.Contains(logger.MessagesAt(LogLevel.Warning), m => m.Contains("IOException", StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Messages, m => m.Contains("secret", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ABlockedRetryIsSilentSoAStuckSignInDoesNotLogEveryPoll()
+    {
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, string.Empty);
+        var logger = new CapturingLogger<ClaudeOAuthUsageProbe>();
+        ClaudeSignInRepair repair = CreateRepair(processes, logger);
+
+        await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
+        int afterFirst = logger.Entries.Count;
+
+        // Three more polls against the same unrepaired sign-in.
+        for (int i = 0; i < 3; i++)
+        {
+            await repair.TryRepairAsync(ExePath, Stale, () => Metadata(Stale), [], CancellationToken.None);
+        }
+
+        Assert.Equal(afterFirst, logger.Entries.Count);
+    }
 
     private static ClaudeAccountMetadata Metadata(DateTimeOffset? expiresAt) =>
         new(expiresAt, RefreshTokenExpiresAt: null, SubscriptionType: null, RateLimitTier: null);

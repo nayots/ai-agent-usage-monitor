@@ -666,6 +666,42 @@ public sealed class ClaudeOAuthUsageProbeTests
     }
 
     [Fact]
+    public async Task ARepairLeavesARecordInTheLogAndNeverPutsATokenInIt()
+    {
+        DateTimeOffset now = DateTimeOffset.Parse("2026-09-12T19:00:00Z");
+        using var directory = new TempDirectory();
+        const string staleToken = "sk-stale-must-never-be-logged";
+        const string renewedToken = "sk-renewed-must-never-be-logged";
+
+        string path = WriteCredentials(directory, staleToken, $"{Expiry(now.AddHours(-1))},{LiveRefreshToken(now)}");
+        var processes = new FakeProcessRunner();
+        processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.263 (Claude Code)");
+        processes.EnqueueCaptured(ExePath, ClaudeSignInRepair.RepairArguments, 0, "Claude Code doctor");
+
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        var repairingProcesses = new RewritingProcessRunner(
+            processes,
+            () => WriteCredentials(directory, renewedToken, $"{Expiry(now.AddHours(8))},{LiveRefreshToken(now)}"));
+
+        var logger = new CapturingLogger<ClaudeOAuthUsageProbe>();
+        var probe = new ClaudeOAuthUsageProbe(
+            repairingProcesses, handler, () => ExePath, () => path, clock: () => now, logger: logger);
+
+        await probe.ProbeAsync(CancellationToken.None);
+
+        // The record has to survive the process, which is the whole reason it is logged and not
+        // only noted - a repair that misbehaves on someone else's machine is read from a file.
+        Assert.Contains(logger.Messages, m => m.Contains("asking Claude Code to renew", StringComparison.Ordinal));
+        Assert.Contains(logger.Messages, m => m.Contains("renewed its sign-in", StringComparison.Ordinal));
+
+        // And a log file is the last place a credential may end up. Both tokens pass through this
+        // probe on this code path; neither may appear in any line of it.
+        Assert.DoesNotContain(logger.Messages, m => m.Contains(staleToken, StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Messages, m => m.Contains(renewedToken, StringComparison.Ordinal));
+        Assert.DoesNotContain(logger.Messages, m => m.Contains("sk-", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ARepairThatLeavesTheSignInSpentStillSendsNoRequest()
     {
         DateTimeOffset now = DateTimeOffset.Parse("2026-09-11T19:00:00Z");
