@@ -95,14 +95,39 @@ internal static class ProcessRunner
         }
     }
 
-    private sealed class ProcessSession(Process process) : IProcessSession
+    private sealed class ProcessSession : IProcessSession
     {
-        private Process? _process = process;
+        private Process? _process;
+        private readonly Task<string> _standardError;
+
+        public ProcessSession(Process process)
+        {
+            _process = process;
+
+            // Drained from the moment the process starts, for two independent reasons. A redirected
+            // pipe that nobody reads can fill and block the child, which would turn a chatty CLI
+            // into a hang; and a CLI that rejects its command line writes its reason here before
+            // exiting, which is the only account of the failure that ever exists.
+            _standardError = process.StandardError.ReadToEndAsync();
+        }
 
         public TextWriter StandardInput => GetProcess().StandardInput;
         public TextReader StandardOutput => GetProcess().StandardOutput;
 
         public Task WaitForExitAsync(CancellationToken ct) => GetProcess().WaitForExitAsync(ct);
+
+        public async Task<string> ReadStandardErrorAsync(CancellationToken ct)
+        {
+            try
+            {
+                return await _standardError.WaitAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
+            {
+                // Diagnostics must never make the outcome worse than the failure being diagnosed.
+                return string.Empty;
+            }
+        }
 
         public void Dispose()
         {

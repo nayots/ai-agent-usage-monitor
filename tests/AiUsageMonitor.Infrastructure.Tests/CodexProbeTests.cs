@@ -217,20 +217,59 @@ public sealed class CodexProbeTests
     }
 
     [Fact]
-    public async Task AppServerIsLaunchedReadOnlyWithApprovalsUntrusted()
+    public async Task AppServerIsLaunchedReadOnlyWithApprovalsNever()
     {
         // The fake keys its sessions on the exact argument string, so enqueueing under the literal
         // the probe is required to use is the assertion: a probe that dropped the flags, reordered
         // them, or put them after the subcommand finds no session and never reaches Connected.
         // Order is load-bearing - -s and -a belong to the top-level codex command, not app-server.
+        //
+        // The approval value is pinned here as well because it is the one part of this string the
+        // CLI has already invalidated once: codex-cli 0.154.0 dropped "untrusted" from the values
+        // --ask-for-approval accepts, which made the launch exit 2 before writing any stdout.
         FakeProcessRunner processes = WithVersion();
-        processes.EnqueueSession(ExePath, "-s read-only -a untrusted app-server", RateLimitFrame());
+        processes.EnqueueSession(ExePath, "-s read-only -a never app-server", RateLimitFrame());
         var probe = new CodexProbe(processes, () => ExePath);
 
         ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
 
         Assert.Equal(ConnectionState.Connected, snapshot.State);
-        Assert.Equal("-s read-only -a untrusted app-server", CodexProbe.AppServerArguments);
+        Assert.Equal("-s read-only -a never app-server", CodexProbe.AppServerArguments);
+    }
+
+    [Fact]
+    public async Task ARejectedLaunchReportsWhatTheCliWroteToStandardError()
+    {
+        // The 0.154.0 regression in miniature: the exe rejects a flag value, exits before writing
+        // a single stdout line, and says why on stderr. Without this the card showed only "closed
+        // stdout", which describes the symptom and hides the one sentence that identifies the bug.
+        FakeProcessRunner processes = WithVersion();
+        processes.EnqueueSessionWithStandardError(
+            ExePath,
+            CodexProbe.AppServerArguments,
+            "error: invalid value 'untrusted' for '--ask-for-approval <APPROVAL_POLICY>'\n  [possible values: on-request, never]\n");
+        var probe = new CodexProbe(processes, () => ExePath);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Error, snapshot.State);
+        Assert.StartsWith("codex app-server closed stdout before an id:2 response was observed.", snapshot.Error);
+        Assert.Contains("invalid value 'untrusted' for '--ask-for-approval", snapshot.Error);
+        // Flattened onto one line - this string is rendered verbatim in the provider card.
+        Assert.DoesNotContain("\n", snapshot.Error);
+    }
+
+    [Fact]
+    public async Task AQuietRejectedLaunchKeepsTheAuthoredMechanismErrorAlone()
+    {
+        // Nothing on stderr must leave the message exactly as it was, with no dangling connective.
+        FakeProcessRunner processes = WithVersion();
+        processes.EnqueueSessionWithStandardError(ExePath, CodexProbe.AppServerArguments, "   \n  \n");
+        var probe = new CodexProbe(processes, () => ExePath);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal("codex app-server closed stdout before an id:2 response was observed.", snapshot.Error);
     }
 
     [Fact]
