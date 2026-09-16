@@ -25,6 +25,12 @@ public sealed class FakeProcessRunner : IProcessRunner
         GetSessionQueue(exePath, arguments).Enqueue(new FakeProcessSession(outputLines));
     }
 
+    /// <summary>A launch the exe refused: nothing on stdout, and its complaint on stderr.</summary>
+    public void EnqueueSessionWithStandardError(string exePath, string arguments, string standardError)
+    {
+        GetSessionQueue(exePath, arguments).Enqueue(new FakeProcessSession([], standardError));
+    }
+
     public Task<(int ExitCode, string StdOut, string StdErr)> RunCapturedAsync(
         string exePath, string arguments, TimeSpan timeout, CancellationToken ct)
     {
@@ -58,15 +64,19 @@ public sealed class FakeProcessRunner : IProcessRunner
 
     public sealed class FakeProcessSession : IProcessSession
     {
-        public FakeProcessSession(IEnumerable<string> outputLines)
+        private readonly string _standardError;
+
+        public FakeProcessSession(IEnumerable<string> outputLines, string standardError = "")
         {
             StandardInput = new StringWriter();
             StandardOutput = new StringReader(string.Join(Environment.NewLine, outputLines));
+            _standardError = standardError;
         }
 
         public TextWriter StandardInput { get; }
         public TextReader StandardOutput { get; }
         public Task WaitForExitAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task<string> ReadStandardErrorAsync(CancellationToken ct) => Task.FromResult(_standardError);
         public void Dispose() { }
     }
 }

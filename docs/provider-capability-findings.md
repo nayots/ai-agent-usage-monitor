@@ -43,12 +43,23 @@ The TypeScript bindings name methods far more legibly than the JSON schemas; `Cl
 Launch the vendored executable directly. The npm shims (`codex.cmd`, `codex.ps1`, `codex`) only re-exec it through node, and shelling out via PowerShell is unnecessary:
 
 ```
-%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe -s read-only -a untrusted app-server
+%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe -s read-only -a never app-server
 ```
 
 Discovery should glob `codex-win32-*\vendor\*\bin\codex.exe` to stay architecture-agnostic, and fall back to `codex.cmd` on PATH.
 
-`-s read-only -a untrusted` are **flags of the top-level `codex` command, not of `app-server`**, so they must precede the subcommand. Verified against 0.144.6 (2026-08-19): accepted, and the `account/rateLimits/read` response is byte-identical to the unflagged call. They are defence-in-depth only — this application never opens a session, so nothing it does today is affected by them; they exist so that the process it spawned is already capped if a future app-server ever acts on its own.
+`-s read-only -a never` are **flags of the top-level `codex` command, not of `app-server`**, so they must precede the subcommand. Verified against 0.154.0 (2026-09-16): accepted, and the `account/rateLimits/read` response carries an identical field set (54 fields) and identical values to the unflagged call. They are defence-in-depth only — this application never opens a session, so nothing it does today is affected by them; they exist so that the process it spawned is already capped if a future app-server ever acts on its own.
+
+**The approval value changed under us, and an invalid one takes the provider down completely.** Through 0.144.6 the flag accepted `untrusted`; 0.154.0 narrowed it to `on-request` and `never`. An unrecognised value is rejected by the argument parser before the app-server starts, so the process exits 2 with **nothing on stdout** and its complaint on stderr:
+
+```
+error: invalid value 'untrusted' for '--ask-for-approval <APPROVAL_POLICY>'
+  [possible values: on-request, never]
+```
+
+`never` was chosen over `on-request` because it matches the original intent: the model is never asked for approval and so can never be granted any, leaving the spawned process unable to escalate past the read-only sandbox. It has also been a valid value for far longer than `untrusted` was, so it does not regress older installs.
+
+Because the probe read only stdout, this presented as `codex app-server closed stdout before an id:2 response was observed` — true, and useless. A session now drains stderr from the moment the process starts (which also stops an unread pipe from ever blocking a chatty child) and the probe appends that text to the error, so the next time a flag is retired the card names the flag.
 
 ### Wire protocol
 

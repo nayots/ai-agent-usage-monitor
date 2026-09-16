@@ -27,6 +27,16 @@ public sealed class CodexProbe : IProviderProbe
     private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RateLimitsTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// How long to wait for standard error once the protocol exchange has already failed. Short on
+    /// purpose: the process has closed stdout by this point, so its stderr has been flushed, and a
+    /// diagnostic must never add to a delay the user is already sitting through.
+    /// </summary>
+    private static readonly TimeSpan StandardErrorTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>Keeps a chatty stderr from crowding the authored sentence off the provider card.</summary>
+    private const int StandardErrorExcerptLength = 400;
+
     private const string MechanismText = "codex app-server (JSON-RPC over stdio, JSONL) - account/rateLimits/read";
 
     /// <summary>
@@ -34,13 +44,22 @@ public sealed class CodexProbe : IProviderProbe
     /// probe only ever calls <c>account/rateLimits/read</c> and never opens a session, so nothing
     /// it does today can be affected by them - but if a future version of the app-server ever acts
     /// on its own, the process this application spawned is already capped at read-only with every
-    /// approval denied. Verified against codex-cli 0.144.6: accepted, and the rate-limit response
-    /// is byte-identical to the unflagged call.
+    /// approval denied. Verified against codex-cli 0.154.0: accepted, and the rate-limit response
+    /// carries the same fields as the unflagged call.
     ///
     /// Order matters. <c>-s</c> and <c>-a</c> are flags of the top-level <c>codex</c> command, not
     /// of the <c>app-server</c> subcommand, so they must precede it.
+    ///
+    /// The approval value is <c>never</c>, and which value it is is not cosmetic. codex-cli 0.154.0
+    /// narrowed <c>--ask-for-approval</c> to <c>on-request</c> and <c>never</c>, dropping the
+    /// <c>untrusted</c> this once passed. An unrecognised value is rejected by the argument parser,
+    /// so the exe exited 2 having written nothing to stdout, and every Codex read failed with the
+    /// stdout-closed error below until this was corrected. <c>never</c> is also the value that
+    /// matches the intent: the model is never asked for approval and so can never be granted any,
+    /// leaving the spawned process unable to escalate past the read-only sandbox. <c>on-request</c>
+    /// would leave it able to ask.
     /// </summary>
-    public const string AppServerArguments = "-s read-only -a untrusted app-server";
+    public const string AppServerArguments = "-s read-only -a never app-server";
 
     private const string SpendLimitSlot = "individualLimit";
     private const string SpendLimitLabel = "Spend limit";
@@ -283,7 +302,15 @@ public sealed class CodexProbe : IProviderProbe
 
         if (result is null)
         {
-            throw new ProviderMechanismException("codex app-server closed stdout before an id:2 response was observed.");
+            // The exe can refuse its own command line - 0.154.0 did exactly that when it dropped a
+            // value from --ask-for-approval - and when it does, it exits before writing a single
+            // stdout frame, with the reason on stderr. Reporting only the closed stream describes
+            // what was seen while withholding what happened, so the CLI's own sentence is carried.
+            string complaint = await ReadStandardErrorExcerptAsync(process).ConfigureAwait(false);
+            throw new ProviderMechanismException(
+                complaint.Length == 0
+                    ? "codex app-server closed stdout before an id:2 response was observed."
+                    : "codex app-server closed stdout before an id:2 response was observed. It reported: " + complaint);
         }
 
         // Close stdin now that we have what we need - verified behaviour: exits code 0 in ~25ms.
@@ -292,6 +319,24 @@ public sealed class CodexProbe : IProviderProbe
 
         List<QuotaWindow> windows = MapRateLimits(result.Value);
         return (windows, notes);
+    }
+
+    /// <summary>
+    /// A single-line, length-capped excerpt of what the process wrote to standard error, for use in
+    /// an error the user reads. Flattened because the provider card renders this string verbatim on
+    /// one line, and capped because a CLI that decides to be chatty must not push the authored
+    /// sentence off the card. Returns an empty string when there is nothing to report, so the
+    /// caller keeps its original wording rather than trailing off into a dangling connective.
+    /// </summary>
+    private static async Task<string> ReadStandardErrorExcerptAsync(IProcessSession process)
+    {
+        using var cts = new CancellationTokenSource(StandardErrorTimeout);
+        string text = await process.ReadStandardErrorAsync(cts.Token).ConfigureAwait(false);
+
+        string flattened = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return flattened.Length <= StandardErrorExcerptLength
+            ? flattened
+            : string.Concat(flattened.AsSpan(0, StandardErrorExcerptLength), "...");
     }
 
     // ----- Response mapping (exact, verified schema - not duck-typed) --------------------------

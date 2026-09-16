@@ -6,6 +6,16 @@ public interface IProcessSession : IDisposable
     TextWriter StandardInput { get; }
     TextReader StandardOutput { get; }
     Task WaitForExitAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Everything the process has written to standard error. A CLI that rejects its own command
+    /// line exits before writing a single stdout frame and explains itself here and nowhere else,
+    /// so a probe that reads only stdout can report that the stream closed but never why.
+    ///
+    /// This is diagnostic only and must never displace the caller's own error: implementations
+    /// return an empty string rather than throwing when the text cannot be read in time.
+    /// </summary>
+    Task<string> ReadStandardErrorAsync(CancellationToken ct);
 }
 
 /// <summary>

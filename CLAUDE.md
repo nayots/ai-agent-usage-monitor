@@ -103,9 +103,11 @@ Verified against Claude Code **2.1.226**, codex-cli **0.144.6** and Cursor **3.1
 ### Codex — JSON-RPC over stdio
 
 Launch the **vendored exe directly**, never the npm shim (`codex.cmd`/`.ps1` just re-exec it through node):
-`%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-*\vendor\*\bin\codex.exe -s read-only -a untrusted app-server`
+`%APPDATA%\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-*\vendor\*\bin\codex.exe -s read-only -a never app-server`
 
-`-s read-only -a untrusted` are flags of the **top-level `codex` command, not of `app-server`**, so they must precede the subcommand (`CodexProbe.AppServerArguments` holds the one copy; the tests reference that constant rather than repeating the string). Verified on 0.144.6: accepted, response byte-identical to the unflagged call. Defence-in-depth only — this app never opens a session.
+`-s read-only -a never` are flags of the **top-level `codex` command, not of `app-server`**, so they must precede the subcommand (`CodexProbe.AppServerArguments` holds the one copy; the tests reference that constant rather than repeating the string). Verified on 0.154.0: accepted, and the response carries an identical field set and identical values to the unflagged call. Defence-in-depth only — this app never opens a session.
+
+**The approval value is version-sensitive, and getting it wrong kills the provider outright.** 0.154.0 narrowed `--ask-for-approval` to `on-request` and `never`, dropping the `untrusted` that shipped through v0.8.0. An unrecognised value is rejected by the *argument parser*, so the exe exits 2 having written **nothing to stdout** — which surfaced as `closed stdout before an id:2 response`, a message describing the symptom while the actual cause sat unread on stderr. `never` is the right replacement on intent as well as validity: the model is never asked for approval and so can never be granted any, leaving the process unable to escalate past the read-only sandbox, whereas `on-request` would leave it able to ask. Because that failure was diagnosable only by hand, `IProcessSession` now drains stderr and the probe appends the CLI's own sentence to that error.
 
 Framing is **newline-delimited JSON**, UTF-8, LF only, no BOM, no `Content-Length` headers. Send `initialize` (mandatory — otherwise `-32600 Not initialized`) then `account/rateLimits/read` (takes no `params`). Pipelining both writes before reading is safe. The `initialized` notification is not required.
 
