@@ -45,6 +45,10 @@ packages/
 *.local.json
 appsettings.Development.json
 secrets.json
+# Agent hook registrations: absolute machine paths and per-developer
+# tooling. .claude/settings.local.json is already covered by *.local.json
+# above; Codex keeps its registrations in a file that is not.
+.codex/hooks.json
 
 # Captured provider fixtures that were not manually redacted.
 # Redacted fixtures belong in tests and SHOULD be committed.
