@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace AiUsageMonitor.App.ViewModels;
 
 /// <summary>
@@ -15,43 +13,33 @@ public static class TrayRotation
     public static readonly IReadOnlyList<int> DwellPresets = [3, 4, 6, 8];
 
     /// <summary>
-    /// The frames eligible for a turn: the troubled ones if there are any, otherwise all of them.
-    /// Waiting is deliberately not trouble - a provider that has not answered yet has nothing to
-    /// report and must not seize the icon from one that has.
-    /// </summary>
-    private static IReadOnlyList<int> Eligible(IReadOnlyList<TrayGlyphFrame> frames)
-    {
-        List<int> troubled = [.. Enumerable.Range(0, frames.Count)
-            .Where(index => frames[index].Kind is TrayFrameKind.AtLimit or TrayFrameKind.Failed)];
-
-        return troubled.Count > 0 ? troubled : [.. Enumerable.Range(0, frames.Count)];
-    }
-
-    /// <summary>
     /// Which frame is up, or -1 when there is nothing to show. One frame per turn: every frame
     /// carries its own name, so there is nothing for a turn to alternate between.
+    /// <para>
+    /// Every provider takes its turn regardless of state. v0.5.0 gave trouble exclusive turns -
+    /// including parking for good on a single troubled provider - but that made an otherwise
+    /// healthy set of providers disappear from the tray for as long as the trouble lasted, which
+    /// read as rotation having stopped rather than as a feature.
+    /// </para>
     /// </summary>
     public static int At(IReadOnlyList<TrayGlyphFrame> frames, TimeSpan elapsed, TimeSpan? dwell)
     {
-        IReadOnlyList<int> eligible = Eligible(frames);
-
-        if (eligible.Count == 0)
+        if (frames.Count == 0)
         {
             return -1;
         }
 
-        if (eligible.Count == 1 || dwell is not TimeSpan turn || turn <= TimeSpan.Zero)
+        if (frames.Count == 1 || dwell is not TimeSpan turn || turn <= TimeSpan.Zero)
         {
-            return Worst(frames, eligible);
+            return Worst(frames);
         }
 
         // Floor division with a non-negative remainder, so a clock that hands back a negative
         // elapsed - a corrected system time, a resumed stopwatch - lands on a frame rather than
         // throwing or indexing backwards.
         long slot = elapsed.Ticks / turn.Ticks;
-        int position = (int)(((slot % eligible.Count) + eligible.Count) % eligible.Count);
 
-        return eligible[position];
+        return (int)(((slot % frames.Count) + frames.Count) % frames.Count);
     }
 
     /// <summary>
@@ -69,13 +57,13 @@ public static class TrayRotation
         && turn > TimeSpan.Zero
         && !windowVisible
         && !sessionLocked
-        && Eligible(frames).Count > 1;
+        && frames.Count > 1;
 
-    private static int Worst(IReadOnlyList<TrayGlyphFrame> frames, IReadOnlyList<int> eligible)
+    private static int Worst(IReadOnlyList<TrayGlyphFrame> frames)
     {
-        int worst = eligible[0];
+        int worst = 0;
 
-        foreach (int index in eligible)
+        for (int index = 1; index < frames.Count; index++)
         {
             if (frames[index].UsedPercent > frames[worst].UsedPercent)
             {

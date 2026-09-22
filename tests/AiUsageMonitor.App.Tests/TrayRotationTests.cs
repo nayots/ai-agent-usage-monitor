@@ -38,29 +38,31 @@ public class TrayRotationTests
     }
 
     /// <summary>
-    /// The answer to the obvious objection - that you might be looking away when the one that
-    /// matters goes past. When it matters, it stops going past.
+    /// v0.5.0 parked the icon on the one troubled provider so an unlocked machine would not miss
+    /// it while you looked away - but that also meant every healthy provider vanished from the
+    /// tray for as long as the trouble lasted, which read as rotation having stopped outright. It
+    /// now takes its turn like any other frame instead of seizing the icon for good.
     /// </summary>
     [Fact]
-    public void ItParksOnTheOnlyTroubledProvider()
+    public void OneTroubledProviderTakesItsTurnRatherThanParkingOnIt()
     {
         TrayGlyphFrame[] frames = [Reading(0, 61d), Troubled(1, TrayFrameKind.AtLimit), Reading(2, 22d)];
 
-        foreach (double second in (double[])[0d, 1.5d, 4d, 9d, 400d])
-        {
-            Assert.Equal(1, TrayRotation.At(frames, TimeSpan.FromSeconds(second), Dwell));
-        }
+        Assert.Equal(0, TrayRotation.At(frames, TimeSpan.Zero, Dwell));
+        Assert.Equal(1, TrayRotation.At(frames, TimeSpan.FromSeconds(4), Dwell));
+        Assert.Equal(2, TrayRotation.At(frames, TimeSpan.FromSeconds(8), Dwell));
+        Assert.Equal(0, TrayRotation.At(frames, TimeSpan.FromSeconds(12), Dwell));
     }
 
     [Fact]
-    public void TwoInTroubleRotateBetweenThemselvesAndIgnoreTheHealthyOne()
+    public void TroubledProvidersRotateAlongsideTheHealthyOneRatherThanExcludingIt()
     {
         TrayGlyphFrame[] frames =
             [Troubled(0, TrayFrameKind.AtLimit), Reading(1, 12d), Troubled(2, TrayFrameKind.Failed)];
 
         Assert.Equal(0, TrayRotation.At(frames, TimeSpan.Zero, Dwell));
-        Assert.Equal(2, TrayRotation.At(frames, TimeSpan.FromSeconds(4), Dwell));
-        Assert.Equal(0, TrayRotation.At(frames, TimeSpan.FromSeconds(8), Dwell));
+        Assert.Equal(1, TrayRotation.At(frames, TimeSpan.FromSeconds(4), Dwell));
+        Assert.Equal(2, TrayRotation.At(frames, TimeSpan.FromSeconds(8), Dwell));
     }
 
     /// <summary>Waiting is not trouble. A provider that has not answered yet does not seize the icon.</summary>
@@ -104,7 +106,7 @@ public class TrayRotationTests
         Assert.False(TrayRotation.ShouldTurn(Three, windowVisible: false, sessionLocked: true, Dwell));
         Assert.False(TrayRotation.ShouldTurn(Three, windowVisible: false, sessionLocked: false, null));
         Assert.False(TrayRotation.ShouldTurn([Reading(0, 5d)], windowVisible: false, sessionLocked: false, Dwell));
-        Assert.False(TrayRotation.ShouldTurn(
+        Assert.True(TrayRotation.ShouldTurn(
             [Reading(0, 5d), Troubled(1, TrayFrameKind.Failed)], windowVisible: false, sessionLocked: false, Dwell));
     }
 
