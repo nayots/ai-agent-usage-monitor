@@ -290,6 +290,13 @@ non-admin. Mechanism: read the access token from `%APPDATA%\Cursor\User\globalSt
 | `GET /auth/full_stripe_profile` | `membershipType:"enterprise"`, `isTeamMember:true`, `isYearlyPlan:false` |
 | `GetMonthlyInvoice` | HTTP 401 `"User not authorized for this team"` — admin-only |
 | `GetUserUsageSummary`, `GetSpendLimitUsage` | HTTP 404 — do not exist |
+| `GET /auth/usage-summary` (2026-09-25) | `billingCycleStart/End` as ISO-8601 (a real month), `limitType:"team"`, `individualUsage.overall:{enabled,used:10948,limit:20000,remaining}` in cents — **the caller's enforced limit, admin override included** — and `teamUsage.onDemand` (the team's aggregate, never shown) |
+| `GetUsageLimitStatusAndActiveGrants` (2026-09-25) | wraps `usageLimitPolicyStatus` only; no override figure |
+
+**Finding 6 (2026-09-25): `perUserMonthlyLimitDollars` is the team default, not the user's limit.**
+An admin raised one user to $200 while the team default stayed $100; `GetHardLimit` kept answering
+100, so the card read "$103 of $100". `/auth/usage-summary` reported `limit: 20000`. The adapter now
+reads the summary first and keeps the event total only as a fallback.
 
 ### 8.2 The findings that shaped the adapter
 

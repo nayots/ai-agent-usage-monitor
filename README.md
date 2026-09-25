@@ -114,7 +114,7 @@ The comparison happens on your computer. Switch it off in **Settings → Updates
 
 The monitor asks for numbers and nothing else. Cursor's local database is opened **read-only**; the app cannot write to it even by accident. It never sends a prompt, starts a model turn, calls a generation endpoint, buys credits or changes your subscription — **it cannot cost you anything, and it does not consume the quota it displays.**
 
-If a provider isn't installed, its card simply says *Not installed*. If a request fails, the card shows a visible error and the scheduler backs off. It never invents a number, reuses a stale one, or shows a zero to fill the gap. **If you see a number, a provider returned it.**
+If a provider isn't installed, it gets no card at all (you can turn *Show providers that are not installed* back on in Settings). If a request fails, the card shows a visible error and the scheduler backs off. It never invents a number, reuses a stale one, or shows a zero to fill the gap. **If you see a number, a provider returned it.**
 
 ### 🙅 What it never does
 
@@ -182,7 +182,7 @@ Being straight about what that proves: a match means your copy is byte-for-byte 
 >
 > Cursor's card shows your **spend against your monthly ceiling** — that is the limit Cursor actually enforces — on the same percentage bar as every other provider, with the money itself (`$11.71 of $100`) written underneath. A percentage tells you where you are; the amount tells you what is left.
 
-You don't need all three. A provider that isn't installed simply shows **Not installed** and costs nothing. 🤷
+You don't need all three. A provider that isn't installed is simply left out and costs nothing. 🤷 Claude Code signed in with an Anthropic Console account or API key has no subscription quota to show, so its card says exactly that.
 
 ---
 
