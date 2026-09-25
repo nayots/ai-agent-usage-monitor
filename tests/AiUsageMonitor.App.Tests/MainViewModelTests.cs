@@ -318,6 +318,20 @@ public class MainViewModelTests
         Assert.False(model.Providers[1].IsHiddenByFilter);
     }
 
+    /// <summary>
+    /// Unsupported means installed but with nothing this application can read - Claude Code on an
+    /// API key, say. The tool was found, so its card stays and says why there is nothing to show.
+    /// </summary>
+    [Fact]
+    public async Task AnInstalledButUnsupportedProviderKeepsItsCardByDefault()
+    {
+        (MainViewModel model, _) = Build(
+            new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Unsupported, [])));
+        await model.RefreshAsync(force: true);
+
+        Assert.False(model.Providers[0].IsHiddenByFilter);
+    }
+
     [Fact]
     public void AWidgetWithACardToShowHasNoEmptyState()
     {

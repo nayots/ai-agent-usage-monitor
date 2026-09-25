@@ -60,6 +60,11 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private const string SignInExpiredMessage =
         "Claude Code's sign-in has fully expired — run \"claude\" and sign in again";
 
+    // Rendered verbatim on the card.
+    private const string ApiKeySignInMessage =
+        "Claude Code is signed in with an Anthropic Console (API) account. It is billed per token, "
+        + "so there is no subscription quota to show.";
+
     /// <summary>How much clock skew to allow before treating a stored expiry as already past.</summary>
     private static readonly TimeSpan ExpirySkewAllowance = TimeSpan.FromSeconds(30);
 
@@ -80,6 +85,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private readonly Func<DateTimeOffset> _clock;
     private readonly Func<bool> _signInAutoRepairEnabled;
     private readonly ClaudeSignInRepair _repair;
+    private readonly Func<string?> _apiKeySignIn;
 
     private static HttpClient CreateClient()
     {
@@ -119,8 +125,10 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         Func<DateTimeOffset>? clock = null,
         ProviderInstallationCache? installations = null,
         Func<bool>? signInAutoRepairEnabled = null,
-        ILogger<ClaudeOAuthUsageProbe>? logger = null)
+        ILogger<ClaudeOAuthUsageProbe>? logger = null,
+        Func<string?>? apiKeySignIn = null)
     {
+        _apiKeySignIn = apiKeySignIn ?? ClaudeApiKeySignIn.DetectOnThisMachine;
         _processes = processes ?? DefaultProcessRunner.Instance;
         _client = handler is null ? Client : CreateClient(handler);
         _locateExecutable = locateExecutable ?? ClaudeExecutableLocator.Locate;
@@ -173,6 +181,14 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         string? token = ReadAccessToken(credentialsPath, credentialsFileExists, notes, out ClaudeAccountMetadata account);
         if (token is null)
         {
+            // Signed in, but with an API key rather than a subscription: there is no quota to read,
+            // which is a fact about the account rather than a fault, so Unsupported, not Unavailable.
+            if (_apiKeySignIn() is string foundIn)
+            {
+                notes.Add($"No subscription sign-in; an API-key sign-in was found ({foundIn}). The key itself is never read or sent.");
+                return Snapshot(true, version, exePath, ConnectionState.Unsupported, [], null, ApiKeySignInMessage, notes);
+            }
+
             // Missing file / missing claudeAiOauth.accessToken -> Unavailable, never an exception.
             return Snapshot(
                 installed: true,

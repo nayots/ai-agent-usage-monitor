@@ -147,6 +147,14 @@ identical token. Dropping "still future" breaks the lapsed path, where a rotatio
 token would send exactly the doomed request that path exists to avoid. **An earlier revision
 stated only the liveness half and shipped only the change half; do not "simplify" it back.**
 
+**An API-key sign-in is `Unsupported`, not `Unavailable` (added 2026-09-25).** Claude Code signed in
+through the Anthropic Console (or via `ANTHROPIC_API_KEY` / `apiKeyHelper`) has no `claudeAiOauth`
+and no subscription quota — the API exposes no spend to a normal key at all. `ClaudeApiKeySignIn`
+tests only that such a key is *present* (never reads or sends it), and only after the OAuth token is
+found missing, so a subscription always wins. Where the Console login stores its key on Windows is
+believed to be `primaryApiKey` in `~/.claude.json`; that was not yet observed on a real Console
+machine when this was written.
+
 One attempt per observed expiry (`ClaudeSignInRepair` holds the block), so a CLI that cannot fix it
 does not spawn a process every poll. Controlled by `AppSettings.ClaudeSignInAutoRepairEnabled`,
 default on.
@@ -172,6 +180,12 @@ Findings that cost real time to establish — do not re-derive:
 - **`GetHardLimit` needs the `teamId`.** Without it: `{"hardLimit":2147483647}`, a sentinel. With
   it: `perUserMonthlyLimitDollars`. The `teamId` comes from `cursorAuth/cachedTeam` **locally** —
   no request needed, and `full_stripe_profile` is not called at all.
+- **`perUserMonthlyLimitDollars` is the team's DEFAULT, not this user's limit (found 2026-09-25).**
+  An admin can raise one user's limit (observed: $100 default, $200 override), and `GetHardLimit`
+  keeps reporting the default, so the card read "$103 of $100". `GetUsageLimitPolicyStatus` reports
+  `limitType: "user-team"` with a `requestLimitIncrease` action, and `GetUsageLimitStatusAndActiveGrants`
+  exists (HTTP 200) — a granted raise is expected there, but where the override lives had not yet been
+  observed on the account carrying one.
 - **`GetAggregatedUsageEvents` is empty (`{}`) on enterprise**, with `teamId:-1` and with the real
   team id alike. The spend must be summed from `GetFilteredUsageEvents`.
 - **`GetFilteredUsageEvents` is already scoped to the caller** — one distinct `owningUser` across

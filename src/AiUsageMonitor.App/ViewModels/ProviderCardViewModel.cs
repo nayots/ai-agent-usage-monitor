@@ -137,10 +137,11 @@ public sealed class ProviderCardViewModel : ObservableObject
     /// <summary>
     /// Only a provider that is absent from the machine can be hidden by availability. An Error or
     /// Unavailable provider is installed and not working, which is exactly the card the user needs
-    /// to see.
+    /// to see; an Unsupported one is installed with nothing to read (Claude Code on an API key), and
+    /// its card is where it says so.
     /// </summary>
     public bool IsHiddenByFilter =>
-        IsHiddenByUser || (!ShowWhenUnavailable && State is ConnectionState.NotInstalled or ConnectionState.Unsupported);
+        IsHiddenByUser || (!ShowWhenUnavailable && State is ConnectionState.NotInstalled);
 
     /// <summary>
     /// Compact density (PRD §17). Set by <see cref="MainViewModel"/> from the one setting, never

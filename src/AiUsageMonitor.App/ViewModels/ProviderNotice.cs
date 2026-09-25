@@ -25,9 +25,13 @@ public static class ProviderNoticeSelector
                 IsAlert: false,
                 ActionText: "Check again"),
 
+            // The provider's own reason when it gave one: "not available from this version" is
+            // wrong for Claude Code signed in with an API key, where no version is at fault.
             ConnectionState.Unsupported => new ProviderNotice(
-                "Usage is not available from this version",
-                "The installed version does not expose usage through a mechanism this application can verify.",
+                "Usage is not available",
+                string.IsNullOrWhiteSpace(snapshot.Error)
+                    ? "The installed version does not expose usage through a mechanism this application can verify."
+                    : snapshot.Error,
                 IsAlert: false,
                 ActionText: null),
 

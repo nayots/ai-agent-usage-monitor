@@ -39,6 +39,37 @@ public sealed class ClaudeOAuthUsageProbeTests
         Assert.Equal(0, handler.RequestCount);
     }
 
+    /// <summary>
+    /// Claude Code signed in with an Anthropic Console account bills per token and has no
+    /// subscription quota at all. Saying "has not stored a sign-in" there was simply false.
+    /// </summary>
+    [Fact]
+    public async Task AnApiKeySignInIsUnsupportedWithItsOwnExplanationAndNoRequest()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        var probe = CreateProbe(handler, directory.File("missing.json"), apiKeySignIn: () => "primaryApiKey");
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Unsupported, snapshot.State);
+        Assert.True(snapshot.Installed);
+        Assert.Contains("Anthropic Console", snapshot.Error, StringComparison.Ordinal);
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task ASubscriptionTokenWinsOverAnApiKeySignIn()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, File.ReadAllText(FixturePath)));
+        var probe = CreateProbe(handler, WriteCredentials(directory, "token"), apiKeySignIn: () => "primaryApiKey");
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Connected, snapshot.State);
+    }
+
     [Fact]
     public async Task CredentialsWithoutClaudeOAuthReturnUnavailableWithoutIssuingAnHttpRequest()
     {
@@ -779,11 +810,17 @@ public sealed class ClaudeOAuthUsageProbeTests
 
     private static long UnixMs(DateTimeOffset instant) => instant.ToUnixTimeMilliseconds();
 
-    private static ClaudeOAuthUsageProbe CreateProbe(HttpMessageHandler handler, string credentialsPath, Func<DateTimeOffset>? clock = null)
+    /// <summary>
+    /// <paramref name="apiKeySignIn"/> defaults to "none found" so no test depends on how the
+    /// machine running it happens to be signed in.
+    /// </summary>
+    private static ClaudeOAuthUsageProbe CreateProbe(
+        HttpMessageHandler handler, string credentialsPath, Func<DateTimeOffset>? clock = null, Func<string?>? apiKeySignIn = null)
     {
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.227 (Claude Code)");
-        return new ClaudeOAuthUsageProbe(processes, handler, () => ExePath, () => credentialsPath, clock: clock);
+        return new ClaudeOAuthUsageProbe(
+            processes, handler, () => ExePath, () => credentialsPath, clock: clock, apiKeySignIn: apiKeySignIn ?? (() => null));
     }
 
     private static async Task<ProviderSnapshot> ProbeFixtureAsync()

@@ -110,10 +110,10 @@ public sealed record AppSettings
     public double? MiniLeft { get; init; }
 
     /// <summary>
-    /// Whether a tool that is not on this machine (NotInstalled, Unsupported) still gets a card.
-    /// Off by default: the widget shows one card per <em>discovered</em> provider (PRD §15), and a
-    /// fresh install on a machine with only Cursor showed two empty "Not installed" cards. A tool
-    /// that is installed but failing is not affected - its card always stays.
+    /// Whether a tool that is not on this machine (NotInstalled) still gets a card. Off by default:
+    /// the widget shows one card per <em>discovered</em> provider (PRD §15), and a fresh install on
+    /// a machine with only Cursor showed two empty "Not installed" cards. A tool that is installed
+    /// is not affected, whether failing or Unsupported - its card always stays.
     /// </summary>
     public bool ShowUnavailableProviders { get; init; }
 
