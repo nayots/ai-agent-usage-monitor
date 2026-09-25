@@ -109,8 +109,13 @@ public sealed record AppSettings
     /// </summary>
     public double? MiniLeft { get; init; }
 
-    /// <summary>PRD §15: an unavailable provider keeps its card unless the user hides it.</summary>
-    public bool ShowUnavailableProviders { get; init; } = true;
+    /// <summary>
+    /// Whether a tool that is not on this machine (NotInstalled, Unsupported) still gets a card.
+    /// Off by default: the widget shows one card per <em>discovered</em> provider (PRD §15), and a
+    /// fresh install on a machine with only Cursor showed two empty "Not installed" cards. A tool
+    /// that is installed but failing is not affected - its card always stays.
+    /// </summary>
+    public bool ShowUnavailableProviders { get; init; }
 
     /// <summary>
     /// Whether a lapsed Claude Code sign-in may be renewed by asking Claude Code's own CLI to do

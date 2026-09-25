@@ -21,18 +21,40 @@ public class TrayGlyphStateTests
     }
 
     /// <summary>
-    /// Not the primary window. The digits used to have to pick one figure with no way to say
-    /// which window it came from, so they took the first; a frame carries its provider's name
-    /// and its tooltip names the window, so it can afford to answer the question actually being
-    /// asked - is anything about to run out.
+    /// The first window, not the fullest. Reporting the fullest made the icon read "95" for a
+    /// weekly window while the five-hour window the user actually works against sat at 5% - the
+    /// figure a glance at the tray is for. The tooltip still lists every window.
     /// </summary>
     [Fact]
-    public void AFrameReportsItsProvidersWorstWindowRatherThanItsFirst()
+    public void AFrameReportsItsProvidersFirstWindowRatherThanItsFullest()
     {
-        TrayGlyphState state = TrayGlyphState.From([Card("CC", 22d, 91d, 40d)]);
+        TrayGlyphState state = TrayGlyphState.From([Card("CC", 5d, 95d, 40d)]);
 
-        Assert.Equal("91", state.Frames[0].Digits);
-        Assert.Equal(91d, state.Frames[0].UsedPercent);
+        Assert.Equal("5", state.Frames[0].Digits);
+        Assert.Equal(5d, state.Frames[0].UsedPercent);
+    }
+
+    [Fact]
+    public void AFirstWindowWithNoPercentageFallsThroughToTheNextThatHasOne()
+    {
+        TrayGlyphState state = TrayGlyphState.From([Card("CC", null, 30d, 60d)]);
+
+        Assert.Equal("30", state.Frames[0].Digits);
+    }
+
+    /// <summary>
+    /// The one exception to "first window": a later window at its limit blocks work however empty
+    /// the first one is, so printing the first window's small figure would say "carry on" to a
+    /// user who cannot.
+    /// </summary>
+    [Fact]
+    public void ALaterWindowAtItsLimitFloodsTheFrame()
+    {
+        TrayGlyphFrame frame = TrayGlyphState.From([Card("CC", 5d, 100d)]).Frames[0];
+
+        Assert.Equal(TrayFrameKind.AtLimit, frame.Kind);
+        Assert.Null(frame.Digits);
+        Assert.Equal(100d, frame.UsedPercent);
     }
 
     /// <summary>

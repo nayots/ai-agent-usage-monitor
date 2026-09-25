@@ -69,18 +69,21 @@ public sealed class TrayGlyphState
                 continue;
             }
 
-            QuotaRowViewModel? worst = card.Windows
-                .Where(row => row.UsedPercent is not null)
-                .OrderByDescending(row => row.UsedPercent)
-                .FirstOrDefault();
+            // The first window with a figure - the card's top row, which is the short window
+            // (Claude's and Codex's five-hour) a glance at the tray is for. Not the fullest: that
+            // made a 95% weekly window hide a 5% five-hour one. The exception is a later window
+            // at its limit, which blocks work however empty the first one is.
+            QuotaRowViewModel? shown = card.Windows
+                .FirstOrDefault(row => row.UsedPercent >= QuotaBarFillSelector.ExhaustedBandStartPercent)
+                ?? card.Windows.FirstOrDefault(row => row.UsedPercent is not null);
 
-            if (worst?.UsedPercent is not double used)
+            if (shown?.UsedPercent is not double used)
             {
                 frames.Add(new(card.TraySlot, null, null, QuotaBarFill.Accent, TrayFrameKind.Waiting));
                 continue;
             }
 
-            QuotaBarFill fill = QuotaBarFillSelector.Select(used, limitReached: false, worst.ColorBarsByUsage, worst.IsStale);
+            QuotaBarFill fill = QuotaBarFillSelector.Select(used, limitReached: false, shown.ColorBarsByUsage, shown.IsStale);
 
             frames.Add(used >= QuotaBarFillSelector.ExhaustedBandStartPercent
                 ? new(card.TraySlot, null, used, fill, TrayFrameKind.AtLimit)

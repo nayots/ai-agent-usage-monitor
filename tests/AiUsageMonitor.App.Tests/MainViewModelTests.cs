@@ -302,19 +302,20 @@ public class MainViewModelTests
     }
 
     [Fact]
-    public async Task HidingUnavailableProvidersDropsThemFromTheFooterCount()
+    public async Task ANotInstalledProviderIsHiddenByDefaultAndShownOnRequest()
     {
         (MainViewModel model, _) = Build(
             new ProviderDescriptor("claude-code", "Claude Code", "CC", new StubProbe("Claude Code", ConnectionState.Connected, [Window()])),
             new ProviderDescriptor("codex", "Codex", "CX", new StubProbe("Codex", ConnectionState.NotInstalled, [])));
         await model.RefreshAsync(force: true);
 
-        Assert.Equal("2 providers", model.FooterText);
-
-        model.ApplySettings(AppSettings.Default with { ShowUnavailableProviders = false });
-
         Assert.Equal("1 provider", model.FooterText);
         Assert.True(model.Providers[1].IsHiddenByFilter);
+
+        model.ApplySettings(AppSettings.Default with { ShowUnavailableProviders = true });
+
+        Assert.Equal("2 providers", model.FooterText);
+        Assert.False(model.Providers[1].IsHiddenByFilter);
     }
 
     [Fact]
