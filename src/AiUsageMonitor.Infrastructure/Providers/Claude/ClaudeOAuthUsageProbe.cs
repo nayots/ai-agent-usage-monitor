@@ -90,6 +90,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private readonly Func<bool> _signInAutoRepairEnabled;
     private readonly ClaudeSignInRepair _repair;
     private readonly Func<string?> _apiKeySignIn;
+    private readonly Func<ClaudeTranscriptLedger> _transcriptLedgerFactory;
+    private ClaudeTranscriptLedger? _transcriptLedger;
 
     private static HttpClient CreateClient()
     {
@@ -130,7 +132,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         ProviderInstallationCache? installations = null,
         Func<bool>? signInAutoRepairEnabled = null,
         ILogger<ClaudeOAuthUsageProbe>? logger = null,
-        Func<string?>? apiKeySignIn = null)
+        Func<string?>? apiKeySignIn = null,
+        Func<ClaudeTranscriptLedger>? transcriptLedger = null)
     {
         _apiKeySignIn = apiKeySignIn ?? ClaudeApiKeySignIn.DetectOnThisMachine;
         _processes = processes ?? DefaultProcessRunner.Instance;
@@ -143,6 +146,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _signInAutoRepairEnabled = signInAutoRepairEnabled ?? (() => true);
         _repair = new ClaudeSignInRepair(_processes, _clock, logger);
+        _transcriptLedgerFactory = transcriptLedger ?? (() => new ClaudeTranscriptLedger(Path.Combine(Path.GetDirectoryName(ClaudeApiKeySignIn.Locations.ForThisMachine().Credentials)!, "projects")));
     }
 
     /// <inheritdoc />
@@ -190,10 +194,24 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             if (_apiKeySignIn() is string foundIn)
             {
                 notes.Add($"No subscription sign-in; a non-subscription credential was found ({foundIn}). It is never read or sent.");
-                return Snapshot(
-                    true, version, exePath, ConnectionState.Unsupported, [], null,
-                    ClaudeApiKeySignIn.IsCloudProvider(foundIn) ? CloudProviderMessage : ApiKeySignInMessage,
-                    notes);
+                if (ClaudeApiKeySignIn.IsCloudProvider(foundIn))
+                {
+                    return Snapshot(true, version, exePath, ConnectionState.Unsupported, [], null, CloudProviderMessage, notes);
+                }
+
+                try
+                {
+                    DateTimeOffset now = _clock();
+                    ClaudeTranscriptLedger ledger = _transcriptLedger ??= _transcriptLedgerFactory();
+                    ClaudeLedgerRefresh refresh = ledger.Refresh(now);
+                    ClaudeUsageTotals totals = ledger.Totals(now);
+                    return EstimateSnapshot(version, exePath, foundIn, now, totals, refresh, notes);
+                }
+                catch (Exception ex)
+                {
+                    notes.Add($"The usage estimate could not be computed ({ex.GetType().Name}).");
+                    return Snapshot(true, version, exePath, ConnectionState.Unsupported, [], null, ApiKeySignInMessage, notes);
+                }
             }
 
             // Missing file / missing claudeAiOauth.accessToken -> Unavailable, never an exception.
@@ -471,6 +489,64 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         {
             return null;
         }
+    }
+
+    private ProviderSnapshot EstimateSnapshot(
+        string? version,
+        string? executablePath,
+        string foundIn,
+        DateTimeOffset now,
+        ClaudeUsageTotals totals,
+        ClaudeLedgerRefresh refresh,
+        List<string> notes)
+    {
+        notes.Add($"Read {refresh.FilesRead} transcript file(s), {refresh.NewReplies} new repl(ies); prices as of 2026-09-25.");
+        if (refresh.FilesUnreadable > 0)
+        {
+            notes.Add($"{refresh.FilesUnreadable} transcript file(s) could not be read this time.");
+        }
+
+        if (!refresh.ProjectsDirectoryFound)
+        {
+            notes.Add("No Claude Code transcripts were found on this PC.");
+        }
+
+        return new ProviderSnapshot(
+            ProviderName: Name,
+            Installed: true,
+            Version: version,
+            ExecutablePath: executablePath,
+            State: ConnectionState.Connected,
+            Mechanism: "Claude Code transcripts on this PC, estimated at list prices (UNOFFICIAL)",
+            Tier: MechanismTier.Unofficial,
+            UpdateModel: UpdateModel,
+            Windows:
+            [
+                EstimateWindow("claude:estimate_today", "Today (estimate)", 0, totals.TodayEndsAt, totals.Today, foundIn),
+                EstimateWindow("claude:estimate_month", "This month (estimate)", 1, totals.MonthEndsAt, totals.Month, foundIn),
+            ],
+            RetrievedAt: now,
+            Error: null,
+            Notes: notes);
+    }
+
+    private static QuotaWindow EstimateWindow(string id, string label, int order, DateTimeOffset resetsAt, ClaudeUsagePeriod period, string foundIn)
+    {
+        var extra = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["claude.estimate.cacheReadTokens"] = period.CacheReadTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.estimate.cacheWriteTokens"] = period.CacheWriteTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.estimate.inputTokens"] = period.InputTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.estimate.outputTokens"] = period.OutputTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.pricesAsOf"] = ClaudeApiPricing.PricesAsOf.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.signIn"] = foundIn,
+        };
+        if (period.HasUnpricedTokens)
+        {
+            extra["claude.estimate.unpricedTokens"] = period.UnpricedTokens.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return new QuotaWindow(id, label, null, resetsAt, null, order, false, extra, false, ClaudeUsageEstimateFormat.AmountText(period));
     }
 
     private ProviderSnapshot Snapshot(

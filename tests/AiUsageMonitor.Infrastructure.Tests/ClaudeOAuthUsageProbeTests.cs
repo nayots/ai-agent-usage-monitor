@@ -10,6 +10,44 @@ namespace AiUsageMonitor.Infrastructure.Tests;
 
 public sealed class ClaudeOAuthUsageProbeTests
 {
+    [Fact]
+    public async Task ConsoleUsageUsesTheInjectedLedgerOnceAndKeepsTheSignInSourceInExtra()
+    {
+        using var directory = new TempDirectory();
+        string projects = directory.File("projects");
+        Directory.CreateDirectory(projects);
+        File.WriteAllText(Path.Combine(projects, "usage.jsonl"), "{\"type\":\"assistant\",\"requestId\":\"request\",\"timestamp\":\"2026-09-25T09:00:00Z\",\"message\":{\"id\":\"message\",\"model\":\"claude-opus-5\",\"usage\":{\"input_tokens\":1000000}}}\n");
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        int factoryCalls = 0;
+        var probe = CreateProbe(handler, directory.File("missing.json"), () => new DateTimeOffset(2026, 9, 25, 10, 0, 0, TimeSpan.Zero), () => "Anthropic profile", () =>
+        {
+            factoryCalls++;
+            return new ClaudeTranscriptLedger(projects, TimeZoneInfo.Utc);
+        });
+
+        ProviderSnapshot first = await probe.ProbeAsync(CancellationToken.None);
+        ProviderSnapshot second = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(1, factoryCalls);
+        Assert.Equal(0, handler.RequestCount);
+        Assert.Equal("≈ $5.00 · 1M tokens", first.Windows[0].AmountText);
+        Assert.Equal("Anthropic profile", first.Windows[0].Extra["claude.signIn"]);
+        Assert.Equal(first.Windows[0].AmountText, second.Windows[0].AmountText);
+    }
+
+    [Fact]
+    public async Task AThrowingLedgerFallsBackToTheExistingUnsupportedMessage()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        var probe = CreateProbe(handler, directory.File("missing.json"), apiKeySignIn: () => "Anthropic profile", transcriptLedger: () => throw new InvalidOperationException());
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Unsupported, snapshot.State);
+        Assert.Contains("Anthropic Console", snapshot.Error, StringComparison.Ordinal);
+        Assert.Contains(snapshot.Notes, note => note.Contains("InvalidOperationException", StringComparison.Ordinal));
+    }
     private const string ExePath = "C:\\tools\\claude.exe";
 
     [Fact]
@@ -44,7 +82,7 @@ public sealed class ClaudeOAuthUsageProbeTests
     /// subscription quota at all. Saying "has not stored a sign-in" there was simply false.
     /// </summary>
     [Fact]
-    public async Task AnApiKeySignInIsUnsupportedWithItsOwnExplanationAndNoRequest()
+    public async Task AnApiKeySignInReturnsTranscriptUsageWithoutAnHttpRequest()
     {
         using var directory = new TempDirectory();
         var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
@@ -52,9 +90,10 @@ public sealed class ClaudeOAuthUsageProbeTests
 
         ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
 
-        Assert.Equal(ConnectionState.Unsupported, snapshot.State);
+        Assert.Equal(ConnectionState.Connected, snapshot.State);
         Assert.True(snapshot.Installed);
-        Assert.Contains("Anthropic Console", snapshot.Error, StringComparison.Ordinal);
+        Assert.Equal(["claude:estimate_today", "claude:estimate_month"], snapshot.Windows.Select(w => w.Id));
+        Assert.All(snapshot.Windows, window => Assert.Null(window.UsedPercent));
         Assert.Equal(0, handler.RequestCount);
     }
 
@@ -829,12 +868,12 @@ public sealed class ClaudeOAuthUsageProbeTests
     /// machine running it happens to be signed in.
     /// </summary>
     private static ClaudeOAuthUsageProbe CreateProbe(
-        HttpMessageHandler handler, string credentialsPath, Func<DateTimeOffset>? clock = null, Func<string?>? apiKeySignIn = null)
+        HttpMessageHandler handler, string credentialsPath, Func<DateTimeOffset>? clock = null, Func<string?>? apiKeySignIn = null, Func<ClaudeTranscriptLedger>? transcriptLedger = null)
     {
         var processes = new FakeProcessRunner();
         processes.EnqueueCaptured(ExePath, "--version", 0, "2.1.227 (Claude Code)");
         return new ClaudeOAuthUsageProbe(
-            processes, handler, () => ExePath, () => credentialsPath, clock: clock, apiKeySignIn: apiKeySignIn ?? (() => null));
+            processes, handler, () => ExePath, () => credentialsPath, clock: clock, apiKeySignIn: apiKeySignIn ?? (() => null), transcriptLedger: transcriptLedger ?? (() => new ClaudeTranscriptLedger(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), TimeZoneInfo.Utc)));
     }
 
     private static async Task<ProviderSnapshot> ProbeFixtureAsync()
