@@ -301,6 +301,11 @@ reply is written up to three times with identical usage (one sample: 335 entries
 it is deduplicated on `message.id` + `requestId`. `~/.claude/stats-cache.json` has a `costUSD` field
 but was months stale while transcripts were current — not usable.
 
+Verified on a Console-account machine (Claude Code 2.1.280): the keyless Console sign-in stores an
+Anthropic profile under `%APPDATA%\Anthropic\configs\` and leaves `.credentials.json` as `{}`;
+`oauthAccount.billingType` is `"usage_based"`. The probe detected the profile and rendered both
+estimate rows. The same run read Cursor's per-user override as `$109.96 of $200` on Cursor 3.21.18.
+
 **Finding 6 (2026-09-25): `perUserMonthlyLimitDollars` is the team default, not the user's limit.**
 An admin raised one user to $200 while the team default stayed $100; `GetHardLimit` kept answering
 100, so the card read "$103 of $100". `/auth/usage-summary` reported `limit: 20000`. The adapter now

@@ -155,8 +155,11 @@ token is found missing, so a subscription always wins. Its sources follow Claude
 precedence: cloud-provider switches (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`, own message),
 `ANTHROPIC_AUTH_TOKEN`/`_API_KEY`/`_PROFILE`, `apiKeyHelper`, a legacy `primaryApiKey`, and — the
 default Console sign-in since 2.1.242 — an **Anthropic profile** under `%APPDATA%\Anthropic\configs\`,
-which stores no key and signs out of claude.ai. The Console sign-in has not been observed on a real
-machine; the sources are from the documentation. `CLAUDE_CONFIG_DIR` moves `.credentials.json`, and
+which stores no key and signs out of claude.ai. **Observed on a real Console machine (Claude Code 2.1.280,
+2026-09-25):** the sign-in is an Anthropic profile (`configs/default.json`, plus `credentials/` and
+`active_config` beside it), `.credentials.json` is an empty `{}`, no `primaryApiKey` anywhere, and
+`~/.claude.json` has `oauthAccount.billingType: "usage_based"` (a subscription reads
+`"stripe_subscription"`). Detection reported `Anthropic profile`, and the estimate rendered. `CLAUDE_CONFIG_DIR` moves `.credentials.json`, and
 the probe honours it.
 
 **A Console/API sign-in shows a usage ESTIMATE from local transcripts (added 2026-09-25).** The API
