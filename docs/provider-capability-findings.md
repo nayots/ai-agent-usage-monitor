@@ -290,6 +290,26 @@ non-admin. Mechanism: read the access token from `%APPDATA%\Cursor\User\globalSt
 | `GET /auth/full_stripe_profile` | `membershipType:"enterprise"`, `isTeamMember:true`, `isYearlyPlan:false` |
 | `GetMonthlyInvoice` | HTTP 401 `"User not authorized for this team"` — admin-only |
 | `GetUserUsageSummary`, `GetSpendLimitUsage` | HTTP 404 — do not exist |
+| `GET /auth/usage-summary` (2026-09-25) | `billingCycleStart/End` as ISO-8601 (a real month), `limitType:"team"`, `individualUsage.overall:{enabled,used:10948,limit:20000,remaining}` in cents — **the caller's enforced limit, admin override included** — and `teamUsage.onDemand` (the team's aggregate, never shown) |
+| `GetUsageLimitStatusAndActiveGrants` (2026-09-25) | wraps `usageLimitPolicyStatus` only; no override figure |
+
+**Claude Code transcripts (2026-09-25).** For a Console/API sign-in, the only usage source a normal
+key has is Claude Code's own `projects/**/*.jsonl`. Each assistant reply carries `message.usage`
+(`input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation.{ephemeral_5m,ephemeral_1h}_input_tokens`,
+`server_tool_use.web_search_requests`, `speed`, `inference_geo`) — tokens, never dollars. The same
+reply is written up to three times with identical usage (one sample: 335 entries, 105 replies), so
+it is deduplicated on `message.id` + `requestId`. `~/.claude/stats-cache.json` has a `costUSD` field
+but was months stale while transcripts were current — not usable.
+
+Verified on a Console-account machine (Claude Code 2.1.280): the keyless Console sign-in stores an
+Anthropic profile under `%APPDATA%\Anthropic\configs\` and leaves `.credentials.json` as `{}`;
+`oauthAccount.billingType` is `"usage_based"`. The probe detected the profile and rendered both
+estimate rows. The same run read Cursor's per-user override as `$109.96 of $200` on Cursor 3.21.18.
+
+**Finding 6 (2026-09-25): `perUserMonthlyLimitDollars` is the team default, not the user's limit.**
+An admin raised one user to $200 while the team default stayed $100; `GetHardLimit` kept answering
+100, so the card read "$103 of $100". `/auth/usage-summary` reported `limit: 20000`. The adapter now
+reads the summary first and keeps the event total only as a fallback.
 
 ### 8.2 The findings that shaped the adapter
 

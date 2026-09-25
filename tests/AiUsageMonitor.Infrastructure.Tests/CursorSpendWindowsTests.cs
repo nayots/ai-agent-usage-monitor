@@ -147,6 +147,116 @@ public sealed class CursorSpendWindowsTests
         Assert.False(window.Extra.ContainsKey("cursor.limitUsd"));
     }
 
+    private static readonly CursorBillingCycle ReportedCycle = new(
+        new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+        new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero),
+        TimeSpan.FromDays(30),
+        DurationWasDerived: false);
+
+    [Fact]
+    public void TheSummarysOverallBucketIsTheMonthlySpendAgainstThisUsersOwnLimit()
+    {
+        QuotaWindow window = Assert.Single(CursorSpendWindows.FromUsageSummary(
+            Json("""{"limitType":"team","individualUsage":{"overall":{"enabled":true,"used":10948,"limit":20000,"remaining":9052}}}"""),
+            ReportedCycle,
+            "enterprise"));
+
+        Assert.Equal("cursor:overall_spend", window.Id);
+        Assert.Equal("Monthly spend", window.Label);
+        Assert.Equal(54.74, window.UsedPercent!.Value, 2);
+        Assert.Equal("$109.48 of $200", window.AmountText);
+        Assert.Equal("usage_summary", window.Extra["cursor.source"]);
+        Assert.Equal("team", window.Extra["cursor.limitType"]);
+        Assert.Equal(ReportedCycle.End, window.ResetsAt);
+        Assert.False(window.IsPartial);
+    }
+
+    [Fact]
+    public void EveryIndividualBucketBecomesAWindowInAFixedOrderAndOnlyOverallPrintsACurrency()
+    {
+        IReadOnlyList<QuotaWindow> windows = CursorSpendWindows.FromUsageSummary(
+            Json("""
+                {"individualUsage":{
+                  "onDemand":{"enabled":true,"used":500,"limit":1000},
+                  "plan":{"enabled":true,"used":2000,"limit":2000},
+                  "overall":{"enabled":true,"used":2500,"limit":3000}}}
+                """),
+            ReportedCycle,
+            "pro");
+
+        Assert.Equal(["cursor:overall_spend", "cursor:included_usage", "cursor:on_demand_spend"], windows.Select(w => w.Id));
+        Assert.Equal(["Monthly spend", "Included usage", "On-demand spend"], windows.Select(w => w.Label));
+        Assert.Equal([0, 1, 2], windows.Select(w => w.Order));
+        Assert.NotNull(windows[0].AmountText);
+        Assert.Null(windows[1].AmountText);
+        Assert.Null(windows[2].AmountText);
+    }
+
+    [Fact]
+    public void ADisabledBucketIsSkipped()
+    {
+        IReadOnlyList<QuotaWindow> windows = CursorSpendWindows.FromUsageSummary(
+            Json("""{"individualUsage":{"overall":{"enabled":true,"used":1,"limit":100},"onDemand":{"enabled":false,"used":0,"limit":0}}}"""),
+            ReportedCycle,
+            "pro");
+
+        Assert.Equal("cursor:overall_spend", Assert.Single(windows).Id);
+    }
+
+    /// <summary>A bucket the provider invents renders under its own name, never dropped.</summary>
+    [Fact]
+    public void AnUnknownBucketKeepsItsProviderToken()
+    {
+        QuotaWindow window = Assert.Single(CursorSpendWindows.FromUsageSummary(
+            Json("""{"individualUsage":{"burstCredits":{"enabled":true,"used":5,"limit":50}}}"""),
+            ReportedCycle,
+            "pro"));
+
+        Assert.Equal("cursor:summary_burstCredits", window.Id);
+        Assert.Equal("burstCredits", window.Label);
+        Assert.True(window.LabelIsProviderToken);
+        Assert.Equal(10.0, window.UsedPercent!.Value, 3);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"individualUsage":{}}""")]
+    [InlineData("""{"individualUsage":{"overall":{"enabled":true,"limit":100}}}""")]
+    [InlineData("""{"individualUsage":null}""")]
+    public void ASummaryWithNoUsableFiguresProducesNoWindow(string json)
+    {
+        Assert.Empty(CursorSpendWindows.FromUsageSummary(Json(json), ReportedCycle, "enterprise"));
+    }
+
+    [Fact]
+    public void TheTeamsAggregateIsNeverReportedAsThisUsersSpend()
+    {
+        IReadOnlyList<QuotaWindow> windows = CursorSpendWindows.FromUsageSummary(
+            Json("""{"teamUsage":{"onDemand":{"enabled":true,"used":795661,"limit":100000}}}"""),
+            ReportedCycle,
+            "enterprise");
+
+        Assert.Empty(windows);
+    }
+
+    [Fact]
+    public void TheSummaryStatesItsOwnCycle()
+    {
+        CursorBillingCycle cycle = CursorBillingCycle.FromSummary(
+            Json("""{"billingCycleStart":"2026-09-01T00:00:00.000Z","billingCycleEnd":"2026-10-01T00:00:00.000Z"}"""))!;
+
+        Assert.Equal(ReportedCycle, cycle);
+    }
+
+    [Theory]
+    [InlineData("""{"billingCycleStart":"2026-10-01T00:00:00.000Z","billingCycleEnd":"2026-10-01T00:00:00.000Z"}""")]
+    [InlineData("""{"billingCycleEnd":"2026-10-01T00:00:00.000Z"}""")]
+    [InlineData("{}")]
+    public void ASummaryCycleThatIsNotARealPeriodIsIgnored(string json)
+    {
+        Assert.Null(CursorBillingCycle.FromSummary(Json(json)));
+    }
+
     [Fact]
     public void AnUnknownCycleLeavesTheWindowPartial()
     {

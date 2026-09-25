@@ -153,6 +153,10 @@ static void PrintWindow(QuotaWindow w, DateTimeOffset now)
     Console.WriteLine($"        {used} / {remaining}");
     Console.WriteLine($"        bar: {bar}");
     Console.WriteLine($"        resets in: {resetCountdown}   window: {duration}   elapsed marker: {elapsedMarker}");
+    if (!string.IsNullOrEmpty(w.AmountText))
+    {
+        Console.WriteLine($"        amount: {w.AmountText}");
+    }
     if (w.Extra.Count > 0)
     {
         string extraStr = string.Join(", ", w.Extra.Select(kv => $"{kv.Key}={kv.Value}"));

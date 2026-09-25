@@ -38,9 +38,10 @@ public sealed class CursorUsageProbe : IProviderProbe
     public MechanismTier Tier => MechanismTier.Unofficial;
     public bool MakesFirstPartyNetworkCall => true;
 
-    // Hard constraint: this is the ONLY network destination this probe may reach. Hardcoded,
-    // never derived from configuration, a redirect, or provider input.
+    // Hard constraint: api2.cursor.sh is the ONLY host this probe may reach. Both addresses are
+    // hardcoded, never derived from configuration, a redirect, or provider input.
     private const string RpcBase = "https://api2.cursor.sh/aiserver.v1.DashboardService/";
+    private const string UsageSummaryUrl = "https://api2.cursor.sh/auth/usage-summary";
     private const string UserAgent = "AiUsageMonitor";
 
     private const string MechanismText = "Cursor dashboard API + local state database (UNOFFICIAL/undocumented)";
@@ -186,6 +187,40 @@ public sealed class CursorUsageProbe : IProviderProbe
             {
                 notes.Add($"{windows.Count} quota window(s) read from this account's plan usage.");
                 return Snapshot(true, version, exePath, ConnectionState.Connected, windows, _clock(), null, notes);
+            }
+
+            // The usage summary is the only source of the limit actually enforced for this user.
+            // GetHardLimit's perUserMonthlyLimitDollars is the TEAM DEFAULT: an admin's per-user
+            // override ($200 against a $100 default, observed live 2026-09-25) is not in it, and
+            // reading it made a half-used limit render as "$103 of $100", exhausted.
+            CursorCall summary = await GetAsync(UsageSummaryUrl, token, ct).ConfigureAwait(false);
+            if (summary.Status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
+            {
+                return Reject(summary, true, version, exePath, notes)!;
+            }
+
+            if (summary.Json is JsonElement summaryJson)
+            {
+                CursorBillingCycle? reportedCycle = CursorBillingCycle.FromSummary(summaryJson);
+                CursorBillingCycle summaryCycle = reportedCycle ?? cycle;
+                IReadOnlyList<QuotaWindow> summaryWindows =
+                    CursorSpendWindows.FromUsageSummary(summaryJson, summaryCycle, account.MembershipType);
+                if (summaryWindows.Count > 0)
+                {
+                    notes.Add($"{summaryWindows.Count} quota window(s) read from this user's usage summary.");
+                    if (reportedCycle is not null)
+                    {
+                        notes.Add("The usage summary reported its own billing cycle, which supersedes the one derived above.");
+                    }
+
+                    return Snapshot(true, version, exePath, ConnectionState.Connected, summaryWindows, _clock(), null, notes);
+                }
+
+                notes.Add("The usage summary carried no per-user figures.");
+            }
+            else
+            {
+                notes.Add($"The usage summary was not available (HTTP {(int)summary.Status}).");
             }
 
             if (account.TeamId is not long teamId)
@@ -458,8 +493,31 @@ public sealed class CursorUsageProbe : IProviderProbe
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.TryAddWithoutValidation("Connect-Protocol-Version", "1");
+        return await SendAsync(request, token, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A caller-scoped REST read. Unlike the RPCs, a body that is not JSON is "nothing usable",
+    /// not a failure of the whole probe: this call has a fallback, and a malformed answer from it
+    /// must not take the working path down with it.
+    /// </summary>
+    private async Task<CursorCall> GetAsync(string url, string token, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        try
+        {
+            return await SendAsync(request, token, ct).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return new CursorCall(HttpStatusCode.UnprocessableContent, null, null);
+        }
+    }
+
+    private async Task<CursorCall> SendAsync(HttpRequestMessage request, string token, CancellationToken ct)
+    {
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.UserAgent.ParseAdd(UserAgent);
 
         using HttpResponseMessage response = await _client.SendAsync(request, ct).ConfigureAwait(false);

@@ -21,18 +21,40 @@ public class TrayGlyphStateTests
     }
 
     /// <summary>
-    /// Not the primary window. The digits used to have to pick one figure with no way to say
-    /// which window it came from, so they took the first; a frame carries its provider's name
-    /// and its tooltip names the window, so it can afford to answer the question actually being
-    /// asked - is anything about to run out.
+    /// The first window, not the fullest. Reporting the fullest made the icon read "95" for a
+    /// weekly window while the five-hour window the user actually works against sat at 5% - the
+    /// figure a glance at the tray is for. The tooltip still lists every window.
     /// </summary>
     [Fact]
-    public void AFrameReportsItsProvidersWorstWindowRatherThanItsFirst()
+    public void AFrameReportsItsProvidersFirstWindowRatherThanItsFullest()
     {
-        TrayGlyphState state = TrayGlyphState.From([Card("CC", 22d, 91d, 40d)]);
+        TrayGlyphState state = TrayGlyphState.From([Card("CC", 5d, 95d, 40d)]);
 
-        Assert.Equal("91", state.Frames[0].Digits);
-        Assert.Equal(91d, state.Frames[0].UsedPercent);
+        Assert.Equal("5", state.Frames[0].Digits);
+        Assert.Equal(5d, state.Frames[0].UsedPercent);
+    }
+
+    [Fact]
+    public void AFirstWindowWithNoPercentageFallsThroughToTheNextThatHasOne()
+    {
+        TrayGlyphState state = TrayGlyphState.From([Card("CC", null, 30d, 60d)]);
+
+        Assert.Equal("30", state.Frames[0].Digits);
+    }
+
+    /// <summary>
+    /// The one exception to "first window": a later window at its limit blocks work however empty
+    /// the first one is, so printing the first window's small figure would say "carry on" to a
+    /// user who cannot.
+    /// </summary>
+    [Fact]
+    public void ALaterWindowAtItsLimitFloodsTheFrame()
+    {
+        TrayGlyphFrame frame = TrayGlyphState.From([Card("CC", 5d, 100d)]).Frames[0];
+
+        Assert.Equal(TrayFrameKind.AtLimit, frame.Kind);
+        Assert.Null(frame.Digits);
+        Assert.Equal(100d, frame.UsedPercent);
     }
 
     /// <summary>
@@ -81,6 +103,48 @@ public class TrayGlyphStateTests
         Assert.Equal(TrayFrameKind.Waiting, frame.Kind);
         Assert.Null(frame.UsedPercent);
         Assert.Null(frame.Digits);
+    }
+
+    [Fact]
+    public void AmountOnlyCardsHaveNoTrayFrame()
+    {
+        TrayGlyphState state = TrayGlyphState.From([CardWithWindows(Window("today", 0, null, "≈ $1.00 · 1K tokens"))]);
+
+        Assert.Empty(state.Frames);
+    }
+
+    [Fact]
+    public void APercentageWindowStillFramesAMixedCard()
+    {
+        TrayGlyphFrame frame = Assert.Single(TrayGlyphState.From([CardWithWindows(
+            Window("percent", 0, 40d),
+            Window("amount", 1, null, "≈ $1.00 · 1K tokens"))]).Frames);
+
+        Assert.Equal("40", frame.Digits);
+    }
+
+    /// <summary>
+    /// A failure outranks the amount-only rule. A card keeps its last rows through an error, so an
+    /// amount-only card that then fails still has those rows - and must still get its Failed frame
+    /// rather than vanish from the tray at exactly the moment something went wrong.
+    /// </summary>
+    [Fact]
+    public void AnAmountOnlyCardThatFailsStillShowsItsFailure()
+    {
+        ProviderCardViewModel card = CardWithWindows(Window("amount", 0, null, "≈ $1.00 · 1K tokens"));
+        card.Apply(Snapshot(ConnectionState.Error, []), Now, Policy);
+
+        TrayGlyphFrame frame = Assert.Single(TrayGlyphState.From([card]).Frames);
+
+        Assert.Equal(TrayFrameKind.Failed, frame.Kind);
+    }
+
+    [Fact]
+    public void CardsWithoutPercentagesOrAmountsStillWait()
+    {
+        TrayGlyphFrame frame = Assert.Single(TrayGlyphState.From([CardWithWindows(Window("unknown", 0, null))]).Frames);
+
+        Assert.Equal(TrayFrameKind.Waiting, frame.Kind);
     }
 
     /// <summary>
@@ -140,6 +204,16 @@ public class TrayGlyphStateTests
         return card;
     }
 
+    private static ProviderCardViewModel CardWithWindows(params QuotaWindow[] windows)
+    {
+        ProviderCardViewModel card = new(
+            new ProviderDescriptor("cc", "CC", "CC", new SilentProbe("CC"), 0),
+            colorBarsByUsage: true,
+            _ => { });
+        card.Apply(Snapshot(ConnectionState.Connected, windows), Now, Policy);
+        return card;
+    }
+
     private static ProviderSnapshot Snapshot(ConnectionState state, IReadOnlyList<QuotaWindow> windows) => new(
         ProviderName: "Provider",
         Installed: state != ConnectionState.NotInstalled,
@@ -154,9 +228,9 @@ public class TrayGlyphStateTests
         Error: null,
         Notes: []);
 
-    private static QuotaWindow Window(string id, int order, double? used) => new(
+    private static QuotaWindow Window(string id, int order, double? used, string? amountText = null) => new(
         Id: id, Label: id, UsedPercent: used, ResetsAt: null, WindowDuration: null,
-        Order: order, IsPartial: true, Extra: new Dictionary<string, string>(), LabelIsProviderToken: true);
+        Order: order, IsPartial: true, Extra: new Dictionary<string, string>(), LabelIsProviderToken: true, AmountText: amountText);
 
     private sealed class SilentProbe(string name) : IProviderProbe
     {

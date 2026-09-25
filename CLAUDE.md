@@ -147,6 +147,32 @@ identical token. Dropping "still future" breaks the lapsed path, where a rotatio
 token would send exactly the doomed request that path exists to avoid. **An earlier revision
 stated only the liveness half and shipped only the change half; do not "simplify" it back.**
 
+**An API-key sign-in is `Unsupported`, not `Unavailable` (added 2026-09-25).** Claude Code signed in
+through the Anthropic Console (or via `ANTHROPIC_API_KEY` / `apiKeyHelper`) has no `claudeAiOauth`
+and no subscription quota — the API exposes no spend to a normal key at all. `ClaudeApiKeySignIn`
+tests only that such a credential is *present* (never reads or sends it), and only after the OAuth
+token is found missing, so a subscription always wins. Its sources follow Claude Code's documented
+precedence: cloud-provider switches (`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX`/`_FOUNDRY`, own message),
+`ANTHROPIC_AUTH_TOKEN`/`_API_KEY`/`_PROFILE`, `apiKeyHelper`, a legacy `primaryApiKey`, and — the
+default Console sign-in since 2.1.242 — an **Anthropic profile** under `%APPDATA%\Anthropic\configs\`,
+which stores no key and signs out of claude.ai. **Observed on a real Console machine (Claude Code 2.1.280,
+2026-09-25):** the sign-in is an Anthropic profile (`configs/default.json`, plus `credentials/` and
+`active_config` beside it), `.credentials.json` is an empty `{}`, no `primaryApiKey` anywhere, and
+`~/.claude.json` has `oauthAccount.billingType: "usage_based"` (a subscription reads
+`"stripe_subscription"`). Detection reported `Anthropic profile`, and the estimate rendered. `CLAUDE_CONFIG_DIR` moves `.credentials.json`, and
+the probe honours it.
+
+**A Console/API sign-in shows a usage ESTIMATE from local transcripts (added 2026-09-25).** The API
+gives a normal key no spend or usage data, so `ClaudeTranscriptLedger` totals `message.usage` from
+`<claude dir>/projects/**/*.jsonl` into "Today (estimate)" and "This month (estimate)" rows (no
+percentage, amount only), priced by `ClaudeApiPricing` — a table copied from the published pricing
+page, with `PricesAsOf`. **Update that table when prices change; never fetch the page at runtime**
+(that is scraping). Facts that cost time: each reply is written up to three times with identical
+usage, so dedup on `message.id` + `requestId` is mandatory (naive sums triple-count); skip
+`<synthetic>`; files are read incrementally in 1 MB chunks and only `"usage"` lines are ever decoded
+(measured: 261.6 MB first scan in 858 ms at 71 MB peak, 4 ms rescans); the scan runs under
+`Task.Run` so it cannot block the probe's caller. Cloud-provider setups keep the plain notice.
+
 One attempt per observed expiry (`ClaudeSignInRepair` holds the block), so a CLI that cannot fix it
 does not spawn a process every poll. Controlled by `AppSettings.ClaudeSignInAutoRepairEnabled`,
 default on.
@@ -172,6 +198,16 @@ Findings that cost real time to establish — do not re-derive:
 - **`GetHardLimit` needs the `teamId`.** Without it: `{"hardLimit":2147483647}`, a sentinel. With
   it: `perUserMonthlyLimitDollars`. The `teamId` comes from `cursorAuth/cachedTeam` **locally** —
   no request needed, and `full_stripe_profile` is not called at all.
+- **`perUserMonthlyLimitDollars` is the team's DEFAULT, not this user's limit (found 2026-09-25).**
+  An admin can raise one user's limit (observed: $100 default, $200 override), and `GetHardLimit`
+  keeps reporting the default, so the card read "$103 of $100". The enforced limit is in
+  **`GET https://api2.cursor.sh/auth/usage-summary`** (same Bearer token, caller-scoped, no roster):
+  `individualUsage.overall.{enabled,used,limit,remaining}` in cents — `limit: 20000` for the $200
+  override — plus a real `billingCycleStart`/`End` in ISO-8601, where `GetCurrentPeriodUsage` gives
+  start = end. The probe reads it after `planUsage` and before the event total, which is now only a
+  fallback. `teamUsage` is the whole team's aggregate and is never shown as the user's. The only other
+  known source of the override, `hardLimitOverrideDollars`, is in `GetTeamSpend`'s roster — still
+  forbidden. `GetUsageLimitStatusAndActiveGrants` and `GetUsageLimitPolicyStatus` do NOT carry it.
 - **`GetAggregatedUsageEvents` is empty (`{}`) on enterprise**, with `teamId:-1` and with the real
   team id alike. The spend must be summed from `GetFilteredUsageEvents`.
 - **`GetFilteredUsageEvents` is already scoped to the caller** — one distinct `owningUser` across

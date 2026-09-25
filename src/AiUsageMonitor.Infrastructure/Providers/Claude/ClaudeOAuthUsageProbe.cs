@@ -60,6 +60,15 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private const string SignInExpiredMessage =
         "Claude Code's sign-in has fully expired — run \"claude\" and sign in again";
 
+    // Rendered verbatim on the card.
+    private const string ApiKeySignInMessage =
+        "Claude Code is signed in with an Anthropic Console account or API key, not a Claude subscription. "
+        + "It is billed per use, so there is no subscription quota to show.";
+
+    private const string CloudProviderMessage =
+        "Claude Code is set up to use a cloud provider (Bedrock, Vertex or Foundry), not a Claude subscription, "
+        + "so there is no subscription quota to show.";
+
     /// <summary>How much clock skew to allow before treating a stored expiry as already past.</summary>
     private static readonly TimeSpan ExpirySkewAllowance = TimeSpan.FromSeconds(30);
 
@@ -80,6 +89,9 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
     private readonly Func<DateTimeOffset> _clock;
     private readonly Func<bool> _signInAutoRepairEnabled;
     private readonly ClaudeSignInRepair _repair;
+    private readonly Func<string?> _apiKeySignIn;
+    private readonly Func<ClaudeTranscriptLedger> _transcriptLedgerFactory;
+    private ClaudeTranscriptLedger? _transcriptLedger;
 
     private static HttpClient CreateClient()
     {
@@ -119,8 +131,11 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         Func<DateTimeOffset>? clock = null,
         ProviderInstallationCache? installations = null,
         Func<bool>? signInAutoRepairEnabled = null,
-        ILogger<ClaudeOAuthUsageProbe>? logger = null)
+        ILogger<ClaudeOAuthUsageProbe>? logger = null,
+        Func<string?>? apiKeySignIn = null,
+        Func<ClaudeTranscriptLedger>? transcriptLedger = null)
     {
+        _apiKeySignIn = apiKeySignIn ?? ClaudeApiKeySignIn.DetectOnThisMachine;
         _processes = processes ?? DefaultProcessRunner.Instance;
         _client = handler is null ? Client : CreateClient(handler);
         _locateExecutable = locateExecutable ?? ClaudeExecutableLocator.Locate;
@@ -131,6 +146,7 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _signInAutoRepairEnabled = signInAutoRepairEnabled ?? (() => true);
         _repair = new ClaudeSignInRepair(_processes, _clock, logger);
+        _transcriptLedgerFactory = transcriptLedger ?? (() => new ClaudeTranscriptLedger(Path.Combine(Path.GetDirectoryName(ClaudeApiKeySignIn.Locations.ForThisMachine().Credentials)!, "projects")));
     }
 
     /// <inheritdoc />
@@ -173,6 +189,41 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         string? token = ReadAccessToken(credentialsPath, credentialsFileExists, notes, out ClaudeAccountMetadata account);
         if (token is null)
         {
+            // Signed in, but with an API key rather than a subscription: there is no quota to read,
+            // which is a fact about the account rather than a fault, so Unsupported, not Unavailable.
+            if (_apiKeySignIn() is string foundIn)
+            {
+                notes.Add($"No subscription sign-in; a non-subscription credential was found ({foundIn}). It is never read or sent.");
+                if (ClaudeApiKeySignIn.IsCloudProvider(foundIn))
+                {
+                    return Snapshot(true, version, exePath, ConnectionState.Unsupported, [], null, CloudProviderMessage, notes);
+                }
+
+                try
+                {
+                    DateTimeOffset now = _clock();
+                    ClaudeTranscriptLedger ledger = _transcriptLedger ??= _transcriptLedgerFactory();
+
+                    // Off the calling thread, always. The first scan reads a month of transcripts
+                    // (seconds, on a real machine), and everything before a probe's first real
+                    // await runs on its caller's thread - which, with the installation check
+                    // served from cache, would be the whole scan. Task.Run also lets the refresh
+                    // service's timeout race it, which a synchronous scan would defeat.
+                    (ClaudeLedgerRefresh refresh, ClaudeUsageTotals totals) = await Task.Run(
+                        () => (ledger.Refresh(now), ledger.Totals(now)), ct).ConfigureAwait(false);
+                    return EstimateSnapshot(version, exePath, foundIn, now, totals, refresh, notes);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    notes.Add($"The usage estimate could not be computed ({ex.GetType().Name}).");
+                    return Snapshot(true, version, exePath, ConnectionState.Unsupported, [], null, ApiKeySignInMessage, notes);
+                }
+            }
+
             // Missing file / missing claudeAiOauth.accessToken -> Unavailable, never an exception.
             return Snapshot(
                 installed: true,
@@ -450,6 +501,66 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         }
     }
 
+    private ProviderSnapshot EstimateSnapshot(
+        string? version,
+        string? executablePath,
+        string foundIn,
+        DateTimeOffset now,
+        ClaudeUsageTotals totals,
+        ClaudeLedgerRefresh refresh,
+        List<string> notes)
+    {
+        notes.Add(
+            $"Read {refresh.FilesRead} transcript file(s), {refresh.NewReplies} new repl(ies); prices as of "
+            + $"{ClaudeApiPricing.PricesAsOf.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)}.");
+        if (refresh.FilesUnreadable > 0)
+        {
+            notes.Add($"{refresh.FilesUnreadable} transcript file(s) could not be read this time.");
+        }
+
+        if (!refresh.ProjectsDirectoryFound)
+        {
+            notes.Add("No Claude Code transcripts were found on this PC.");
+        }
+
+        return new ProviderSnapshot(
+            ProviderName: Name,
+            Installed: true,
+            Version: version,
+            ExecutablePath: executablePath,
+            State: ConnectionState.Connected,
+            Mechanism: "Claude Code transcripts on this PC, estimated at list prices (UNOFFICIAL)",
+            Tier: MechanismTier.Unofficial,
+            UpdateModel: UpdateModel,
+            Windows:
+            [
+                EstimateWindow("claude:estimate_today", "Today (estimate)", 0, totals.TodayEndsAt, totals.Today, foundIn),
+                EstimateWindow("claude:estimate_month", "This month (estimate)", 1, totals.MonthEndsAt, totals.Month, foundIn),
+            ],
+            RetrievedAt: now,
+            Error: null,
+            Notes: notes);
+    }
+
+    private static QuotaWindow EstimateWindow(string id, string label, int order, DateTimeOffset resetsAt, ClaudeUsagePeriod period, string foundIn)
+    {
+        var extra = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["claude.estimate.cacheReadTokens"] = period.CacheReadTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.estimate.cacheWriteTokens"] = period.CacheWriteTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.estimate.inputTokens"] = period.InputTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.estimate.outputTokens"] = period.OutputTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.pricesAsOf"] = ClaudeApiPricing.PricesAsOf.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            ["claude.signIn"] = foundIn,
+        };
+        if (period.HasUnpricedTokens)
+        {
+            extra["claude.estimate.unpricedTokens"] = period.UnpricedTokens.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return new QuotaWindow(id, label, null, resetsAt, null, order, false, extra, false, ClaudeUsageEstimateFormat.AmountText(period));
+    }
+
     private ProviderSnapshot Snapshot(
         bool installed,
         string? version,
@@ -510,11 +621,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         return now + (wait > MaxThrottleWait ? MaxThrottleWait : wait);
     }
 
-    private static string GetCredentialsPath()
-    {
-        string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(userProfile, ".claude", ".credentials.json");
-    }
+    /// <summary>Honours <c>CLAUDE_CONFIG_DIR</c>, which moves Claude Code's credentials file with it.</summary>
+    private static string GetCredentialsPath() => ClaudeApiKeySignIn.Locations.ForThisMachine().Credentials;
 
     /// <summary>
     /// Reads <c>claudeAiOauth.accessToken</c> from the local credential store. Returns null - never

@@ -20,7 +20,7 @@ public class AppSettingsStoreTests
         Assert.False(defaults.MiniMode);
         Assert.Equal(MiniDock.Top, defaults.MiniDock);
         Assert.Null(defaults.MiniLeft);
-        Assert.True(defaults.ShowUnavailableProviders);
+        Assert.False(defaults.ShowUnavailableProviders);
         Assert.Equal(300, defaults.StaleAfterSeconds);
     }
 

@@ -95,6 +95,32 @@ public class ProviderNoticeTests
         Assert.Null(notice.DetailText);
     }
 
+    /// <summary>
+    /// Unsupported used to discard the provider's reason for a generic "not available from this
+    /// version", which is simply wrong for Claude Code signed in with an API key - nothing about
+    /// the version is at fault. It is still a fact, not a failure: no alert and no retry button.
+    /// </summary>
+    [Fact]
+    public void AnUnsupportedProvidersOwnReasonIsTheBody()
+    {
+        ProviderNotice notice = ProviderNoticeSelector.For(Snapshot("Billed per token."), ConnectionState.Unsupported)!;
+
+        Assert.Equal("Usage is not available", notice.Title);
+        Assert.Equal("Billed per token.", notice.Body);
+        Assert.False(notice.IsAlert);
+        Assert.Null(notice.ActionText);
+    }
+
+    [Fact]
+    public void AnUnsupportedProviderWithNoReasonKeepsTheGenericBody()
+    {
+        ProviderNotice notice = ProviderNoticeSelector.For(Snapshot(null), ConnectionState.Unsupported)!;
+
+        Assert.Equal(
+            "The installed version does not expose usage through a mechanism this application can verify.",
+            notice.Body);
+    }
+
     private static ProviderSnapshot Snapshot(string? error) => new(
         "Provider", true, null, null, ConnectionState.Error, "test", MechanismTier.Official,
         "pull", [], null, error, []);

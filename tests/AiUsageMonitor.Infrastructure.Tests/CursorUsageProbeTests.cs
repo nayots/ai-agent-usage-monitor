@@ -110,6 +110,86 @@ public sealed class CursorUsageProbeTests
         Assert.Equal("11.71", window.Extra["cursor.spentUsd"]);
     }
 
+    /// <summary>
+    /// The limit that is actually enforced. GetHardLimit's perUserMonthlyLimitDollars is the TEAM
+    /// DEFAULT; an admin's per-user override ($200 against a $100 default, observed live) appears
+    /// only in the caller-scoped usage summary. Reading the default made the card say "$103 of
+    /// $100" and colour itself exhausted for a user with half their limit left.
+    /// </summary>
+    [Fact]
+    public async Task AnEnterpriseSeatReadsItsOwnLimitFromTheUsageSummary()
+    {
+        using var directory = new TempDirectory();
+        string path = WriteDatabase(directory, LiveToken, membershipType: "enterprise", teamId: 13589081);
+        var handler = EnterpriseSeat(totalEvents: 2, pages: [Events(700.61, 470.0)]);
+        handler.Responses["usage-summary"] = Summary(used: 10948, limit: "20000");
+        var probe = CreateProbe(handler, path);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Connected, snapshot.State);
+        QuotaWindow window = Assert.Single(snapshot.Windows);
+        Assert.Equal("cursor:overall_spend", window.Id);
+        Assert.Equal("Monthly spend", window.Label);
+        Assert.Equal(54.74, window.UsedPercent!.Value, 2);
+        Assert.Equal("$109.48 of $200", window.AmountText);
+        Assert.Equal(new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero), window.ResetsAt);
+        Assert.Equal(TimeSpan.FromDays(30), window.WindowDuration);
+        Assert.Equal("/auth/usage-summary", Assert.Single(handler.Paths, p => p.Contains("summary", StringComparison.Ordinal)));
+        Assert.DoesNotContain("GetHardLimit", handler.Methods);
+        Assert.DoesNotContain("GetFilteredUsageEvents", handler.Methods);
+    }
+
+    [Fact]
+    public async Task AnUnavailableUsageSummaryFallsBackToTheEventTotal()
+    {
+        using var directory = new TempDirectory();
+        string path = WriteDatabase(directory, LiveToken, membershipType: "enterprise", teamId: 13589081);
+        var handler = EnterpriseSeat(totalEvents: 2, pages: [Events(700.61, 470.0)]);
+        handler.Fallback = request => request.RequestUri!.AbsolutePath.EndsWith("usage-summary", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.NotFound)
+            : null!;
+        var probe = CreateProbe(handler, path);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Connected, snapshot.State);
+        Assert.Equal("cursor:cycle_spend", Assert.Single(snapshot.Windows).Id);
+    }
+
+    /// <summary>No ceiling is a fact, not a zero: no percentage is invented for it.</summary>
+    [Fact]
+    public async Task AnUncappedSummaryShowsNoPercentage()
+    {
+        using var directory = new TempDirectory();
+        string path = WriteDatabase(directory, LiveToken, membershipType: "enterprise", teamId: 13589081);
+        var handler = EnterpriseSeat(totalEvents: 2, pages: [Events(700.61, 470.0)]);
+        handler.Responses["usage-summary"] = Summary(used: 10948, limit: "null");
+        var probe = CreateProbe(handler, path);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        QuotaWindow window = Assert.Single(snapshot.Windows);
+        Assert.Null(window.UsedPercent);
+        Assert.Null(window.AmountText);
+        Assert.Equal("109.48", window.Extra["cursor.spentUsd"]);
+    }
+
+    [Fact]
+    public async Task AUsageSummaryReachesEvenASeatWithNoTeamRecordedLocally()
+    {
+        using var directory = new TempDirectory();
+        string path = WriteDatabase(directory, LiveToken, membershipType: "enterprise", teamId: null);
+        var handler = EnterpriseSeat(totalEvents: 0, pages: [""]);
+        handler.Responses["usage-summary"] = Summary(used: 500, limit: "10000");
+        var probe = CreateProbe(handler, path);
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Connected, snapshot.State);
+        Assert.Equal(5.0, Assert.Single(snapshot.Windows).UsedPercent!.Value, 3);
+    }
+
     [Fact]
     public async Task EveryRequestBodyIsValidJsonCarryingTheFieldsTheEndpointExpects()
     {
@@ -417,6 +497,18 @@ public sealed class CursorUsageProbeTests
         return $"header.{payload}.signature";
     }
 
+    /// <summary>Shaped exactly like the live enterprise response of 2026-09-25.</summary>
+    private static string Summary(long used, string limit) =>
+
+        """
+        {"billingCycleStart":"2026-09-01T00:00:00.000Z","billingCycleEnd":"2026-10-01T00:00:00.000Z",
+         "membershipType":"enterprise","limitType":"team","isUnlimited":false,
+         "individualUsage":{"overall":{"enabled":true,"used":USED,"limit":LIMIT,"remaining":null}},
+         "teamUsage":{"onDemand":{"enabled":true,"used":795661,"limit":null,"remaining":null}}}
+        """
+            .Replace("USED", used.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Replace("LIMIT", limit);
+
     private static string Events(params double[] cents) =>
         string.Join(",", cents.Select(c =>
             $$"""{"chargedCents":{{c.ToString(System.Globalization.CultureInfo.InvariantCulture)}},"owningUser":"1"}"""));
@@ -523,7 +615,10 @@ public sealed class CursorUsageProbeTests
             Methods.Add(method);
 
             string body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
-            Bodies.Add((method, body));
+            if (request.Method == HttpMethod.Post)
+            {
+                Bodies.Add((method, body));
+            }
 
             if (method == "GetFilteredUsageEvents")
             {
@@ -547,6 +642,7 @@ public sealed class CursorUsageProbeTests
                 return Json(response);
             }
 
+            // A Fallback may return null to mean "no special answer for this route".
             return Fallback?.Invoke(request) ?? Json("{}");
         }
 
