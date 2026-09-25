@@ -178,6 +178,50 @@ public sealed class ClaudeTranscriptLedgerTests
         Assert.Equal(20, ledger.Totals(Now).Today.InputTokens);
     }
 
+    /// <summary>
+    /// Real transcripts run to tens of megabytes, so they are read in fixed-size chunks rather than
+    /// whole. A reply whose line straddles a chunk boundary must still be counted exactly once.
+    /// </summary>
+    [Fact]
+    public void RepliesStraddlingReadBufferBoundariesAreCountedOnce()
+    {
+        using var directory = new TempDirectory();
+        var content = new StringBuilder();
+        string padding = "{\"type\":\"user\",\"text\":\"" + new string('x', 997) + "\"}";
+        long expected = 0;
+        for (int i = 0; i < 3000; i++)
+        {
+            content.Append(padding).Append('\n');
+            if (i % 7 == 0)
+            {
+                content.Append(Line($"reply-{i}", i + 1)).Append('\n');
+                expected += i + 1;
+            }
+        }
+
+        File.WriteAllText(directory.File("big.jsonl"), content.ToString());
+        var ledger = new ClaudeTranscriptLedger(directory.File("."), TimeZoneInfo.Utc);
+
+        ledger.Refresh(Now);
+
+        Assert.Equal(expected, ledger.Totals(Now).Today.InputTokens);
+        Assert.Equal(Encoding.UTF8.GetByteCount(content.ToString()), ledger.BytesRead);
+    }
+
+    /// <summary>A single line longer than the read buffer - a large tool result - is carried whole.</summary>
+    [Fact]
+    public void ALineLongerThanTheReadBufferIsHandled()
+    {
+        using var directory = new TempDirectory();
+        string huge = "{\"type\":\"user\",\"text\":\"" + new string('y', 3_000_000) + "\"}";
+        File.WriteAllText(directory.File("a.jsonl"), huge + "\n" + Line("after", 42) + "\n");
+        var ledger = new ClaudeTranscriptLedger(directory.File("."), TimeZoneInfo.Utc);
+
+        ledger.Refresh(Now);
+
+        Assert.Equal(42, ledger.Totals(Now).Today.InputTokens);
+    }
+
     private static string Line(string id, long input, string timestamp = "2026-09-25T09:00:00Z", string model = "claude-opus-5") =>
         $"{{\"type\":\"assistant\",\"requestId\":\"request-{id}\",\"timestamp\":\"{timestamp}\",\"message\":{{\"id\":\"message-{id}\",\"model\":\"{model}\",\"usage\":{{\"input_tokens\":{input}}}}}}}";
 }

@@ -203,9 +203,19 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
                 {
                     DateTimeOffset now = _clock();
                     ClaudeTranscriptLedger ledger = _transcriptLedger ??= _transcriptLedgerFactory();
-                    ClaudeLedgerRefresh refresh = ledger.Refresh(now);
-                    ClaudeUsageTotals totals = ledger.Totals(now);
+
+                    // Off the calling thread, always. The first scan reads a month of transcripts
+                    // (seconds, on a real machine), and everything before a probe's first real
+                    // await runs on its caller's thread - which, with the installation check
+                    // served from cache, would be the whole scan. Task.Run also lets the refresh
+                    // service's timeout race it, which a synchronous scan would defeat.
+                    (ClaudeLedgerRefresh refresh, ClaudeUsageTotals totals) = await Task.Run(
+                        () => (ledger.Refresh(now), ledger.Totals(now)), ct).ConfigureAwait(false);
                     return EstimateSnapshot(version, exePath, foundIn, now, totals, refresh, notes);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -500,7 +510,9 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         ClaudeLedgerRefresh refresh,
         List<string> notes)
     {
-        notes.Add($"Read {refresh.FilesRead} transcript file(s), {refresh.NewReplies} new repl(ies); prices as of 2026-09-25.");
+        notes.Add(
+            $"Read {refresh.FilesRead} transcript file(s), {refresh.NewReplies} new repl(ies); prices as of "
+            + $"{ClaudeApiPricing.PricesAsOf.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)}.");
         if (refresh.FilesUnreadable > 0)
         {
             notes.Add($"{refresh.FilesUnreadable} transcript file(s) could not be read this time.");

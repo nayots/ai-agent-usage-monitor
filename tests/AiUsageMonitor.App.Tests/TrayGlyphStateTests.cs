@@ -123,6 +123,22 @@ public class TrayGlyphStateTests
         Assert.Equal("40", frame.Digits);
     }
 
+    /// <summary>
+    /// A failure outranks the amount-only rule. A card keeps its last rows through an error, so an
+    /// amount-only card that then fails still has those rows - and must still get its Failed frame
+    /// rather than vanish from the tray at exactly the moment something went wrong.
+    /// </summary>
+    [Fact]
+    public void AnAmountOnlyCardThatFailsStillShowsItsFailure()
+    {
+        ProviderCardViewModel card = CardWithWindows(Window("amount", 0, null, "≈ $1.00 · 1K tokens"));
+        card.Apply(Snapshot(ConnectionState.Error, []), Now, Policy);
+
+        TrayGlyphFrame frame = Assert.Single(TrayGlyphState.From([card]).Frames);
+
+        Assert.Equal(TrayFrameKind.Failed, frame.Kind);
+    }
+
     [Fact]
     public void CardsWithoutPercentagesOrAmountsStillWait()
     {

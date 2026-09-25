@@ -11,6 +11,10 @@ public sealed class ClaudeUsageEstimateFormatTests
     [InlineData(2_000_000, "2M")]
     [InlineData(3_400_000_000, "3.4B")]
     [InlineData(999_950, "1M")]
+    [InlineData(999_949, "999.9K")]
+    [InlineData(999_950_000, "1B")]
+    [InlineData(999_949_999, "999.9M")]
+    [InlineData(1_000, "1K")]
     public void CompactTokensUsesInvariantRoundedUnits(long tokens, string expected)
     {
         Assert.Equal(expected, ClaudeUsageEstimateFormat.CompactTokens(tokens));
