@@ -62,7 +62,11 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
 
     // Rendered verbatim on the card.
     private const string ApiKeySignInMessage =
-        "Claude Code is signed in with an Anthropic Console (API) account. It is billed per token, "
+        "Claude Code is signed in with an Anthropic Console account or API key, not a Claude subscription. "
+        + "It is billed per use, so there is no subscription quota to show.";
+
+    private const string CloudProviderMessage =
+        "Claude Code is set up to use a cloud provider (Bedrock, Vertex or Foundry), not a Claude subscription, "
         + "so there is no subscription quota to show.";
 
     /// <summary>How much clock skew to allow before treating a stored expiry as already past.</summary>
@@ -185,8 +189,11 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
             // which is a fact about the account rather than a fault, so Unsupported, not Unavailable.
             if (_apiKeySignIn() is string foundIn)
             {
-                notes.Add($"No subscription sign-in; an API-key sign-in was found ({foundIn}). The key itself is never read or sent.");
-                return Snapshot(true, version, exePath, ConnectionState.Unsupported, [], null, ApiKeySignInMessage, notes);
+                notes.Add($"No subscription sign-in; a non-subscription credential was found ({foundIn}). It is never read or sent.");
+                return Snapshot(
+                    true, version, exePath, ConnectionState.Unsupported, [], null,
+                    ClaudeApiKeySignIn.IsCloudProvider(foundIn) ? CloudProviderMessage : ApiKeySignInMessage,
+                    notes);
             }
 
             // Missing file / missing claudeAiOauth.accessToken -> Unavailable, never an exception.
@@ -526,11 +533,8 @@ public sealed class ClaudeOAuthUsageProbe : IProviderProbe
         return now + (wait > MaxThrottleWait ? MaxThrottleWait : wait);
     }
 
-    private static string GetCredentialsPath()
-    {
-        string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(userProfile, ".claude", ".credentials.json");
-    }
+    /// <summary>Honours <c>CLAUDE_CONFIG_DIR</c>, which moves Claude Code's credentials file with it.</summary>
+    private static string GetCredentialsPath() => ClaudeApiKeySignIn.Locations.ForThisMachine().Credentials;
 
     /// <summary>
     /// Reads <c>claudeAiOauth.accessToken</c> from the local credential store. Returns null - never

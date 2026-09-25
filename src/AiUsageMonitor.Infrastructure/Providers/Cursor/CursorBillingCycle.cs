@@ -71,6 +71,22 @@ public sealed record CursorBillingCycle(
         return new CursorBillingCycle(derivedStart, cycleEnd, cycleEnd - derivedStart, DurationWasDerived: true);
     }
 
+    /// <summary>
+    /// The cycle the usage summary states for itself, or null when it does not state a real period.
+    /// Unlike GetCurrentPeriodUsage on the measured enterprise seat - whose start equalled its end -
+    /// the summary reported a proper month (2026-09-01 to 2026-10-01), so no derivation is needed;
+    /// a start not strictly before its end is rejected by the same rule as <see cref="Read"/>.
+    /// </summary>
+    public static CursorBillingCycle? FromSummary(JsonElement summary)
+    {
+        DateTimeOffset? start = CursorInstant.Property(summary, "billingCycleStart");
+        DateTimeOffset? end = CursorInstant.Property(summary, "billingCycleEnd");
+
+        return start is DateTimeOffset from && end is DateTimeOffset to && from < to
+            ? new CursorBillingCycle(from, to, to - from, DurationWasDerived: false)
+            : null;
+    }
+
     private static bool IsUtcMonthBoundary(DateTimeOffset instant)
     {
         DateTimeOffset utc = instant.ToUniversalTime();

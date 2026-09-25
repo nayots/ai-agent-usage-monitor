@@ -59,6 +59,20 @@ public sealed class ClaudeOAuthUsageProbeTests
     }
 
     [Fact]
+    public async Task ACloudProviderSetupIsUnsupportedAndSaysSo()
+    {
+        using var directory = new TempDirectory();
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(HttpStatusCode.OK, "{}"));
+        var probe = CreateProbe(handler, directory.File("missing.json"), apiKeySignIn: () => "CLAUDE_CODE_USE_BEDROCK");
+
+        ProviderSnapshot snapshot = await probe.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(ConnectionState.Unsupported, snapshot.State);
+        Assert.Contains("cloud provider", snapshot.Error, StringComparison.Ordinal);
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    [Fact]
     public async Task ASubscriptionTokenWinsOverAnApiKeySignIn()
     {
         using var directory = new TempDirectory();
