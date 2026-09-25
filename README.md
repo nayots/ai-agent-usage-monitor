@@ -182,7 +182,7 @@ Being straight about what that proves: a match means your copy is byte-for-byte 
 >
 > Cursor's card shows your **spend against your monthly ceiling** — that is the limit Cursor actually enforces — on the same percentage bar as every other provider, with the money itself (`$11.71 of $100`) written underneath. A percentage tells you where you are; the amount tells you what is left.
 
-You don't need all three. A provider that isn't installed is simply left out and costs nothing. 🤷 Claude Code signed in with an Anthropic Console account or API key has no subscription quota to show, so its card says exactly that.
+You don't need all three. A provider that isn't installed is simply left out and costs nothing. 🤷 Claude Code signed in with an Anthropic Console account or API key has no subscription quota, so its card shows **today's and this month's tokens with an estimated cost** instead (`≈ $38.20 · 12.4M tokens`), totalled from Claude Code's own transcripts on this PC and priced at Anthropic's published list prices. It is labelled an estimate because it is one: it knows nothing of negotiated discounts, and nothing of usage from other machines.
 
 ---
 

@@ -159,6 +159,17 @@ which stores no key and signs out of claude.ai. The Console sign-in has not been
 machine; the sources are from the documentation. `CLAUDE_CONFIG_DIR` moves `.credentials.json`, and
 the probe honours it.
 
+**A Console/API sign-in shows a usage ESTIMATE from local transcripts (added 2026-09-25).** The API
+gives a normal key no spend or usage data, so `ClaudeTranscriptLedger` totals `message.usage` from
+`<claude dir>/projects/**/*.jsonl` into "Today (estimate)" and "This month (estimate)" rows (no
+percentage, amount only), priced by `ClaudeApiPricing` — a table copied from the published pricing
+page, with `PricesAsOf`. **Update that table when prices change; never fetch the page at runtime**
+(that is scraping). Facts that cost time: each reply is written up to three times with identical
+usage, so dedup on `message.id` + `requestId` is mandatory (naive sums triple-count); skip
+`<synthetic>`; files are read incrementally in 1 MB chunks and only `"usage"` lines are ever decoded
+(measured: 261.6 MB first scan in 858 ms at 71 MB peak, 4 ms rescans); the scan runs under
+`Task.Run` so it cannot block the probe's caller. Cloud-provider setups keep the plain notice.
+
 One attempt per observed expiry (`ClaudeSignInRepair` holds the block), so a CLI that cannot fix it
 does not spawn a process every poll. Controlled by `AppSettings.ClaudeSignInAutoRepairEnabled`,
 default on.
