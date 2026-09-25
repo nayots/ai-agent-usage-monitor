@@ -63,6 +63,12 @@ public sealed class TrayGlyphState
                 continue;
             }
 
+            if (card.Windows.Count > 0
+                && card.Windows.All(row => row.UsedPercent is null && !string.IsNullOrWhiteSpace(row.AmountText)))
+            {
+                continue;
+            }
+
             if (card.State is ConnectionState.Error or ConnectionState.Unavailable)
             {
                 frames.Add(new(card.TraySlot, null, null, QuotaBarFill.Accent, TrayFrameKind.Failed));

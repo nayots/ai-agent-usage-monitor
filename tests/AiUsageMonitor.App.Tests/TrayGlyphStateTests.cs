@@ -105,6 +105,32 @@ public class TrayGlyphStateTests
         Assert.Null(frame.Digits);
     }
 
+    [Fact]
+    public void AmountOnlyCardsHaveNoTrayFrame()
+    {
+        TrayGlyphState state = TrayGlyphState.From([CardWithWindows(Window("today", 0, null, "≈ $1.00 · 1K tokens"))]);
+
+        Assert.Empty(state.Frames);
+    }
+
+    [Fact]
+    public void APercentageWindowStillFramesAMixedCard()
+    {
+        TrayGlyphFrame frame = Assert.Single(TrayGlyphState.From([CardWithWindows(
+            Window("percent", 0, 40d),
+            Window("amount", 1, null, "≈ $1.00 · 1K tokens"))]).Frames);
+
+        Assert.Equal("40", frame.Digits);
+    }
+
+    [Fact]
+    public void CardsWithoutPercentagesOrAmountsStillWait()
+    {
+        TrayGlyphFrame frame = Assert.Single(TrayGlyphState.From([CardWithWindows(Window("unknown", 0, null))]).Frames);
+
+        Assert.Equal(TrayFrameKind.Waiting, frame.Kind);
+    }
+
     /// <summary>
     /// The widget can afford a card that says "Not installed"; sixteen pixels cannot afford a
     /// rotation slot for a tool with no quota to report. This is the one place the glyph
@@ -162,6 +188,16 @@ public class TrayGlyphStateTests
         return card;
     }
 
+    private static ProviderCardViewModel CardWithWindows(params QuotaWindow[] windows)
+    {
+        ProviderCardViewModel card = new(
+            new ProviderDescriptor("cc", "CC", "CC", new SilentProbe("CC"), 0),
+            colorBarsByUsage: true,
+            _ => { });
+        card.Apply(Snapshot(ConnectionState.Connected, windows), Now, Policy);
+        return card;
+    }
+
     private static ProviderSnapshot Snapshot(ConnectionState state, IReadOnlyList<QuotaWindow> windows) => new(
         ProviderName: "Provider",
         Installed: state != ConnectionState.NotInstalled,
@@ -176,9 +212,9 @@ public class TrayGlyphStateTests
         Error: null,
         Notes: []);
 
-    private static QuotaWindow Window(string id, int order, double? used) => new(
+    private static QuotaWindow Window(string id, int order, double? used, string? amountText = null) => new(
         Id: id, Label: id, UsedPercent: used, ResetsAt: null, WindowDuration: null,
-        Order: order, IsPartial: true, Extra: new Dictionary<string, string>(), LabelIsProviderToken: true);
+        Order: order, IsPartial: true, Extra: new Dictionary<string, string>(), LabelIsProviderToken: true, AmountText: amountText);
 
     private sealed class SilentProbe(string name) : IProviderProbe
     {
