@@ -1,4 +1,4 @@
-<!-- codex-workflow:begin v7 -->
+<!-- codex-workflow:begin v8 -->
 # Agent roles → see CLAUDE.md and docs/codex-workflow.md
 
 This project defines its multi-agent workflow (Claude ↔ Codex) in two managed

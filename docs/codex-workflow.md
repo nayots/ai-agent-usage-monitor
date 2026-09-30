@@ -1,4 +1,4 @@
-<!-- codex-workflow:begin v7 -->
+<!-- codex-workflow:begin v8 -->
 # Claude ↔ Codex workflow — procedure reference
 
 Companion to the `codex-workflow` block in `CLAUDE.md`, which holds the offload
@@ -7,7 +7,7 @@ everything that only applies *once you have decided to delegate*: the
 environment it runs in, the runtime knobs, and Steps 3–6.
 
 Both are installed and version-matched by `/codex-workflow-setup`. **Managed
-region — hand edits are replaced on the next upgrade.** If this file says `v7`
+region — hand edits are replaced on the next upgrade.** If this file says `v8`
 and `CLAUDE.md` does not, or vice versa, the pair is mismatched: re-run the
 setup skill rather than trusting either.
 
@@ -16,7 +16,7 @@ and follow it.
 
 ## Hard environmental facts
 
-Verified on Windows 11, Codex plugin v1.0.6, codex-cli 0.144.6. Recheck on
+Verified on Windows 11, Codex plugin v1.0.6, codex-cli 0.159.2. Recheck on
 plugin upgrade. These are facts about how Codex actually runs here, not risks to
 weigh.
 
@@ -59,6 +59,16 @@ weigh.
 5. **`/codex:setup` reporting `ready: true` certifies almost nothing.** It does
    not test egress, `.git` writability, or whether the resume path works. Treat
    it as "the CLI exists and is authenticated", nothing more.
+6. **`gpt-6.1-sol` needs codex-cli 0.159.2 or later** — the CLI on `PATH`, which
+   is what the plugin drives, not the desktop app's bundled copy. On 0.155.1
+   every call is refused with `The 'gpt-6.1-sol' model is not supported when
+   using Codex with a ChatGPT account.`, which reads like an account or plan
+   problem and is not one: `gpt-6-sol` and `gpt-6-luna` work on the same account
+   and client, and the same account runs `gpt-6.1-sol` once the CLI is upgraded.
+   Check with `codex --version`; upgrade with `npm i -g @openai/codex@latest`.
+   **Then start a new Claude Code session:** the plugin's app-server brokers keep
+   the old binary loaded until its `SessionEnd` hook shuts them down, so a call
+   in the same session still runs the old client.
 
 ## Why the direct companion call is the default path
 
@@ -87,16 +97,36 @@ is.** A 900-line mechanical refactor is `low`; a 40-line concurrency fix is
 
 | Effort | Use when |
 |---|---|
-| `minimal` / `low` | Fully specified and mechanical. The plan states exactly what to write; no design decisions remain. |
+| `low` | Fully specified and mechanical. The plan states exactly what to write; no design decisions remain. |
 | `medium` | Clear spec, ordinary implementation. Interfaces given; the how is routine. |
 | `high` | Non-obvious design inside the task: state machines, tricky invariants, tests that must genuinely prove something. |
 | `xhigh` | Genuinely hard: algorithmic correctness, subtle debugging, or a proof obligation. |
 
+**Model: `gpt-6.1-sol` for practically everything; `gpt-6-luna` only for very
+simple work.** Choose the model by how much judgement the task needs, then scale
+effort within it — Sol at `low` is the right call for a mechanical task that
+still touches real code, and is usually a better one than Luna.
+
 | Task shape | Model |
 |---|---|
-| Mechanical and fully enumerated; little judgement required | `gpt-5.6-luna` — fastest, cheapest; simple coding, extraction, classification |
-| Everyday implementation against a written plan — **the default** | `gpt-5.6-terra` — mid-tier; the vendor positions it for "production workloads where Sol is unnecessarily expensive" |
-| Difficult coding, algorithmic correctness, or a proof obligation | `gpt-5.6-sol` — most powerful; complex reasoning, quality-critical work |
+| **The default.** Everyday implementation against a plan, complex coding, multi-step or agentic work, debugging, anything where quality or reasoning depth matters more than minimum cost | `gpt-6.1-sol` — high-capability reasoning model for complex professional and agentic work. $2.00 in / $10.00 out per 1M tokens |
+| **Very simple and fully enumerated** — extraction, classification, summarisation, a mechanical transformation, simple scripted edits, where the task is clear and well-scoped and speed and cost matter most | `gpt-6-luna` — fast, extremely cost-efficient; built for focused, high-volume work. $0.10 in / $0.50 out per 1M tokens |
+
+When unsure, use Sol. Luna earns its 20× price cut only where a wrong result
+costs one cheap retry, not a review round.
+
+**Luna sometimes does nothing and says it cannot.** Measured 2026-09-30 on
+codex-cli 0.159.2: across 33 identical one-file tasks, Luna replied some form of
+"I can't read `<file>` because no filesystem tool is available" **12 times** —
+11 of 27 at `low`, 1 of 6 at `medium`, 4 of 8 with `--write` — ran no command,
+and the job still ended `completed (exit 0)`. Sol did it 0 times in 7. Telling Luna in
+the prompt that it may read files did not help (3 of 6 refused). So on a Luna
+job, read the `💬` line before anything else: a claim of no tools with a clean
+`🌳` and no new commits means nothing happened. Relaunch once `--fresh`; if it
+refuses again, move the task to Sol. The 5.6 family (`gpt-5.6-sol`,
+`-terra`, `-luna`) is now labelled "older" in Codex's own model list; a
+`DEFAULT_MODEL` still naming one of them is a stale default, not a choice.
+Pricing is as supplied on 2026-09-30 and billed to the Codex plan, not Claude's.
 
 Constraints that make this rubric real:
 - **Effort costs wall-clock, and that has a diagnostic side effect.** At `xhigh`
@@ -105,14 +135,16 @@ Constraints that make this rubric real:
   on mechanical work buys a faster failure signal as well as speed.
 - **Use the rubric to step DOWN as often as up.** It is not a ratchet toward the
   maximum; that is the failure mode it exists to prevent.
-- **`max` and `ultra` are unreachable.** The plugin hardcodes
-  `VALID_REASONING_EFFORTS` as `none|minimal|low|medium|high|xhigh` and *throws*
-  on anything else, so `max` — which every 5.6 model supports and the desktop
-  app exposes — is rejected by the plugin, not the model. `minimal` is accepted
-  here but listed by neither the vendor docs nor the desktop app.
+- **The usable efforts are `low`, `medium`, `high`, `xhigh`** — plus `none` on
+  Luna only. The plugin hardcodes `VALID_REASONING_EFFORTS` as
+  `none|minimal|low|medium|high|xhigh` and *throws* on anything else, so `max`
+  (both models) and `ultra` — which the desktop app exposes — are rejected by the
+  plugin, not the model. The other way round, `minimal` passes the plugin and is
+  refused by both models with a 400 (`'minimal' is not supported with the
+  'gpt-6-luna' model`), and `none` is refused by Sol. Verified 2026-09-30.
 - **Pass full model IDs.** The only alias the plugin maps is `spark` →
-  `gpt-5.3-codex-spark`, which is likely stale: probing codex-cli 0.144.6
-  surfaces `gpt-5.3-codex` but no `-spark`. Prefer explicit IDs.
+  `gpt-5.3-codex-spark`, which is stale: Codex's model list has no `-spark`
+  model at all. Prefer explicit IDs.
 - **Reviews ignore these flags entirely.** `/codex:review` and
   `/codex:adversarial-review` take no per-call flags and always use the resolved
   config (`~/.codex/config.toml`, plus a project `.codex/config.toml` when the
@@ -176,7 +208,7 @@ Verified `task` contract for v1.0.6 — recheck on upgrade:
 
 ```bash
 node "<companion>" task --background --write --fresh \
-  --model gpt-5.6-terra --effort medium \
+  --model gpt-6.1-sol --effort medium \
   --cwd "<repo-root>" --prompt-file "<temp-prompt-file>"
 ```
 
@@ -193,16 +225,33 @@ it and relay progress:
 
 ```bash
 # immediately after launching -- this is the dead-worker catch
-node ~/.claude/scripts/watch-job.mjs --cwd "<repo-root>" --interval 5
+node ~/.claude/scripts/watch-job.mjs --cwd "<repo-root>" --job-id <id> --interval 5
 
 # then again, in the SAME turn as the reply that relayed the previous block
-node ~/.claude/scripts/watch-job.mjs --cwd "<repo-root>"
+node ~/.claude/scripts/watch-job.mjs --cwd "<repo-root>" --job-id <id>
 ```
+
+**Always pass `--job-id`** with the id the launch printed (`Codex Task started
+in the background as <id>`). Without it the watcher reports the *newest* job for
+the workspace, which is a guess: a field session relayed a job killed ninety
+minutes earlier as the live one. The watcher now says `NOTE: no --job-id given`
+on stderr when it had several to choose from — treat that as a mistake to fix,
+not a caveat.
 
 Each call blocks for the interval (default 60 s), returns early the moment the
 job finishes, prints one compact block, and writes to stderr both
-`state=running|completed|failed|dead` and a `RELAY-TO-USER:` line telling you
-what to do next. Do exactly what that line says.
+`state=running|stalled|completed|failed|dead` and a `RELAY-TO-USER:` line telling
+you what to do next. Do exactly what that line says.
+
+**Where job records live depends on the shell that launched the job.** The
+companion writes to `$CLAUDE_PLUGIN_DATA/state` when that variable is set, and to
+`<temp>/codex-companion` when it is not — and Claude Code sets it for the Bash
+tool but **not** for the PowerShell tool. The watcher searches both (and the
+`~/.claude/plugins/data/codex-openai-codex/state` default), so either shell
+works. An older watcher that searched one root answered "No Codex job found" for
+every PowerShell launch while the job ran and committed; two sessions read that
+as "the plugin wrote no record". If you ever see that message, read the roots it
+lists before concluding anything about the job.
 
 **A relayed block is not a stopping point — it is a progress report emitted
 mid-loop.** While `state=running`: reply with the block verbatim — no
@@ -211,7 +260,23 @@ same turn.** A reply with no tool call after it *ends your turn*, and a turn tha
 ends here abandons the job: it runs on, or stops to ask a question, with nothing
 watching it and nothing to wake you but me noticing and asking. Only a terminal
 `state` ends the loop — `completed` and `failed` mean stop and act on the result,
-`dead` means stop and relaunch.
+`dead` means stop and relaunch, `stalled` means stop and check (see "Hung
+worker" below).
+
+**`completed` means Codex's turn ended — not that your brief is done.** One
+field job was handed seven tasks, finished one, left the tree dirty and
+non-compiling, and still reported `completed (exit 0)`; nothing in the record
+distinguishes that from a finished brief. So before acting on a `completed`,
+and before telling me it succeeded:
+
+1. Read the watcher's `🌳` line — it reports uncommitted paths on every
+   terminal job.
+2. Run `git log --oneline <base>..HEAD` and match the commits against the
+   plan's task list.
+3. Read the job's final output for which tasks it says remain.
+
+A short or dirty stop is not a failure to hide; it is the next delegation's
+brief. Relaunch `--fresh` for the remaining tasks, restating the tree (below).
 
 **Your message is the only channel.** Claude Code collapses a finished shell call
 to "Ran 1 shell command" and never shows me stdout, so a block I don't see
@@ -229,14 +294,46 @@ instead of waiting.
 
 On `state=dead`, stop polling and relaunch with `--fresh`. Never `--resume` after
 a dead worker: the record permanently blocks resume for that workspace and no
-supported command clears it.
+supported command clears it. `dead` has two causes and the block names which: a
+worker that never logged anything (it crashed at spawn), or a worker whose
+process is gone while its record still says `running` (killed, or crashed
+mid-run). In the second case it may have committed first — check `git log`
+before writing the relaunch prompt.
+
+**Hung worker (`state=stalled`).** Workers have been observed to hang mid-run:
+process alive, CPU near zero, log frozen — both recorded cases on the line
+`Starting collaboration tool: wait.`, which earlier in the same jobs returned in
+about a minute. The record stays `running` forever. The watcher reports
+`stalled` once a worker whose process is confirmed alive has written nothing for
+15 minutes. That is a heuristic, so confirm before acting:
+
+```powershell
+Get-Process -Id <pid> | Select-Object Id, StartTime, CPU   # sample twice, a minute apart
+```
+
+- **CPU rising** → it is working (a long reasoning step, a slow command). Resume
+  polling.
+- **CPU flat** → it is hung. `Stop-Process -Id <pid> -Force`, then `git log`:
+  the commits made before the hang are already there. Finish or relaunch the
+  remainder `--fresh`, restating the tree.
+- **Killing the worker does not kill Codex subagents it spawned.** One committed
+  a genuine fix eight minutes after its parent was killed. Re-check `git log` a
+  few minutes after any kill before building on the tree.
+- **Partial work is usually worth finishing rather than redoing.** A hung task
+  left ~80% complete and correct was faster to finish by hand than to re-run.
+  Review it as carefully as any delegated diff — the missing part is usually the
+  judgement work.
+- Telling the delegate to "stop after the final commit" does **not** prevent
+  this; it was tried and the hang moved earlier.
 
 If the watcher is missing, fall back to reading the job record directly — this
-still needs no user-invoked command:
+still needs no user-invoked command. `<state>` is whichever of
+`$CLAUDE_PLUGIN_DATA/state`, `~/.claude/plugins/data/codex-openai-codex/state`
+or `<temp>/codex-companion` holds it (see above — check all three):
 
 ```
-~/.claude/plugins/data/codex-openai-codex/state/<repo-name>-<hash>/jobs/<jobId>.json   → .status, .phase, .pid
-~/.claude/plugins/data/codex-openai-codex/state/<repo-name>-<hash>/jobs/<jobId>.log    → human-readable progress
+<state>/<repo-name>-<hash>/jobs/<jobId>.json   → .status, .phase, .pid
+<state>/<repo-name>-<hash>/jobs/<jobId>.log    → human-readable progress
 ```
 
 **A job whose log stops after `Queued for background execution` is a dead
@@ -289,6 +386,12 @@ put the detail in the committed plan file and reference it by path.
 
 ### Either way
 - One task (or one coherent slice) per delegation; keep each prompt focused.
+- **Any prompt covering more than one task must say, in these words or near
+  them:** "If you run short of time, finish and commit the task you are on
+  before stopping, and say clearly which task numbers remain. A committed task
+  is resumable; an uncommitted half-task is not." In the field run that
+  motivated it, the one delegation without this line stopped after 1 of 7 tasks
+  with a non-compiling tree; the three that carried it all stopped clean.
 - Do NOT enable the review gate (`/codex:setup --enable-review-gate`): it can
   loop Claude↔Codex and drain usage limits. Reviews stay manual.
 - If a task needs the full session context, tell me to run `/codex:transfer`.
@@ -343,6 +446,13 @@ Do NOT file reports about this project's own code — only about the integration
 | `/codex:cancel` fails with `Invalid argument/option - 'C:/Program Files/Git/PID'` | MSYS path conversion mangling `taskkill /PID` under Git Bash. Kill the PID from PowerShell instead. |
 | A long command is killed with nothing captured, and Codex narrates hitting a command time limit | Codex applies a time limit **per shell call**, so a chained `build && test` spends the whole budget on one call. Split them; give a long suite its own invocation. The ~120 s figure comes from Codex's own narration, not from a documented setting — treat it as an order of magnitude, not a threshold to tune against. |
 | The watcher calls a running job `dead`, but its log is still growing | Fixed from the v6 watcher onward, which judges liveness by whether the worker logged anything rather than by the `--fresh` wording. On an older copy, every `--resume` job hits this. Check the job's `.log` yourself before relaunching — and never relaunch `--fresh` while the "dead" job is still writing. |
+| `The '<model>' model is not supported when using Codex with a ChatGPT account.` | Almost always a codex-cli too old for that model, not the account — see hard fact 6. Confirm by running the same call with an older model (`gpt-6-sol`); if that works, upgrade the CLI and start a new session. |
+| `✅ … completed` but `💬` says it can't read files or has no filesystem/shell tool | A `gpt-6-luna` turn that never used its tools — intermittent — 12 of 33 in testing, at both efforts and in both sandboxes. Nothing was done. Relaunch `--fresh` once, then switch to `gpt-6.1-sol`. Not a sandbox problem: do not touch the patch. |
+| `❌ … failed` in 5–10 s with `💬` naming an HTTP 400 | The API refused the request — model, effort or parameter — before any work happened. Nothing to clean up; fix the flag and relaunch. (Pre-v8 watchers printed `💬 no message` here.) |
+| `No Codex job found …` right after a launch that printed an id | **Not** a missing record. The job was filed under a state root the watcher did not search — PowerShell launches go to `<temp>/codex-companion` because `CLAUDE_PLUGIN_DATA` is unset there. The v8 watcher searches every root and lists them in the message; on an older copy pass `--state-root "$env:TEMP\codex-companion"`. |
+| The watcher reports a job id that is not the one your launch printed | You omitted `--job-id`, so it picked the newest record for the workspace. Re-run with `--job-id`. |
+| `state=running` with ⏱ climbing for an hour, `⚙️ idle`, and nothing new in `💬` | A hung or killed worker on a pre-v8 watcher, which checked neither the pid nor the log's age. The v8 watcher reports `dead` or `stalled` instead. See "Hung worker". |
+| `completed (exit 0)`, but the plan is half done or the build is broken | Expected — `completed` is the turn ending, not the brief. Check `🌳`, `git log` and the final output; relaunch `--fresh` for what remains. |
 
 ---
 
@@ -371,6 +481,11 @@ In all cases:
   Claude shares this tree and may have written them. Excluding them from your
   commits is correct and sufficient; cleanup is not your call. "Outside the
   plan" means "not mine to commit", never "mine to remove".
+- **If you must stop before the brief is done** — time, a failed patch, a
+  blocker — first finish and commit the task you are on, or revert its
+  uncommitted half, so the tree builds. Then say exactly which task numbers
+  remain. Your job ends as `completed` either way, so the words you end with
+  are the only record of what is left.
 - **If a task is blocked by the environment** (no network, no write access):
   stop, make no commits, and report the exact failing command. Do not retry an
   install that has already been forbidden in your prompt.

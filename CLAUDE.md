@@ -379,13 +379,13 @@ absolute machine paths and this product must stay user- and machine-agnostic.
 ## Two managed files
 
 `AGENTS.md` in its entirety, and everything in this file below the
-`<!-- codex-workflow:begin v7 -->` marker, are **generated and owned by
+`<!-- codex-workflow:begin v8 -->` marker, are **generated and owned by
 `/codex-workflow-setup`**. Hand-edits there are silently overwritten on the next setup run, and
 changing the version marker breaks the gate that checks it. Corrections belong **above** the
 marker, where this sentence is. That is why the stale "committed before delegating" step is
 corrected here rather than fixed at its source.
 
-<!-- codex-workflow:begin v7 -->
+<!-- codex-workflow:begin v8 -->
 # Claude ↔ Codex workflow
 
 - **Claude** (you): PLANNING and REVIEW. You decide whether, and how, to offload
@@ -402,7 +402,7 @@ don't state it as guaranteed. Offloading is OPTIONAL, decided per feature.
 work, read `docs/codex-workflow.md`** — the procedure, plus Codex's own role.
 Not "consult if unsure": read it. The companion's flag contract is pinned to one
 plugin version and the polling loop has stop conditions that are wrong to guess
-at. It must say `v7`, matching this block; if it is missing or differs, **say so
+at. It must say `v8`, matching this block; if it is missing or differs, **say so
 and stop rather than working from memory** — a stale procedure is worse than
 none, being confidently wrong. Re-run `/codex-workflow-setup` to restore the pair.
 
@@ -488,7 +488,7 @@ they adjust from.**
 
 ### Standing preferences (edit to change the defaults)
 DEFAULT_DELEGATION: plugin
-DEFAULT_MODEL: gpt-5.6-terra
+DEFAULT_MODEL: gpt-6.1-sol
 DEFAULT_EFFORT: medium
 
 ## Steps 3–6 — Plan, execute, review, report friction
